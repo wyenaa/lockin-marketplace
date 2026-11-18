@@ -44,6 +44,35 @@ Klik **Masuk**, lalu tombol peran demo untuk mencoba. Akun baru dapat didaftarka
 - Font Plus Jakarta Sans dan Caveat disimpan lokal beserta lisensi OFL di `public/assets`; antarmuka dapat dimuat tanpa koneksi ke Google Fonts.
 - Aplikasi disiapkan untuk dijalankan lokal. Sebelum deployment publik, ganti/hapus akun demo, tambahkan rate limiting, HTTPS dengan cookie Secure, backup database, serta integrasi gateway/blockchain bila dibutuhkan. Belum ada deployment hosting.
 
+## Payment Gateway & Blockchain (Sepolia)
+
+Aplikasi telah terintegrasi dengan:
+1. **Midtrans Sandbox (Snap)**: Pembayaran DP dan pelunasan menggunakan Snap redirect. Webhook diverifikasi dengan signature SHA-512, serta didukung sinkronisasi manual (`/api/bookings/:id/sync-payment`).
+2. **Ethereum Sepolia Testnet**: Bukti pembayaran DP dan pelunasan dicatat secara on-chain ke smart contract (`contracts/LockInBookingLog.sol` dan `contracts/LockInFinalPaymentLog.sol`). Worker backend memproses antrian job blockchain (`blockchain_jobs`) setiap 15 detik dan tautan transaksi dapat dilihat langsung di Sepolia Etherscan.
+3. **Simulasi Fallback**: Jika kredensial Midtrans / Sepolia tidak diatur di `.env`, aplikasi otomatis berjalan dalam mode simulasi interaktif (pengujian lokal tanpa koneksi eksternal).
+
+### Konfigurasi `.env`
+
+Salin dan sesuaikan variabel pada file `.env`:
+
+```env
+PORT=4000
+MIDTRANS_SERVER_KEY=SB-Mid-server-...
+MIDTRANS_SIGNATURE_SECRET_KEY=Mid-server-...
+SEPOLIA_RPC_URL=https://sepolia.infura.io/v3/...
+SEPOLIA_WRITER_PRIVATE_KEY=...
+SEPOLIA_DP_CONTRACT_ADDRESS=0xdDF5D4Ad584679A7c2E76765097DBeD0393F6F6f
+SEPOLIA_FINAL_CONTRACT_ADDRESS=0x9165Ee0C004c8D45f1B021dD8F2d8D6fF5968FCF
+```
+
+### Audit Database & Blockchain
+
+Jalankan script verifikasi konsistensi database terhadap smart contract Sepolia:
+
+```powershell
+node audit-lockin.mjs
+```
+
 ## Pengujian
 
 ```powershell
