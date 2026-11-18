@@ -1,5 +1,6 @@
 /**
  * LockIn — Script Audit Konsistensi Transaksi (Database & Ethereum Sepolia)
+ * Mengaudit Smart Contract Tunggal (LockInEscrow.sol).
  * Pemeriksaan bersifat read-only.
  * Jalankan: node audit-lockin.mjs
  */
@@ -33,39 +34,24 @@ const warn = message => {
   console.log(`  [PERLU DICEK] ${message}`);
 };
 
-const contracts = {
-  DP: {
-    address: process.env.SEPOLIA_DP_CONTRACT_ADDRESS,
-    eventName: "DpPaymentRecorded"
-  },
-  FINAL: {
-    address: process.env.SEPOLIA_FINAL_CONTRACT_ADDRESS,
-    eventName: "FinalPaymentRecorded"
-  }
-};
+const contractAddress = process.env.SEPOLIA_CONTRACT_ADDRESS || process.env.SEPOLIA_DP_CONTRACT_ADDRESS;
 
-const events = {
-  DP: new Interface([
-    "event DpPaymentRecorded(bytes32 indexed bookingRefHash, bytes32 indexed paymentRefHash, bytes32 agreementHash, uint256 recordedAt)"
-  ]),
-  FINAL: new Interface([
-    "event FinalPaymentRecorded(bytes32 indexed bookingRefHash, bytes32 indexed paymentRefHash, bytes32 agreementHash, uint256 recordedAt)"
-  ])
-};
+const contractInterface = new Interface([
+  "event BookingStatusUpdated(bytes32 indexed bookingRefHash, bytes32 indexed paymentRefHash, bytes32 agreementHash, uint8 status, uint256 timestamp)"
+]);
 
 let provider;
-const writerCache = new Map();
+let authorizedWriterCache = null;
 
 async function auditConfirmedJob(job, payment, booking) {
   const kind = payment.payment_type || 'DP';
-  const config = contracts[kind];
 
   if (!job.tx_hash) {
     warn(`${kind}: CONFIRMED tanpa tx_hash.`);
     return;
   }
 
-  if (!provider || !config?.address || !isAddress(config.address)) {
+  if (!provider || !contractAddress || !isAddress(contractAddress)) {
     warn(`${kind}: RPC atau alamat kontrak tidak valid.`);
     return;
   }
@@ -83,24 +69,22 @@ async function auditConfirmedJob(job, payment, booking) {
     }
     pass(`${kind}: receipt Sepolia berhasil`);
 
-    if (receipt.to?.toLowerCase() !== config.address.toLowerCase()) {
+    if (receipt.to?.toLowerCase() !== contractAddress.toLowerCase()) {
       fail(`${kind}: alamat kontrak tujuan tidak cocok`);
       return;
     }
-    pass(`${kind}: tujuan kontrak sesuai`);
+    pass(`${kind}: tujuan kontrak sesuai (LockInEscrow)`);
 
-    let authorizedWriter = writerCache.get(kind);
-    if (!authorizedWriter) {
+    if (!authorizedWriterCache) {
       const contract = new Contract(
-        config.address,
+        contractAddress,
         ["function authorizedWriter() view returns (address)"],
         provider
       );
-      authorizedWriter = await contract.authorizedWriter();
-      writerCache.set(kind, authorizedWriter);
+      authorizedWriterCache = await contract.authorizedWriter();
     }
 
-    if (receipt.from.toLowerCase() === authorizedWriter.toLowerCase()) {
+    if (receipt.from.toLowerCase() === authorizedWriterCache.toLowerCase()) {
       pass(`${kind}: pengirim sesuai authorizedWriter`);
     } else {
       fail(`${kind}: pengirim bukan authorizedWriter`);
@@ -108,39 +92,38 @@ async function auditConfirmedJob(job, payment, booking) {
 
     const matchingEvents = [];
     for (const log of receipt.logs) {
-      if (log.address.toLowerCase() !== config.address.toLowerCase()) continue;
+      if (log.address.toLowerCase() !== contractAddress.toLowerCase()) continue;
       try {
-        const parsed = events[kind].parseLog(log);
-        if (parsed?.name === config.eventName) matchingEvents.push(parsed.args);
+        const parsed = contractInterface.parseLog(log);
+        if (parsed?.name === "BookingStatusUpdated") matchingEvents.push(parsed.args);
       } catch {}
     }
 
-    if (matchingEvents.length !== 1) {
-      fail(`${kind}: diharapkan 1 event ${config.eventName}, ditemukan ${matchingEvents.length}`);
-      return;
-    }
-    pass(`${kind}: event ${config.eventName} ditemukan on-chain`);
+    if (matchingEvents.length >= 1) {
+      pass(`${kind}: event BookingStatusUpdated ditemukan on-chain`);
+      const event = matchingEvents[0];
+      if (event.bookingRefHash.toLowerCase() === id(booking.id).toLowerCase()) {
+        pass(`${kind}: bookingRefHash cocok on-chain`);
+      } else {
+        fail(`${kind}: bookingRefHash berbeda`);
+      }
 
-    const event = matchingEvents[0];
-    if (event.bookingRefHash.toLowerCase() === id(booking.id).toLowerCase()) {
-      pass(`${kind}: bookingRefHash cocok on-chain`);
-    } else {
-      fail(`${kind}: bookingRefHash berbeda`);
-    }
+      const orderRef = payment.provider_order_id || payment.id;
+      if (event.paymentRefHash.toLowerCase() === id(orderRef).toLowerCase()) {
+        pass(`${kind}: paymentRefHash cocok on-chain`);
+      } else {
+        fail(`${kind}: paymentRefHash berbeda`);
+      }
 
-    const orderRef = payment.provider_order_id || payment.id;
-    if (event.paymentRefHash.toLowerCase() === id(orderRef).toLowerCase()) {
-      pass(`${kind}: paymentRefHash cocok on-chain`);
+      const rawHash = booking.hash || booking.agreement_hash || '';
+      const formattedHash = rawHash.startsWith('0x') ? rawHash : `0x${rawHash}`;
+      if (event.agreementHash.toLowerCase() === formattedHash.toLowerCase()) {
+        pass(`${kind}: agreementHash cocok dengan database`);
+      } else {
+        fail(`${kind}: agreementHash berbeda dari database`);
+      }
     } else {
-      fail(`${kind}: paymentRefHash berbeda`);
-    }
-
-    const rawHash = booking.hash || booking.agreement_hash || '';
-    const formattedHash = rawHash.startsWith('0x') ? rawHash : `0x${rawHash}`;
-    if (event.agreementHash.toLowerCase() === formattedHash.toLowerCase()) {
-      pass(`${kind}: agreementHash cocok dengan database`);
-    } else {
-      fail(`${kind}: agreementHash berbeda dari database`);
+      fail(`${kind}: event BookingStatusUpdated tidak ditemukan di receipt`);
     }
   } catch (error) {
     warn(`${kind}: pemeriksaan RPC bermasalah (${error.shortMessage || error.message})`);
@@ -149,10 +132,10 @@ async function auditConfirmedJob(job, payment, booking) {
 
 async function runAudit() {
   console.log("\n=======================================================");
-  console.log(" 🔍 AUDIT LOCKIN: DATABASE & ETHEREUM SEPOLIA (READ-ONLY)");
+  console.log(" 🔍 AUDIT LOCKIN: 1 KONTRAK TUNGGAL & DATABASE (READ-ONLY)");
   console.log("=======================================================\n");
 
-  // 1. Periksa koneksi RPC Sepolia
+  // 1. Periksa RPC Sepolia
   if (process.env.SEPOLIA_RPC_URL) {
     try {
       provider = new JsonRpcProvider(process.env.SEPOLIA_RPC_URL);
@@ -173,13 +156,11 @@ async function runAudit() {
     warn("SEPOLIA_RPC_URL tidak tersedia");
   }
 
-  // 2. Periksa Smart Contracts
-  for (const [kind, cfg] of Object.entries(contracts)) {
-    if (cfg.address && isAddress(cfg.address)) {
-      pass(`Alamat contract ${kind} valid: ${cfg.address}`);
-    } else {
-      warn(`Alamat contract ${kind} belum diisi atau tidak valid`);
-    }
+  // 2. Periksa Smart Contract Tunggal
+  if (contractAddress && isAddress(contractAddress)) {
+    pass(`Alamat Smart Contract Tunggal (LockInEscrow) valid: ${contractAddress}`);
+  } else {
+    warn("Alamat Smart Contract belum diatur di .env (SEPOLIA_CONTRACT_ADDRESS)");
   }
 
   // 3. Periksa Database (Supabase)
@@ -234,7 +215,7 @@ async function runAudit() {
       warn("Belum ada data booking di database Supabase.");
     }
   } else {
-    warn("Kredensial Supabase belum diatur di .env (SUPABASE_URL & SUPABASE_SERVICE_ROLE_KEY).");
+    warn("Kredensial Supabase belum diatur di .env.");
   }
 
   console.log(`\nAudit selesai: ${passed} passed, ${failed} failed, ${warnings} warnings\n`);

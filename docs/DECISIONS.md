@@ -11,11 +11,12 @@
   - Memiliki fitur Auth terintegrasi serta Row Level Security (RLS) untuk isolasi data pelanggan vs vendor vs admin.
   - Mendukung realtime event dan skema relasional yang aman untuk transaksi finansial.
 
-## ADR-003: Dua Smart Contract Terpisah (DP & Final Payment)
-- **Keputusan:** Menggunakan 2 smart contract terpisah: `LockInBookingLog.sol` untuk DP dan `LockInFinalPaymentLog.sol` untuk pelunasan.
+## ADR-003: 1 Smart Contract Tunggal dengan Pembaruan Status (LockInEscrow.sol)
+- **Keputusan:** Menggunakan **1 smart contract tunggal** (`LockInEscrow.sol`) yang mengelola pencatatan DP, pelunasan, dan status update booking dalam satu siklus hidup (`BookingStatus`).
 - **Alasan:**
-  - Memisahkan audit event DP dan Pelunasan agar query on-chain lebih sederhana dan bersih.
-  - Memudahkan audit independen di Etherscan tanpa parameter enum yang kompleks.
+  - Menghindari overhead deploy dan maintain 2 alamat kontrak berbeda.
+  - Menyediakan single source of truth on-chain untuk setiap booking dengan state tracking terpusat (`DPPaid`, `FinalPaid`, `Completed`, `Disputed`, `Resolved`).
+  - Memudahkan audit di Etherscan dengan 1 contract address dan event `BookingStatusUpdated`.
 
 ## ADR-004: Pola Outbox untuk Pencatatan Blockchain
 - **Keputusan:** Notifikasi webhook dari Midtrans tidak langsung memblokir response untuk menunggu transaksi blockchain selesai (yang memakan waktu 12–30 detik per block di Sepolia).

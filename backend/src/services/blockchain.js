@@ -1,48 +1,51 @@
-// LockIn — Pencatatan bukti transaksi ke Ethereum Sepolia
+// LockIn — Pencatatan bukti transaksi ke Smart Contract Tunggal Ethereum Sepolia (LockInEscrow)
 // Outbox pattern: DB → blockchain_jobs queue → worker kirim setiap 15 detik.
-// Jika RPC/gas bermasalah, pembayaran TIDAK diubah menjadi gagal.
 import { Contract, JsonRpcProvider, Wallet, id as ethersId } from 'ethers';
 import { supabase } from '../db/supabase.js';
 
 const ABI = [
   'function recordDpPayment(bytes32 bookingRefHash, bytes32 agreementHash, bytes32 paymentRefHash) external',
   'function recordFinalPayment(bytes32 bookingRefHash, bytes32 agreementHash, bytes32 paymentRefHash) external',
-  'function recordedPayments(bytes32 paymentRefHash) view returns (bool)'
+  'function updateStatus(bytes32 bookingRefHash, uint8 newStatus) external',
+  'function getBooking(bytes32 bookingRefHash) view returns (bytes32 agreementHash, uint8 status, uint256 updatedAt)',
+  'function recordedPayments(bytes32 paymentRefHash) view returns (bool)',
+  'function authorizedWriter() view returns (address)',
+  'event BookingStatusUpdated(bytes32 indexed bookingRefHash, bytes32 indexed paymentRefHash, bytes32 agreementHash, uint8 status, uint256 timestamp)'
 ];
 
 let active = false;
-const contracts = new Map();
-let provider;
+let contractInstance = null;
+let provider = null;
 
 function ready() {
+  const address = process.env.SEPOLIA_CONTRACT_ADDRESS || process.env.SEPOLIA_DP_CONTRACT_ADDRESS;
   return Boolean(
     process.env.SEPOLIA_RPC_URL &&
     process.env.SEPOLIA_WRITER_PRIVATE_KEY &&
-    process.env.SEPOLIA_DP_CONTRACT_ADDRESS
+    address
   );
 }
 
-async function getContract(paymentType) {
-  if (!['DP', 'FINAL'].includes(paymentType)) throw new Error('Jenis pembayaran tidak dikenal.');
+async function getContract() {
+  const address = process.env.SEPOLIA_CONTRACT_ADDRESS || process.env.SEPOLIA_DP_CONTRACT_ADDRESS;
+  if (!address) throw new Error('Alamat kontrak Sepolia belum diatur di .env');
+
   if (!provider) {
     provider = new JsonRpcProvider(process.env.SEPOLIA_RPC_URL);
     const network = await provider.getNetwork();
     if (network.chainId !== 11155111n) throw new Error('RPC bukan jaringan Ethereum Sepolia.');
   }
-  const address = paymentType === 'FINAL'
-    ? process.env.SEPOLIA_FINAL_CONTRACT_ADDRESS
-    : process.env.SEPOLIA_DP_CONTRACT_ADDRESS;
-  if (!address) throw new Error(`Alamat kontrak untuk ${paymentType} belum diatur.`);
-  if (!contracts.has(paymentType)) {
+
+  if (!contractInstance) {
     const wallet = new Wallet(process.env.SEPOLIA_WRITER_PRIVATE_KEY, provider);
-    contracts.set(paymentType, new Contract(address, ABI, wallet));
+    contractInstance = new Contract(address, ABI, wallet);
   }
-  return contracts.get(paymentType);
+  return contractInstance;
 }
 
 /**
  * Worker: proses antrian blockchain_jobs dari Supabase.
- * Dipanggil setiap 15 detik dari index.js.
+ * Menggunakan 1 smart contract tunggal dengan fungsi recordDpPayment dan recordFinalPayment.
  */
 export async function syncBlockchainJobs() {
   if (!ready() || active || !supabase) return;
@@ -64,8 +67,8 @@ export async function syncBlockchainJobs() {
 
     for (const job of jobs) {
       try {
+        const c = await getContract();
         const paymentType = job.payments?.payment_type || 'DP';
-        const c = await getContract(paymentType);
         const bookingRefHash = ethersId(job.booking_id);
         const rawHash = job.bookings?.hash || '';
         const agreementHash = rawHash.startsWith('0x') ? rawHash : `0x${rawHash}`;
@@ -89,7 +92,7 @@ export async function syncBlockchainJobs() {
           continue;
         }
 
-        // Kirim transaksi ke Sepolia
+        // Kirim transaksi ke smart contract tunggal (LockInEscrow)
         const tx = paymentType === 'FINAL'
           ? await c.recordFinalPayment(bookingRefHash, agreementHash, paymentHash)
           : await c.recordDpPayment(bookingRefHash, agreementHash, paymentHash);
