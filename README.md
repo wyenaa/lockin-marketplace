@@ -1,101 +1,178 @@
-# LockIn
+# 🎓 LockIn — Graduation Vendor Marketplace with Escrow & Blockchain Audit Trail
 
-Website full stack berdasarkan delapan tampilan Figma LockIn: landing page, katalog vendor, detail jasa/perjanjian, detail sewa standing sign, checkout, status booking, dashboard vendor, dan admin sengketa. Aset SVG asli Figma disimpan di `public/assets`.
+Platform marketplace pemesanan vendor wisuda (PA Wisuda, MUA, Stylist, Content Creator, Rental Acrylic Sign) dengan integrasi **Midtrans Sandbox** untuk pembayaran bertahap (DP 30% & Pelunasan) serta pencatatan bukti transaksi on-chain ke **Ethereum Sepolia Testnet**.
 
-## Menjalankan di Windows
+Repository: [https://github.com/wyenaa/lockin-marketplace](https://github.com/wyenaa/lockin-marketplace)
 
-Prasyarat: Node.js 24 atau lebih baru. Tidak perlu menginstal database atau dependency untuk menjalankan aplikasi.
+---
 
-```powershell
-cd "D:\semester 7\blockchain"
-npm.cmd start
+## 🏗️ Struktur Folder Proyek
+
+```
+lockin-marketplace/
+├── backend/                  # Server Node.js + Express API
+│   ├── src/
+│   │   ├── index.js          # HTTP server, routing, REST API & file static
+│   │   ├── db/
+│   │   │   ├── supabase.js   # Supabase client & query runner
+│   │   │   └── seed.js       # Seed data vendor & demo accounts
+│   │   ├── services/
+│   │   │   ├── midtrans.js   # Midtrans Snap payment & signature verification
+│   │   │   └── blockchain.js # Ethers.js integration & worker queue (outbox)
+│   │   └── webhooks/
+│   │       └── midtrans.js   # Webhook handler (idempotent, SHA-512 check)
+│   ├── tests/                # Unit tests (payment security, signature, logic)
+│   │   ├── midtrans.test.mjs
+│   │   └── payment-security.test.mjs
+│   └── package.json
+│
+├── frontend/                 # Client UI (Single Page Application)
+│   ├── public/
+│   │   ├── index.html        # Single-page application entry
+│   │   ├── app.js            # Routing, state machine, modals, booking flow
+│   │   ├── styles.css        # Responsive styling & design tokens
+│   │   └── assets/           # SVG icons, logo, font lokal OFL
+│   └── package.json
+│
+├── blockchain/               # Smart Contracts (Solidity)
+│   ├── contracts/
+│   │   ├── LockInBookingLog.sol      # Pencatatan bukti pembayaran DP on-chain
+│   │   └── LockInFinalPaymentLog.sol # Pencatatan bukti pelunasan on-chain
+│   ├── DEPLOY.md             # Panduan deployment smart contract via Remix IDE
+│   └── package.json
+│
+├── database/                 # Database Schema & Seed (Supabase PostgreSQL)
+│   ├── schemas/
+│   │   └── schema.sql        # Skema tabel lengkap + RLS policies
+│   └── seeds/
+│       └── seed.sql          # SQL seed vendor demo
+│
+├── docs/                     # Dokumentasi arsitektur, keputusan & checklist
+├── audit-lockin.mjs          # Script audit konsistensi DB vs Sepolia on-chain
+├── .env.example              # Template variabel lingkungan
+├── .gitignore
+├── package.json              # Root npm workspace & scripts
+└── README.md
 ```
 
-Buka **http://127.0.0.1:3000**. Untuk pengembangan dengan restart otomatis, gunakan `npm.cmd run dev`. `npm.cmd` menghindari pembatasan eksekusi `npm.ps1` di PowerShell.
+---
 
-Database SQLite dibuat otomatis di `data/lockin.sqlite`, termasuk enam vendor contoh dan tiga akun demo. Data booking tetap tersimpan setelah server dimatikan. `HOST`, `PORT`, dan `DB_PATH` dapat diberikan melalui environment variable; nilai default host adalah `127.0.0.1`. Server tidak membaca file `.env` secara otomatis.
+## ⚙️ Tech Stack
 
-## Akun demo
+| Komponen | Teknologi | Keterangan |
+|---|---|---|
+| **Backend** | Node.js (>=22.0.0), Express | ES Module, zero-dependency REST API core |
+| **Frontend** | Vanilla JS, CSS3, HTML5 | SPA interaktif, desain Figma, assets lokal |
+| **Database** | Supabase (PostgreSQL) | Auth bawaan, Row Level Security, realtime |
+| **Payment Gateway** | Midtrans Sandbox (Snap API) | Pembayaran DP & pelunasan, verifikasi SHA-512 |
+| **Blockchain** | Ethereum Sepolia Testnet | Smart contract Solidity 0.8.24 via Ethers.js |
+| **Worker Queue** | Outbox Pattern | Async job processing tiap 15 detik dengan retry |
+| **Testing** | Node.js Test Runner | `node --test` untuk unit test & audit script |
 
-| Peran | Email | Password |
-| --- | --- | --- |
-| Pelanggan | user@lockin.demo | LockInDemo123! |
-| Vendor | vendor@lockin.demo | LockInDemo123! |
-| Admin | admin@lockin.demo | LockInDemo123! |
+---
 
-Klik **Masuk**, lalu tombol peran demo untuk mencoba. Akun baru dapat didaftarkan sebagai pelanggan. Semua vendor contoh dimiliki akun vendor demo. Keluar untuk beralih peran; peran tidak dapat diubah oleh pelanggan melalui API.
+## 🚀 Panduan Memulai
 
-## Alur utama
+### 1. Prasyarat
+- Node.js versi 22 atau lebih baru.
+- Git.
+- Akun [Midtrans Sandbox](https://sandbox.midtrans.com) (opsional, tersedia mode simulasi).
+- Akun [Supabase](https://supabase.com) untuk database cloud.
+- Wallet testnet MetaMask & Sepolia ETH (opsional, tersedia audit check).
 
-1. Cari vendor berdasarkan kategori, kota Malang, dan tanggal. Urutkan harga atau rating.
-2. Buka detail, isi tanggal, jam, dan alamat acara, lalu setujui perjanjian.
-3. Backend mengunci snapshot perjanjian, menghasilkan hash SHA-256, menyimpan booking, dan menahan slot selama 24 jam.
-4. Checkout menyediakan QRIS, virtual account, serta e-wallet dalam sandbox. Uji sukses, gagal, atau kedaluwarsa. Jasa membayar DP 30%, lalu sisa pelunasan; sewa membayar biaya sewa dan deposit sekaligus.
-5. Booking muncul pada akun pelanggan dan dashboard vendor. Konfirmasi selesai tersedia untuk booking lunas setelah tanggal acara. Sewa yang selesai dianggap telah dikembalikan dalam kondisi baik; deposit dikembalikan secara simulasi.
-6. Keluhan dapat diajukan pada hari acara sampai 48 jam setelah akhir hari acara. Sertakan kronologi dan keterangan atau tautan bukti. Vendor menanggapi dari dashboard; admin memutuskan pelepasan dana, refund sebagian, atau refund penuh. Keputusan tidak bisa dikirim dua kali.
-7. Pembatalan menghitung refund sesuai aturan yang ditampilkan dan melepas slot. Riwayat audit menyimpan nominal refund.
+### 2. Instalasi Dependency
 
-## Batas implementasi
+```bash
+# Install dependencies di root / backend
+npm install
+```
 
-- **Pembayaran dan escrow adalah simulasi** sesuai checkout sandbox di desain. Tidak ada uang sungguhan, webhook gateway, rekening penampungan, atau transfer refund. Biaya layanan contoh Rp0.
-- **Blockchain adalah simulasi lokal**. Hash SHA-256 dan rantai audit disimpan di SQLite; belum ada smart contract atau transaksi Sepolia. Aplikasi tidak menampilkan transaksi/explorer palsu.
-- Nama, harga, dan rating merupakan data contoh untuk menggantikan placeholder desain. Katalog saat ini hanya Malang.
-- Bukti sengketa berupa teks dan tautan; unggah berkas belum tersedia. Pendaftaran vendor pada landing page menyimpan minat kontak, belum membuat vendor baru atau mengirim pesan.
-- Font Plus Jakarta Sans dan Caveat disimpan lokal beserta lisensi OFL di `public/assets`; antarmuka dapat dimuat tanpa koneksi ke Google Fonts.
-- Aplikasi disiapkan untuk dijalankan lokal. Sebelum deployment publik, ganti/hapus akun demo, tambahkan rate limiting, HTTPS dengan cookie Secure, backup database, serta integrasi gateway/blockchain bila dibutuhkan. Belum ada deployment hosting.
+### 3. Setup Environment (.env)
 
-## Payment Gateway & Blockchain (Sepolia)
+Salin `.env.example` ke `.env`:
+```bash
+cp .env.example .env
+```
 
-Aplikasi telah terintegrasi dengan:
-1. **Midtrans Sandbox (Snap)**: Pembayaran DP dan pelunasan menggunakan Snap redirect. Webhook diverifikasi dengan signature SHA-512, serta didukung sinkronisasi manual (`/api/bookings/:id/sync-payment`).
-2. **Ethereum Sepolia Testnet**: Bukti pembayaran DP dan pelunasan dicatat secara on-chain ke smart contract (`contracts/LockInBookingLog.sol` dan `contracts/LockInFinalPaymentLog.sol`). Worker backend memproses antrian job blockchain (`blockchain_jobs`) setiap 15 detik dan tautan transaksi dapat dilihat langsung di Sepolia Etherscan.
-3. **Simulasi Fallback**: Jika kredensial Midtrans / Sepolia tidak diatur di `.env`, aplikasi otomatis berjalan dalam mode simulasi interaktif (pengujian lokal tanpa koneksi eksternal).
-
-### Konfigurasi `.env`
-
-Salin dan sesuaikan variabel pada file `.env`:
-
+Sesuaikan nilai di `.env`:
 ```env
 PORT=4000
+HOST=127.0.0.1
+
+# Midtrans Sandbox
 MIDTRANS_SERVER_KEY=SB-Mid-server-...
 MIDTRANS_SIGNATURE_SECRET_KEY=Mid-server-...
+
+# Ethereum Sepolia Testnet
 SEPOLIA_RPC_URL=https://sepolia.infura.io/v3/...
 SEPOLIA_WRITER_PRIVATE_KEY=...
 SEPOLIA_DP_CONTRACT_ADDRESS=0xdDF5D4Ad584679A7c2E76765097DBeD0393F6F6f
 SEPOLIA_FINAL_CONTRACT_ADDRESS=0x9165Ee0C004c8D45f1B021dD8F2d8D6fF5968FCF
+
+# Supabase
+SUPABASE_URL=https://xxxx.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=ey...
 ```
 
-### Audit Database & Blockchain
+### 4. Setup Database Supabase
+1. Buka project di **Supabase Dashboard** → **SQL Editor**.
+2. Salin isi file `database/schemas/schema.sql` dan jalankan (Run).
+3. Opsional: jalankan `database/seeds/seed.sql` untuk vendor contoh.
 
-Jalankan script verifikasi konsistensi database terhadap smart contract Sepolia:
+### 5. Menjalankan Aplikasi
 
-```powershell
-node audit-lockin.mjs
+```bash
+# Menjalankan server aplikasi (backend + frontend SPA)
+npm run dev
 ```
 
-## Pengujian
+Buka browser di:
+👉 **`http://127.0.0.1:4000`**
 
-```powershell
-npm.cmd run check
-npm.cmd test
+---
+
+## 🧪 Testing & Audit
+
+### Menjalankan Unit Test
+Menguji verifikasi signature Midtrans, status notification, dan validasi keamanan transaksi:
+```bash
+npm run test
 ```
 
-Pengujian API menggunakan database memori terpisah, sehingga tidak mengubah data lokal. Mencakup akses peran, isolasi pengguna, jadwal ganda, validasi tanggal, pembayaran ulang, DP/pelunasan, sewa/deposit, kedaluwarsa, pembatalan, dan alur sengketa.
-
-Untuk pengujian browser, instal dev dependency dengan `npm.cmd install`, lalu jalankan `npm.cmd run test:e2e` setelah dependency Playwright tersedia. Pengujian menggunakan Chrome yang sudah terpasang di Windows; `CHROME_PATH` dapat mengubah lokasi executable. Database browser test juga terpisah dalam memori.
-
-## Struktur
-
-```text
-server.mjs          HTTP server, REST API, autentikasi, SQLite, seed data
-public/index.html   Dokumen aplikasi
-public/app.js       Routing, halaman, form, interaksi API
-public/styles.css   Token desain dan layout responsif
-public/assets/      Aset SVG asli Figma
-tests/              Pengujian API dan browser
-data/               Database runtime (diabaikan Git)
+### Menjalankan Audit Database & Blockchain
+Memverifikasi konsistensi data hash booking dan receipt on-chain Sepolia:
+```bash
+npm run audit
 ```
 
-API utama: `GET /api/vendors`, `GET /api/vendors/:id`, `POST /api/auth/register`, `POST /api/auth/login`, `POST /api/auth/logout`, `GET /api/auth/me`, `GET/POST /api/bookings`, `GET /api/bookings/:id`, `POST /api/bookings/:id/payment`, `POST /api/bookings/:id/complete`, `POST /api/bookings/:id/cancel`, `POST /api/bookings/:id/dispute`, `GET /api/bookings/:id/audit`, `GET /api/disputes`, `POST /api/disputes/:id/response`, `POST /api/disputes/:id/resolve`, dan `POST /api/leads`.
+---
 
-Password menggunakan scrypt dengan salt unik; sesi disimpan server-side dan cookie HttpOnly/SameSite. Endpoint mutasi memvalidasi origin jika browser mengirimkannya, input, akses pemilik, peran, dan transisi status. Nominal pembayaran dihitung oleh backend.
+## 🔒 Alur Transaksi & Keamanan
+
+```
+Pelanggan buat Booking
+      ↓
+Persetujuan Perjanjian Digital (Snapshot disimpan & di-hash SHA-256)
+      ↓
+Checkout DP (30%) via Midtrans Snap (QRIS / VA / E-Wallet)
+      ↓
+Webhook Midtrans masuk ke /webhooks/midtrans
+      ↓
+Verifikasi Signature SHA-512 (Timing-safe comparison)
+      ↓
+Update status di Database (Idempotent: cegah duplicate event)
+      ↓
+Worker Outbox mencatat hash bukti ke Smart Contract Sepolia (LockInBookingLog.sol)
+      ↓
+Pelunasan (Sisa 70%) sebelum hari H acara
+      ↓
+Dicatat ke Smart Contract Pelunasan (LockInFinalPaymentLog.sol)
+      ↓
+Konfirmasi Selesai / Penyelesaian Sengketa oleh Admin
+```
+
+---
+
+## 📄 Lisensi & Kontribusi
+Dikembangkan untuk Tugas Akhir mata kuliah Teknologi Blockchain dan Platform Keuangan Digital, Universitas Brawijaya.
+All rights reserved © 2026 LockIn Team.

@@ -1,0 +1,21 @@
+-- ============================================================
+-- LockIn — Seed Data Demo untuk Supabase
+-- Jalankan SETELAH schema.sql
+-- Pastikan sudah buat 3 akun demo via Supabase Auth dulu:
+--   user@lockin.demo     → role: customer
+--   vendor@lockin.demo   → role: vendor
+--   admin@lockin.demo    → role: admin
+-- ============================================================
+
+-- Ganti UUID di bawah ini dengan UUID dari Supabase Auth Dashboard
+-- (Authentication → Users)
+
+-- Contoh: seed vendor demo (owner_id = UUID akun vendor@lockin.demo)
+-- INSERT INTO public.vendors (owner_id, name, category, price, deposit, rating, completed, verified, color, description)
+-- VALUES
+--   ('<vendor-user-uuid>', 'Teman Wisuda',   'PA Wisuda',          250000, 0,      4.9, 48, true, 'pink',   'Pendamping wisuda seharian.'),
+--   ('<vendor-user-uuid>', 'Glow Graduation','GCC',                450000, 0,      4.9, 36, true, 'blue',   'Dokumentasi foto dan video pendek wisuda.'),
+--   ('<vendor-user-uuid>', 'Nara Beauty',    'Hijab & Hair Stylist',350000, 0,     4.8, 52, true, 'green',  'Hijab styling dan hair do.'),
+--   ('<vendor-user-uuid>', 'Aurelia Makeup', 'MUA',                500000, 0,      4.9, 64, true, 'gold',   'Makeup wisuda natural dan tahan lama.'),
+--   ('<vendor-user-uuid>', 'Ruang Akrilik',  'Standing Sign',      150000, 100000, 4.8, 28, true, 'purple', 'Acrylic standing sign sewa satu hari.'),
+--   ('<vendor-user-uuid>', 'Cerita Kampus',  'GCC',                375000, 0,      4.7, 23, true, 'red',    'Foto dan video vertikal wisuda.');

@@ -1,0 +1,13 @@
+{
+  "name": "lockin-blockchain",
+  "version": "1.0.0",
+  "private": true,
+  "description": "LockIn — Smart contracts (Solidity, deploy via Remix IDE)",
+  "scripts": {
+    "audit": "node ../audit-lockin.mjs"
+  },
+  "dependencies": {
+    "dotenv": "^17.2.3",
+    "ethers": "^6.15.0"
+  }
+}

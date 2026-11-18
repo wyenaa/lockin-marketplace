@@ -1,12 +1,10 @@
 /**
- * LockIn — Audit pembayaran DP dan FINAL.
+ * LockIn — Script Audit Konsistensi Transaksi (Database & Ethereum Sepolia)
  * Pemeriksaan bersifat read-only.
  * Jalankan: node audit-lockin.mjs
  */
 
 import "dotenv/config";
-import path from "node:path";
-import { DatabaseSync } from "node:sqlite";
 import {
   Contract,
   id,
@@ -14,6 +12,7 @@ import {
   isAddress,
   JsonRpcProvider
 } from "ethers";
+import { createClient } from "@supabase/supabase-js";
 
 let passed = 0;
 let failed = 0;
@@ -54,8 +53,6 @@ const events = {
   ])
 };
 
-const databasePath = path.resolve(process.cwd(), "data", "lockin.sqlite");
-let db;
 let provider;
 const writerCache = new Map();
 
@@ -69,7 +66,7 @@ async function auditConfirmedJob(job, payment, booking) {
   }
 
   if (!provider || !config?.address || !isAddress(config.address)) {
-    warn(`${kind}: RPC atau alamat kontrak tidak tersedia.`);
+    warn(`${kind}: RPC atau alamat kontrak tidak valid.`);
     return;
   }
 
@@ -122,18 +119,18 @@ async function auditConfirmedJob(job, payment, booking) {
       fail(`${kind}: diharapkan 1 event ${config.eventName}, ditemukan ${matchingEvents.length}`);
       return;
     }
-    pass(`${kind}: event ${config.eventName} ditemukan`);
+    pass(`${kind}: event ${config.eventName} ditemukan on-chain`);
 
     const event = matchingEvents[0];
     if (event.bookingRefHash.toLowerCase() === id(booking.id).toLowerCase()) {
-      pass(`${kind}: bookingRefHash cocok`);
+      pass(`${kind}: bookingRefHash cocok on-chain`);
     } else {
       fail(`${kind}: bookingRefHash berbeda`);
     }
 
     const orderRef = payment.provider_order_id || payment.id;
     if (event.paymentRefHash.toLowerCase() === id(orderRef).toLowerCase()) {
-      pass(`${kind}: paymentRefHash cocok`);
+      pass(`${kind}: paymentRefHash cocok on-chain`);
     } else {
       fail(`${kind}: paymentRefHash berbeda`);
     }
@@ -150,29 +147,22 @@ async function auditConfirmedJob(job, payment, booking) {
   }
 }
 
-try {
-  db = new DatabaseSync(databasePath, { readOnly: true });
+async function runAudit() {
+  console.log("\n=======================================================");
+  console.log(" 🔍 AUDIT LOCKIN: DATABASE & ETHEREUM SEPOLIA (READ-ONLY)");
+  console.log("=======================================================\n");
 
-  console.log("\n=== AUDIT LOCKIN: DP + PELUNASAN (READ ONLY) ===");
-
-  const tables = db.prepare(`SELECT name FROM sqlite_master WHERE type = 'table'`).all().map(row => row.name);
-  const required = ["bookings", "payments", "ledger_entries", "blockchain_jobs"];
-
-  for (const name of required) {
-    if (tables.includes(name)) pass(`Tabel ${name} ada`);
-    else fail(`Tabel ${name} tidak ada`);
-  }
-
+  // 1. Periksa koneksi RPC Sepolia
   if (process.env.SEPOLIA_RPC_URL) {
     try {
       provider = new JsonRpcProvider(process.env.SEPOLIA_RPC_URL);
       const network = await provider.getNetwork();
       if (network.chainId !== 11155111n) {
-        fail(`RPC memakai chainId ${network.chainId}, bukan Sepolia`);
+        fail(`RPC memakai chainId ${network.chainId}, bukan Sepolia (11155111)`);
         provider.destroy();
         provider = null;
       } else {
-        pass("RPC terhubung ke Ethereum Sepolia");
+        pass("RPC terhubung ke Ethereum Sepolia Testnet");
       }
     } catch (error) {
       warn(`Koneksi Sepolia bermasalah (${error.shortMessage || error.message})`);
@@ -183,44 +173,75 @@ try {
     warn("SEPOLIA_RPC_URL tidak tersedia");
   }
 
-  const bookings = db.prepare(`SELECT * FROM bookings ORDER BY id`).all();
-  if (bookings.length) pass(`Ditemukan ${bookings.length} booking`);
-  else warn("Belum ada booking");
-
-  for (const booking of bookings) {
-    const totalAmount = booking.price || booking.total_amount || 0;
-    const bookingState = booking.state || booking.status;
-    console.log(`\nBOOKING ${booking.id} | ${bookingState} | Total Rp${totalAmount}`);
-
-    const rawHash = booking.hash || booking.agreement_hash || '';
-    const cleanHash = rawHash.replace(/^0x/i, '');
-    if (/^[0-9a-f]{64}$/i.test(cleanHash)) {
-      pass("Format agreement hash valid SHA-256");
+  // 2. Periksa Smart Contracts
+  for (const [kind, cfg] of Object.entries(contracts)) {
+    if (cfg.address && isAddress(cfg.address)) {
+      pass(`Alamat contract ${kind} valid: ${cfg.address}`);
     } else {
-      fail("Format agreement hash tidak valid");
-    }
-
-    const payments = db.prepare(`SELECT * FROM payments WHERE booking_id = ? ORDER BY id`).all(booking.id);
-    if (!payments.length) warn("Booking belum memiliki pembayaran");
-
-    for (const payment of payments) {
-      const isPaid = payment.outcome === 'success' || payment.status === 'PAID';
-      console.log(`  Pembayaran ${payment.id} [${payment.payment_type || 'DP'}]: ${isPaid ? 'PAID' : (payment.outcome || payment.status)} Rp${payment.amount}`);
-      if (isPaid) {
-        const job = db.prepare(`SELECT * FROM blockchain_jobs WHERE payment_id = ?`).get(payment.id);
-        if (job) {
-          console.log(`    Blockchain job: ${job.status}${job.tx_hash ? ` (tx: ${job.tx_hash})` : ''}`);
-          if (job.status === 'CONFIRMED') {
-            await auditConfirmedJob(job, payment, booking);
-          }
-        }
-      }
+      warn(`Alamat contract ${kind} belum diisi atau tidak valid`);
     }
   }
 
+  // 3. Periksa Database (Supabase)
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
+
+  if (supabaseUrl && supabaseKey) {
+    pass("Konfigurasi Supabase terdeteksi");
+    const supabase = createClient(supabaseUrl, supabaseKey);
+
+    const requiredTables = ["bookings", "payments", "ledger_entries", "blockchain_jobs"];
+    for (const table of requiredTables) {
+      const { error } = await supabase.from(table).select('id').limit(1);
+      if (error && error.code === '42P01') {
+        fail(`Tabel ${table} belum dibuat di Supabase`);
+      } else {
+        pass(`Tabel ${table} tersedia di Supabase`);
+      }
+    }
+
+    const { data: bookings } = await supabase.from('bookings').select('*').order('created_at', { ascending: false });
+    if (bookings?.length) {
+      pass(`Ditemukan ${bookings.length} booking di database`);
+      for (const booking of bookings) {
+        console.log(`\nBOOKING ${booking.id} | Status: ${booking.state} | Total: Rp${booking.price}`);
+        const rawHash = booking.hash || '';
+        const cleanHash = rawHash.replace(/^0x/i, '');
+        if (/^[0-9a-f]{64}$/i.test(cleanHash)) {
+          pass("Format agreement hash valid SHA-256");
+        } else {
+          fail("Format agreement hash tidak valid");
+        }
+
+        const { data: payments } = await supabase.from('payments').select('*').eq('booking_id', booking.id);
+        if (!payments?.length) warn("Booking belum memiliki pembayaran");
+
+        for (const payment of payments || []) {
+          const isPaid = payment.outcome === 'success';
+          console.log(`  Pembayaran ${payment.id} [${payment.payment_type || 'DP'}]: ${isPaid ? 'PAID' : payment.outcome} Rp${payment.amount}`);
+          if (isPaid) {
+            const { data: job } = await supabase.from('blockchain_jobs').select('*').eq('payment_id', payment.id).single();
+            if (job) {
+              console.log(`    Blockchain job: ${job.status}${job.tx_hash ? ` (tx: ${job.tx_hash})` : ''}`);
+              if (job.status === 'CONFIRMED') {
+                await auditConfirmedJob(job, payment, booking);
+              }
+            }
+          }
+        }
+      }
+    } else {
+      warn("Belum ada data booking di database Supabase.");
+    }
+  } else {
+    warn("Kredensial Supabase belum diatur di .env (SUPABASE_URL & SUPABASE_SERVICE_ROLE_KEY).");
+  }
+
   console.log(`\nAudit selesai: ${passed} passed, ${failed} failed, ${warnings} warnings\n`);
-} catch (e) {
-  console.error("Audit error:", e.message);
-} finally {
   provider?.destroy();
 }
+
+runAudit().catch(err => {
+  console.error("Audit error:", err.message);
+  provider?.destroy();
+});

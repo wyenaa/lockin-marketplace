@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { verifySignature, interpretNotification } from '../src/midtrans.js';
+import { verifySignature, interpretNotification } from '../src/services/midtrans.js';
 
 const serverKey = 'SB-Mid-server-FAKE-LOCAL-TEST';
 const valid = {

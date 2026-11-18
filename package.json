@@ -1,24 +1,21 @@
 {
-  "name": "lockin",
+  "name": "lockin-marketplace",
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Platform booking vendor wisuda berdasarkan desain Figma LockIn",
+  "description": "LockIn — Platform booking vendor wisuda dengan Escrow Payment Midtrans Sandbox & Audit Trail Ethereum Sepolia",
   "scripts": {
-    "start": "node server.mjs",
-    "dev": "node --watch server.mjs",
-    "test": "node --test tests/*.test.mjs",
-    "check": "node --check server.mjs && node --check public/app.js",
-    "test:e2e": "playwright test"
+    "start": "node backend/src/index.js",
+    "dev": "node --watch backend/src/index.js",
+    "test": "node --test backend/tests/*.test.mjs",
+    "audit": "node audit-lockin.mjs"
   },
   "engines": {
-    "node": ">=24.0.0"
+    "node": ">=22.0.0"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.39.0",
     "dotenv": "^17.2.3",
     "ethers": "^6.15.0"
-  },
-  "devDependencies": {
-    "@playwright/test": "^1.64.1"
   }
 }

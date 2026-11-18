@@ -1,6 +1,29 @@
-data/
-node_modules/
+# Environment
 .env
-test-results/
-_lockin-payment/
+.env.local
+.env.*.local
 
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Runtime data
+data/
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+
+# Logs
+*.log
+logs/
+npm-debug.log*
+
+# Playwright & Tests
+test-results/
+playwright-report/
+
+# OS & Editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

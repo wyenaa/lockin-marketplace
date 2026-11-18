@@ -1,8 +1,8 @@
-// Modul integrasi Midtrans Sandbox — Snap Redirect & Webhook
-// Port dari prototipe payment gateway LockIn.
+// LockIn — Integrasi Midtrans Sandbox (Snap Redirect + Webhook)
+// Dipindahkan dari src/midtrans.js (repo asal) tanpa perubahan logika.
 import { createHash, timingSafeEqual } from 'node:crypto';
 
-// Snap Redirect: backend meminta URL pembayaran sandbox; tidak ada uang sungguhan.
+/** Buat transaksi Midtrans Snap dan kembalikan redirect_url */
 export async function createSnapPayment({ orderId, amount }) {
   const serverKey = process.env.MIDTRANS_SERVER_KEY;
   if (!serverKey) throw new Error('MIDTRANS_SERVER_KEY belum diisi di .env');
@@ -28,7 +28,10 @@ export async function createSnapPayment({ orderId, amount }) {
   return result.redirect_url;
 }
 
-// Verifikasi signature SHA-512 dari webhook Midtrans.
+/**
+ * Verifikasi signature SHA-512 dari webhook Midtrans.
+ * Menggunakan timingSafeEqual untuk mencegah timing attack.
+ */
 export function verifySignature(notification, serverKey) {
   const { order_id, status_code, gross_amount, signature_key } = notification || {};
   if (![order_id, status_code, gross_amount, signature_key, serverKey].every(x => typeof x === 'string' && x.length > 0)) return false;
@@ -37,7 +40,7 @@ export function verifySignature(notification, serverKey) {
   return timingSafeEqual(Buffer.from(expected, 'hex'), Buffer.from(signature_key, 'hex'));
 }
 
-// Memetakan status notifikasi Midtrans ke status internal.
+/** Memetakan status notifikasi Midtrans ke status internal */
 export function interpretNotification(n) {
   const status = n.transaction_status;
   if (status === 'settlement') return 'PAID';
@@ -47,7 +50,7 @@ export function interpretNotification(n) {
   return 'PENDING';
 }
 
-// Mengambil status transaksi dari Midtrans Status API.
+/** Ambil status transaksi dari Midtrans Status API */
 export async function fetchMidtransStatus(orderId) {
   const serverKey = process.env.MIDTRANS_SERVER_KEY;
   if (!serverKey) throw new Error('MIDTRANS_SERVER_KEY belum diatur');
@@ -60,3 +63,5 @@ export async function fetchMidtransStatus(orderId) {
   if (!response.ok) throw new Error(result.status_message || 'Gagal mengecek pembayaran');
   return result;
 }
+
+export const isMidtransConfigured = () => !!process.env.MIDTRANS_SERVER_KEY;
