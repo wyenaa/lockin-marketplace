@@ -1,5 +1,10 @@
 // LockIn — Supabase client
 // Digunakan oleh semua modul backend untuk akses database.
+import ws from 'ws';
+if (!globalThis.WebSocket) {
+  globalThis.WebSocket = ws;
+}
+
 import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = process.env.SUPABASE_URL;

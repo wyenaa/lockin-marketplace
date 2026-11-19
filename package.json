@@ -11,11 +11,12 @@
     "audit": "node audit-lockin.mjs"
   },
   "engines": {
-    "node": ">=22.0.0"
+    "node": ">=20.0.0"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.39.0",
     "dotenv": "^17.2.3",
-    "ethers": "^6.15.0"
+    "ethers": "^6.15.0",
+    "ws": "^8.18.0"
   }
 }
