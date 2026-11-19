@@ -1,12 +1,238 @@
 <!doctype html>
 <html lang="id">
 <head>
-  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#1d4ed8"><meta name="description" content="LockIn — booking vendor wisuda, kunci perjanjian, dan kelola pembayaran dalam satu tempat.">
-  <title>LockIn — Kunci janji, tenang di hari H</title>
-  <link rel="icon" href="/assets/logo.svg" type="image/svg+xml">
-  <link href="/assets/fonts.css" rel="stylesheet">
-  <link rel="stylesheet" href="/styles.css"><script src="/app.js" defer></script>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>LockIn: Vendor Wisuda dengan Pembayaran Aman</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Caveat:wght@700&display=swap">
+<style>
+:root{--bg:#F6F9FF;--c:#fff;--t:#0F172A;--m:#475569;--p:#1D4ED8;--pl:#DBEAFE;--b:#E2E8F0;--a:#C2410C;--ok:#DCFCE7;--okt:#166534;--bad:#FEE2E2;--badt:#991B1B;--hero:#DCEAFF;color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0B1220;--c:#131D33;--t:#E5E7EB;--m:#A3B1C6;--p:#60A5FA;--pl:#1E3A6B;--b:#25324D;--a:#FB923C;--ok:#12391F;--okt:#86EFAC;--bad:#4A1717;--badt:#FCA5A5;--hero:#10203F;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0B1220;--c:#131D33;--t:#E5E7EB;--m:#A3B1C6;--p:#60A5FA;--pl:#1E3A6B;--b:#25324D;--a:#FB923C;--ok:#12391F;--okt:#86EFAC;--bad:#4A1717;--badt:#FCA5A5;--hero:#10203F;color-scheme:dark}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--t);font-family:'Plus Jakarta Sans',system-ui,sans-serif;line-height:1.5}
+a{color:inherit;text-decoration:none}
+.w{max-width:1200px;margin:0 auto;padding:0 20px}
+.demo{background:var(--p);color:#fff;text-align:center;font-size:13px;font-weight:600;padding:8px 12px}
+.nav{background:var(--c);border-bottom:1px solid var(--b)}
+.nav .w{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;padding-top:14px;padding-bottom:14px}
+.logo{display:flex;align-items:center;gap:10px;font-weight:800;font-size:24px}
+.links{display:flex;gap:20px;font-size:14px;font-weight:600;color:var(--m);flex-wrap:wrap}
+.links a:hover{color:var(--p)}
+.btn{display:inline-block;border:0;border-radius:12px;padding:13px 20px;font:700 15px 'Plus Jakarta Sans',sans-serif;cursor:pointer;background:var(--p);color:#fff;text-align:center}
+.btn.o{background:transparent;color:var(--p);border:2px solid var(--p)}
+.btn.blk{display:block;width:100%}
+.btn:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid #F59E0B;outline-offset:2px}
+.hero{background:linear-gradient(180deg,var(--hero),var(--bg));padding:48px 0 70px}
+.hero .w{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:32px;align-items:center}
+h1{font-size:clamp(34px,5vw,60px);line-height:1.06;letter-spacing:-1.5px;margin:0 0 16px;font-weight:800}
+h1 em{font-family:'Caveat',cursive;font-style:normal;color:var(--a);font-size:1.25em;letter-spacing:0}
+h2{margin:0 0 14px;font-size:24px;letter-spacing:-.4px}
+.mut{font-size:14px;color:var(--m)}
+.art{position:relative;min-height:340px;border-radius:28px;background:radial-gradient(circle at 70% 20%,#fff 0,#BFDBFE 35%,#3B82F6 100%);overflow:hidden}
+.chip{position:absolute;background:var(--c);color:var(--m);border-radius:16px;padding:12px 14px;box-shadow:0 12px 30px rgba(29,78,216,.25);font-size:13px}
+.chip b{display:block;color:var(--t);font-size:14px}
+.sch{margin:-40px auto 0;position:relative;background:var(--c);border-radius:20px;padding:18px;box-shadow:0 18px 40px rgba(15,23,42,.14);display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;align-items:end}
+label{display:block;font-size:12px;font-weight:700;color:var(--m);margin-bottom:5px}
+select,input[type=text],input[type=date]{width:100%;border:1px solid var(--b);border-radius:12px;padding:12px;font:500 14px 'Plus Jakarta Sans',sans-serif;background:var(--c);color:var(--t)}
+.sec{padding:44px 0 0}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:16px}
+.card{background:var(--c);border-radius:20px;box-shadow:0 6px 22px rgba(15,23,42,.08);overflow:hidden;display:block}
+.card .im{height:130px}.card .bd{padding:16px;font-size:14px;color:var(--m)}.card b{display:block;color:var(--t);font-size:17px}
+.pad{padding:22px}
+.cat{height:150px;border-radius:20px;padding:16px;color:#fff;display:flex;flex-direction:column;justify-content:flex-end;font-weight:700}
+.tag{display:inline-block;background:var(--pl);color:var(--p);border-radius:999px;padding:3px 10px;font-size:12px;font-weight:700}
+.tag.ok{background:var(--ok);color:var(--okt)}.tag.bad{background:var(--bad);color:var(--badt)}
+.two{display:grid;grid-template-columns:1.3fr 1fr;gap:24px;align-items:start;padding:32px 0}
+@media(max-width:820px){.two{grid-template-columns:1fr}}
+.row{display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid var(--b);font-size:14px;color:var(--m)}
+.row b{color:var(--t);text-align:right}
+.pill{width:100%;display:flex;justify-content:space-between;gap:12px;text-align:left;border:2px solid var(--b);border-radius:14px;padding:14px;margin-bottom:10px;background:var(--c);color:var(--t);font:600 14px 'Plus Jakarta Sans',sans-serif;cursor:pointer}
+.pill.sel{border-color:var(--p);background:var(--pl)}
+.chips{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px}
+.chips button{border:1px solid var(--b);background:var(--c);color:var(--t);border-radius:999px;padding:8px 14px;font:600 13px 'Plus Jakarta Sans',sans-serif;cursor:pointer}
+.chips .on{background:var(--p);color:#fff;border-color:var(--p)}
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin:8px 0}
+.cal span{text-align:center;padding:9px 0;border-radius:10px;background:var(--pl);font-size:13px;font-weight:600}
+.cal .no{background:var(--b);color:var(--m);text-decoration:line-through}.cal .pk{background:var(--p);color:#fff}
+.log{background:#0B1220;color:#86EFAC;font:12px/1.7 ui-monospace,monospace;border-radius:14px;padding:14px;margin-top:12px}
+.msg{padding:12px 14px;border-radius:12px;font-size:14px;font-weight:600;margin-bottom:14px}
+footer{margin-top:56px;background:#0B1F4D;color:#CBD5E1;padding:22px 0;font-size:13px}
+#toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:#0F172A;color:#fff;padding:12px 18px;border-radius:12px;font-size:14px;font-weight:600;display:none;z-index:9}
+.acts{display:flex;align-items:center;gap:12px}.links{flex:1;justify-content:center}.links a{padding:6px 2px;border-bottom:2px solid transparent}.links a.on{color:var(--p);border-color:var(--p)}
+.mn{position:relative}.mn summary{list-style:none;display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:600;font-size:14px}.mn summary::-webkit-details-marker{display:none}
+.av{width:34px;height:34px;border-radius:50%;background:var(--p);color:#fff;display:grid;place-items:center;font-weight:800}
+.dd{position:absolute;right:0;top:44px;background:var(--c);border:1px solid var(--b);border-radius:14px;box-shadow:0 12px 30px rgba(15,23,42,.18);min-width:170px;padding:6px;z-index:5}.dd a{display:block;padding:10px 12px;border-radius:10px;font-size:14px;font-weight:600}.dd a:hover{background:var(--pl)}
+.back{font-size:14px;font-weight:600;color:var(--m);display:inline-block;margin:24px 0 12px}
+.stepper{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.stepper span{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;color:var(--m)}.stepper i{width:26px;height:26px;border-radius:50%;background:var(--b);display:grid;place-items:center;font-style:normal;font-size:13px}.stepper .on{color:var(--t)}.stepper .on i{background:var(--p);color:#fff}.stepper .dn i{background:var(--okt);color:var(--bg)}.stepper em{width:28px;height:2px;background:var(--b)}
+.stp{display:grid;gap:12px;margin-top:20px}.stp div{display:flex;gap:16px;align-items:flex-start;background:var(--c);border-radius:18px;padding:18px;box-shadow:0 6px 22px rgba(15,23,42,.08)}.stp i{flex:none;width:36px;height:36px;border-radius:50%;background:var(--p);color:#fff;display:grid;place-items:center;font-style:normal;font-weight:800}.stp b{display:block}
+.vcta{display:flex;justify-content:space-between;align-items:center;gap:20px;flex-wrap:wrap}
+.ph{display:grid;place-items:center;border-radius:14px;aspect-ratio:4/5}.gal{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px}.card .im{display:grid;place-items:center}
+</style>
 </head>
-<body><a class="skip" href="#main">Lewati ke konten</a><div id="app"><p class="loading">Memuat LockIn…</p></div><div id="toast" role="status" aria-live="polite"></div><dialog id="modal"></dialog><noscript>Aktifkan JavaScript untuk menggunakan LockIn.</noscript></body>
+<body>
+<header class="nav"><div class="w"><a class="logo" href="#beranda"><svg width="34" height="34" viewBox="0 0 38 38" aria-hidden="true"><rect width="38" height="38" rx="11" fill="#1D4ED8"/><rect x="10" y="17" width="18" height="12" rx="3" fill="#fff"/><path d="M14 17v-3a5 5 0 0 1 10 0v3" fill="none" stroke="#fff" stroke-width="2.5"/></svg>LockIn</a>
+<nav class="links" id="nv" aria-label="Menu utama"></nav><div class="acts" id="ac"></div></div></header>
+<main id="app"></main>
+<footer><div class="w">&copy; 2026 LockIn</div></footer>
+<div id="toast" role="status"></div>
+<script>
+var S={city:'Malang',cc:'Malang',mode:'dp',lunas:false,req:null,vid:0,role:null,user:'',next:null,dispute:false,vf:'',pay:'QRIS',sc:'sukses',item:'g',stage:0,cat:'Semua',dec:'vendor',agree:false};
+var CAT={MUA:'MUA',Stylist:'Hijab & Hair Stylist',GCC:'Graduation Content Creator',PA:'PA Wisuda',Sign:'Acrylic Standing Sign'},GR={MUA:'#FDE68A,#B45309',Stylist:'#6EE7B7,#047857',GCC:'#93C5FD,#1E3A8A',PA:'#F9A8D4,#BE185D',Sign:'#C4B5FD,#5B21B6'},CF={l:'Harga tertulis di sumber publik',d:'Harga perlu dikonfirmasi',e:'Perkiraan',a:'Harga via WA atau DM vendor'};
+var CT=[['PA','','PA Wisuda',GR.PA,'Lihat vendor'],['GCC','','Graduation Content Creator',GR.GCC,'Lihat vendor'],['Stylist','','Hijab & Hair Stylist',GR.Stylist,'Lihat vendor'],['MUA','','MUA',GR.MUA,'Lihat vendor'],['Sign','','Acrylic Standing Sign',GR.Sign,'Lihat vendor']];
+var CITIES=['Malang','Surabaya','Yogyakarta','Semarang','Solo','Bandung','Bogor'],DEF={MUA:300000,Stylist:150000,GCC:350000,PA:300000,Sign:75000};
+function cln(s){return s.split('. ').filter(function(x){return!(/\b(WA|DM)\b/.test(x)||/pricelist|bio\b|link|form booking|katalog|sumber|listing|estimasi|data akun|nama akun|cek status/i.test(x))}).join('. ')}
+var VD=`MUA|Malang|Lolita Makeup||lolitamakeup.id|199000|349000|l|Wisuda: makeup 249rb, +hairdo 349rb. Pendamping: 199rb, +hairdo 299rb. Bundling ibu dan anak mulai 399rb. Home service, transport mulai 50rb.
+MUA|Malang|Makeup Rinsil||bridestory.com/makeup-rinsil|250000|250000|d|Soft makeup, hijab do simple termasuk, hairdo biaya tambahan. Free home service Malang Kota.
+MUA|Malang|Magda MUA||magdamua.com|500000|500000|l|Makeup + hairdo atau hijabdo untuk photoshoot dan graduation.
+MUA|Malang|Kamilah MUA||jasamakeupmalang.com|250000|300000|d|Wisuda 300rb, pendamping 250rb, hairdo 150rb. Home service Malang-Batu termasuk. Sumber sekitar 2 tahun lalu.
+MUA|Malang|Ananda Beauty Makeup|||0|0|a|Melayani 24 jam, makeup panggilan ke rumah atau lokasi wisuda.
+MUA|Malang|Make Up By Dyah|||0|0|a|Studio di Graha Alphecca C dan panggilan. Ada paket wisuda, tanya via WA.
+MUA|Malang|Bie MUA|bie_mua||0|0|a|Certified MUA sejak 2017. Menerima luar kota.
+MUA|Malang|IFV Graduation (Foto dan Makeup Wisuda)|ifv_graduation||0|0|a|Foto dan makeup wisuda, Sawojajar.
+MUA|Malang|By Dhemenayu|by.dhemenayu||0|0|a|Pricelist via WA, bukan DM. Blimbing.
+MUA|Malang|Galeri Makeup Vina|galerimakeupvina||0|0|a|Data akun sekitar 2 tahun lalu.
+MUA|Malang|MUA by Ziyah|mua_byziyah||0|0|a|Paket Reguler dan Premium. Makeup pendamping wisuda. Malang Raya, Surabaya, Lumajang.
+MUA|Malang|Studio Delapan||studiodelapan.com|0|0|a|Makeup wisuda, hairdo, hijab stylist, sewa kebaya dan aksesoris. Jl. Soekarno Hatta.
+MUA|Malang|Ewardrobe Malang|ewardrobe.malang|ewardrobe.wordpress.com|300000|300000|d|Paket kebaya premium + makeup mulai 300rb. Sewa kebaya biasa 175rb. Sumber lama.
+Stylist|Malang|Lolita Makeup (add-on hairdo)||lolitamakeup.id/harga|100000|150000|l|Hairdo 100-150rb. Hijabdo simple sudah termasuk di paket wisuda.
+Stylist|Malang|Hijab Do Malang|hijabdo.malang||0|0|a|Certified personal stylist.
+Stylist|Malang|Hijab Stylist Malang|hijabstylistmalang||0|0|a|DM lambat, gunakan WA.
+Stylist|Malang|Hairdo Hijabdo Malang (Devita Natalia)|devitanatalia.hairdo||0|0|a|Hairdo dan hijabdo untuk wisuda, wedding, prewedding, party.
+Stylist|Malang|Hair dan Hijab Do (Jeje Jesyka)|hijabhairdo.jeje_jesyka||0|0|a|Batu. Freelancer hijabdo dan hairdo.
+GCC|Malang|Dokumentasi Wisuda (Foto Wisuda Outdoor)|dokumentasiwisuda||250000|0|l|Foto wisuda mulai 250rb, personal dan grup.
+GCC|Malang|Moment Graduation|moment.graduation||0|0|a|Foto-video pre, day, post graduation. Malang dan Surabaya. Pricelist via WA.
+GCC|Malang|Laurea (Wisuda Outdoor)|laurea.ind||0|0|a|Gaya minimalis elegan. Malang, Surabaya, Bali, Bandung, Yogyakarta.
+GCC|Malang|Memoriest|memoriest.id||0|0|a|Fotografer laki-laki dan perempuan, personal dan grup.
+GCC|Malang|Gawemomen|gawemomen||0|0|a|Konsep foto wisuda tanpa kaku. Malang dan Surabaya.
+GCC|Malang|Neom Picture|neompicture||0|0|a|Malang dan Surabaya.
+GCC|Malang|Storykuphoto|storykuphoto|storykuphoto.com|0|0|a|Paket foto + video teaser reels atau TikTok lewat form booking.
+PA|Lokasi belum jelas|Ide Trade Centre (Jasa Pendamping Wisuda)||idetradecentre.my.id|300000|300000|d|Jasa pendamping wisuda umum. Verifikasi lokasi sebelum dipakai.
+Sign|Malang|Arbeya Flo|arbeya.flo||0|0|a|Sewa dan jual papan akrilik, free ongkir, bisa dadakan.
+Sign|Malang|Fatimah Hijab Official (Buket dan Papan Akrilik)|fatimah_hijabofficial||0|0|a|Harga via katalog di bio.
+MUA|Surabaya|Ratu Nimas MUA|||350000|350000|d|Makeup + hairdo atau hijabdo. Listing sekitar 2 tahun lalu.
+GCC|Surabaya|Senior Grads (Jasa Foto Wisuda)|senioragrads||0|0|a|Juga Malang, Yogyakarta, Solo, Semarang, Bandung, Jakarta.
+Sign|Surabaya|Papan Akrilik Surabaya|papanakriliksby.id||72000|0|l|Sewa 72rb.
+Sign|Surabaya|Ruang Bunga SDA|ruangbunga.sda||0|0|a|Sewa atau beli, pricelist via link bio. Surabaya-Sidoarjo.
+MUA|Yogyakarta|Wedding Center Jogja|mua.weddingcenterjogja|weddingcenteryogyakarta.com|200000|200000|d|Makeup wisuda + hairdo atau hijab 200rb. Makeup ibu atau keluarga 200rb.
+MUA|Yogyakarta|Ovieka MUA||jogjamakeup.com|500000|550000|l|Wisuda hijab 500rb, non-hijab 550rb. Home service.
+MUA|Yogyakarta|Sandita MUA|sanditamua||200000|300000|d|Dasar 200rb (hijabdo +50rb), premium 300rb. Home service 25rb per orang. Listing era pandemi.
+MUA|Yogyakarta|Rias Wisuda Jogja|makeupwisudajogjakarta||0|0|a|MUA dan hijab stylist.
+MUA|Yogyakarta|Makeup Wisuda Jogja (Widap)|widap_makeup||0|0|a|Certified MUA, tidak melayani DM.
+MUA|Yogyakarta|Ulya Nela MUA|ulyanelamua||0|0|a|Luar kota bisa.
+MUA|Yogyakarta|MUA Jogja (Indah Nurita)|indah_nurita||0|0|a|
+MUA|Yogyakarta|Brushed by Hunn|brushedbyhunn||0|0|a|Yogyakarta, Klaten, Solo.
+GCC|Yogyakarta|Calista Photo Studio|||240000|0|l|Paket foto wisuda mulai 240rb.
+GCC|Yogyakarta|Rabiyuk|||400000|0|l|Paket personal Essential: 1 wisudawan, 1 jam, 30 foto edit.
+Sign|Yogyakarta|Papan Akrilik Jogja by Yiega|papanakrilikjogja.byyiega||80000|0|d|Sewa mulai 80rb. Cek status buka (menurut postingan libur sampai Agustus 2025).
+Sign|Yogyakarta|Seliya Craft|seliya.craft||0|0|a|Free ongkir se-Jogja, free custom papan.
+Sign|Yogyakarta|Papan Bunga Jogja|papanbunga.jogja||0|0|a|Sewa dan beli, free antar-jemput.
+MUA|Semarang|Ayunayyara Makeup|ayunayyaramakeup||250000|250000|l|Wisuda 250rb (dari bio IG).
+MUA|Semarang|Dhenoq Makeup|dhenoq_makeup||200000|200000|d|Listing marketplace.
+MUA|Semarang|Aylla Makeup dan Boutique|ayllamakeupandboutique||0|0|a|Sekaran, area UNNES. Pricelist via DM.
+MUA|Semarang|Nabila Makeup|nblamakeup||0|0|a|
+MUA|Semarang|Divia Makeup|diviamakeup||0|0|a|
+MUA|Semarang|Makeup by Yayaa|makeupbyyayaa_||0|0|a|Pricelist via WA.
+MUA|Semarang|Pratiwi Makeup Hijabdo|pratiwi_makeuphijabdo||0|0|a|Mijen, Boja, Kendal.
+MUA|Semarang|Dhewi Hartono|dhewihartono||0|0|a|Tembalang, home service.
+Sign|Semarang|Papan Akrilik Semarang|papanakrilik.semarang||75000|0|l|Sewa 75rb, bisa request desain.
+Sign|Semarang|Sunflowrist|sunflowrist__||50000|0|l|Mulai 50rb, free design dan ongkir, order H-1.
+Sign|Semarang|Akrily Florist|akrily.florist||0|0|a|Booking maksimal H-2 via WA.
+Sign|Semarang|By Monic Florist|bymonic.florist||0|0|a|Sewa dan beli.
+MUA|Solo|Makeup by Zahra|makeup_byzahra||0|0|a|Juga Jogja.
+MUA|Solo|Vita Hasan Makeup|vitahasanmakeup||0|0|a|Solo Raya.
+MUA|Solo|Madina Makeup|madinamakeup_mua||0|0|a|Pricelist via WA.
+MUA|Solo|Ria Soenaryo Makeup dan Salon Studio|riasoenaryo||400000|900000|d|Kisaran makeup + hairdo atau hijabdo 400-900rb (estimasi artikel, bukan pricelist resmi).
+Sign|Solo|Ucapinaku|ucapinaku||0|0|a|Sewa papan bunga akrilik + gift wisuda. Free ongkir UMS.
+MUA|Bandung|YSR Makeup Artist|ysr_makeupartist||0|0|a|Certified BNSP.
+MUA|Bandung|Vimodist Makeup|vimodist_makeup||0|0|a|Certified BNSP, hijab only available.
+MUA|Bandung|Uwie MUA|makeup.byuwie||0|0|a|Hijab dan hairdo.
+MUA|Bandung|Ara Makeup|araamakeup||0|0|a|Korean dan fresh look. Bandung dan Jakarta.
+MUA|Bandung|Rins MUA Bandung|rinsmuabandung||0|0|a|Soft glam, graduation.
+MUA|Bandung|Nayah MUA|nayah_mua||0|0|a|Pricelist via link bio.
+MUA|Bandung|Laela Makeup|laela.makeup||0|0|a|MUA dan hijabdo, termasuk pendamping wisuda.
+Sign|Bandung|Buntara Bandung|buntara_bdg||100000|0|l|Sekitar 100rb (dari nama akun). Menerima sewa dadakan.
+MUA|Bogor|Metha Makeup Wedding|metha_makeupwedding||500000|500000|l|Wisuda + mom termasuk hijabdo 500rb. Transport menyesuaikan.
+MUA|Bogor|Wisye Makeup|wisye.makeup||0|0|a|
+MUA|Bogor|Win Makeup Bogor|winmakeup_bgr||0|0|a|
+MUA|Bogor|Wulan MUA|wulan.mua||0|0|a|Hairdo oleh @wulan.hairdo.
+MUA|Bogor|By Linds Makeup|bylindsmakeup||0|0|a|Bogor, Depok, Jakarta.
+MUA|Bogor|Shanty Makeup|shanty_makeup24||0|0|a|
+Sign|Bogor|Enzcraft|enzcraft||0|0|a|Sewa papan ucapan akrilik dan flower box, maksimal H-1 jam 19.00.`.split('\n').map(function(r,i){var x=r.split('|');return{i:i,c:x[0],k:x[1],n:x[2],ig:x[3],w:x[4],a:+x[5]||DEF[x[0]],b:+x[6]||0,f:x[7],t:cln(x[8]||'')}});
+function rp(n){return 'Rp'+n.toLocaleString('id-ID')}
+function pr(v){return v.a?(v.b&&v.b!=v.a?rp(v.a)+' - '+rp(v.b):'Mulai '+rp(v.a)):'Tanya vendor'}
+var P={MUA:'<path d="M6 18l8-8 3 3-8 8H6zM14 10l4-5 2 2-5 4"/>',Stylist:'<path d="M12 3c3 3 6 5 6 9a6 6 0 0 1-12 0c0-4 3-6 6-9z"/>',GCC:'<rect x="3" y="7" width="18" height="12" rx="3"/><circle cx="12" cy="13" r="3.5"/>',PA:'<circle cx="12" cy="8" r="3.5"/><path d="M5 20c1-4 4-6 7-6s6 2 7 6"/>',Sign:'<rect x="4" y="4" width="16" height="12" rx="2"/><path d="M12 16v5M8 21h8"/>'};
+function ic(c){return '<svg width="38" height="38" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.6" aria-hidden="true">'+P[c]+'</svg>'}
+function hsh(s){var h=0;for(var i=0;i<s.length;i++)h=(h*31+s.charCodeAt(i))>>>0;return h}
+function th(v,i){var a=hsh(v.n)+i*37;return 'linear-gradient('+(135+i*40)+'deg,hsl('+a%360+',70%,72%),hsl('+(a+45)%360+',62%,50%))'}
+function gal(v,n){var o='';for(var i=0;i<n;i++)o+='<div class="ph" style="background:'+th(v,i)+'">'+ic(v.c)+'</div>';return o}
+function calc(){var v=VD[S.vid]||VD[0],sg=v.c=='Sign',p=v.a,dep=sg?100000:0,fee=Math.round(p*.03),due=dep?p+dep:Math.round(p*.3),tr=S.req&&S.req.status=='approved'&&S.req.vid==v.i?S.req.tr:0,rest=dep?0:p-due,tot=due+fee+tr;return{i:{n:v.n,p:p,dep:dep},fee:fee,due:due,tr:tr,rest:rest,total:tot,full:tot+rest}}
+function toast(t){var e=document.getElementById('toast');e.textContent=t;e.style.display='block';clearTimeout(window.tt);window.tt=setTimeout(function(){e.style.display='none'},2600)}
+var pages={
+beranda:function(){return '<section class="hero"><div class="w"><div><h1>Booking Vendor Wisuda<br>Tanpa Takut <em>DP Hilang</em></h1><p class="mut" style="font-size:18px;max-width:480px">Cari PA wisuda, content creator, hijab dan hair stylist, MUA, sampai sewa acrylic standing sign. Kesepakatan dikunci di awal, dana ditahan sampai wisuda beres.</p><p><a class="btn" href="#daftar">Cari Vendor</a> <a class="btn o" href="#cara">Lihat Cara Kerja</a></p></div><div class="art" aria-hidden="true"><svg viewBox="0 0 400 340" width="100%" height="100%"><rect x="130" y="150" width="140" height="110" rx="24" fill="#1E3A8A"/><path d="M158 150v-30a42 42 0 0 1 84 0v30" fill="none" stroke="#1E3A8A" stroke-width="20" stroke-linecap="round"/><circle cx="200" cy="200" r="14" fill="#FDBA74"/></svg><div class="chip" style="top:20px;left:16px"><b>DP ditahan aman</b>menunggu wisuda selesai</div><div class="chip" style="right:16px;top:120px"><b>Aturan refund terkunci</b>tercatat di blockchain</div></div></div></section>'
++'<div class="w"><form class="sch" onsubmit="return false"><div><label for="b">Jenis jasa</label><select id="b"><option>Semua jasa</option><option>PA Wisuda</option><option>Graduation Content Creator</option><option>Hijab &amp; Hair Stylist</option><option>MUA</option><option>Acrylic Standing Sign</option></select></div><div><label for="c">Tanggal wisuda</label><input id="c" type="date"></div><div><label for="d">Lokasi acara</label><select id="d">'+CITIES.map(function(x){return '<option'+(S.cc==x?' selected':'')+'>'+x+'</option>'}).join('')+'</select></div><a class="btn" href="#daftar" data-a="search">Cari Vendor</a></form></div>'
++'<div class="w sec"><h2>Kategori Wisuda</h2><div class="grid">'+CT.map(function(v){return '<a class="cat" data-a="cat" data-v="'+v[0]+'" style="background:linear-gradient(160deg,'+v[3]+')" href="#daftar">'+v[2]+'<span style="font-weight:500;font-size:13px">'+v[4]+'</span></a>'}).join('')+'</div></div>'
++'<div class="w sec"><h2>Kenapa LockIn</h2><div class="grid">'+[['Dana ditahan','Cair ke vendor setelah acara selesai dan dikonfirmasi.'],['Janji terkunci','Perjanjian dan aturan refund tidak bisa diubah sepihak.'],['Bukti bisa dicek','Status booking tercatat dan bisa diverifikasi siapa saja.'],['Vendor terverifikasi','Setiap vendor dicek tim sebelum tampil.']].map(function(s){return '<div class="card pad"><b>'+s[0]+'</b><span class="mut">'+s[1]+'</span></div>'}).join('')+'</div></div>'+'<div class="w sec"><div class="card pad vcta" style="background:#1E3A8A;color:#fff"><div><h2>Punya jasa untuk wisuda? Jadi vendor LockIn</h2><p style="margin:0">Jadwal terkunci setelah DP masuk, pembayaran pasti, dan catatan transaksi yang rapi.</p></div><div><a class="btn" style="background:#fff;color:#1E3A8A" href="#daftar-vendor">Daftar jadi vendor</a> <a class="btn o" style="color:#fff;border-color:#fff" href="#masuk-vendor">Masuk vendor</a></div></div></div>'},
+daftar:function(){var cs=['Semua','PA','GCC','Stylist','MUA','Sign'],ct=['Semua kota'].concat(CITIES),L=VD.filter(function(v){return(S.cat=='Semua'||v.c==S.cat)&&(S.city=='Semua kota'||v.k==S.city)});return '<div class="w sec"><h2>Vendor Wisuda</h2><div style="max-width:240px;margin-bottom:14px"><label for="cty">Lokasi acara</label><select id="cty">'+ct.map(function(x){return '<option'+(S.city==x?' selected':'')+'>'+x+'</option>'}).join('')+'</select></div><div class="chips">'+cs.map(function(c){return '<button data-a="cat" data-v="'+c+'" class="'+(S.cat==c?'on':'')+'">'+(c=='Sign'?'Standing Sign':c=='Stylist'?'Hijab &amp; Hair':c)+'</button>'}).join('')+'</div><p class="mut">'+L.length+' vendor</p><div class="grid">'+(L.length?L.map(function(v){return '<a class="card" data-a="item" data-v="'+v.i+'" href="#vendor"><div class="im" style="background:'+th(v,0)+'">'+ic(v.c)+'</div><div class="bd"><b>'+v.n+'</b><span class="tag">'+CAT[v.c]+'</span> <span class="tag">'+v.k+'</span><p style="margin:10px 0 0"><b style="display:inline;color:var(--a);font-size:16px">'+pr(v)+'</b></p></div></a>'}).join(''):'<p class="mut">Belum ada vendor untuk pilihan ini.</p>')+'</div></div>'},
+vendor:function(){var v=VD[S.vid]||VD[0],sg=v.c=='Sign',c=calc(),loc=S.cc,rq=S.req&&S.req.vid==v.i?S.req:null,same=loc==v.k||v.k=='Lokasi belum jelas',ok=same||(rq&&rq.status=='approved'&&rq.city==loc),d='',act;for(var i=1;i<=14;i++)d+='<span class="'+([3,10].indexOf(i)>-1?'no':i==12?'pk':'')+'">'+i+'</span>';
+if(ok)act='<label style="font-size:14px;color:var(--m);display:block;margin:12px 0"><input type="checkbox" id="agr" '+(S.agree?'checked':'')+'> Saya menyetujui perjanjian dan aturan refund</label><button class="btn blk" data-a="tocheck">Tanda tangan perjanjian dan bayar DP</button>';
+else if(rq&&rq.city==loc&&rq.status=='pending')act='<div class="msg" style="background:var(--pl);color:var(--p)">Permintaan terkirim. Menunggu persetujuan vendor.</div><a class="btn blk" href="#status">Lihat status permintaan</a>';
+else if(rq&&rq.city==loc&&rq.status=='rejected')act='<div class="msg" style="background:var(--bad);color:var(--badt)">Vendor menolak permintaan untuk '+loc+'.</div><a class="btn blk" href="#daftar">Cari vendor lain</a>';
+else act='<div class="msg" style="background:var(--pl);color:var(--p)">'+v.n+' melayani kota '+v.k+'. Untuk acara di '+loc+', vendor perlu menyetujui dulu. Setelah disetujui, kamu bisa tanda tangan perjanjian dan bayar DP.</div><button class="btn blk" data-a="req">Ajukan permintaan ke vendor</button>';
+return '<div class="w"><a class="back" href="#daftar">&larr; Kembali ke daftar</a>'+(ok?'<div>'+stp(1)+'</div>':'')+'</div><div class="w two" style="padding-top:12px"><div><div class="card pad" style="margin-bottom:24px"><h2>'+v.n+'</h2><span class="tag">'+CAT[v.c]+'</span> <span class="tag">'+v.k+'</span><p class="mut">'+v.t+'</p><p><b style="color:var(--a);font-size:20px">'+pr(v)+'</b></p><h2 style="font-size:17px;margin-top:18px">Portofolio</h2><div class="gal">'+gal(v,6)+'</div></div>'+(ok?'<div class="card pad"><h2>Perjanjian digital</h2>'+(sg?'<h2 style="font-size:16px">Pilih tanggal sewa</h2><div class="cal">'+d+'</div><p class="mut">Tanggal dicoret sudah disewa. Satu barang hanya untuk satu pelanggan per hari.</p><div class="row"><span>Serah terima</span><b>Kondisi barang difoto kedua pihak</b></div><div class="row"><span>Terlambat kembali</span><b>Denda per hari sesuai perjanjian</b></div><div class="row"><span>Rusak atau hilang</span><b>Dipotong dari deposit sesuai bukti</b></div>':'<div class="row"><span>Lingkup kerja</span><b>Sesuai paket yang disepakati</b></div><div class="row"><span>Jam mulai dan toleransi</span><b>Disepakati, toleransi 15 menit</b></div><div class="row"><span>Perubahan jadwal</span><b>Disetujui kedua pihak</b></div><div class="row"><span>Force majeure</span><b>Diatur dalam perjanjian</b></div>')+'<p class="mut">Setelah disetujui, hash perjanjian dicatat di blockchain (testnet).</p></div>':'')+'</div><div class="card pad"><h2>Ringkasan booking</h2><label for="loc">Lokasi acara</label><select id="loc" style="margin-bottom:12px">'+CITIES.map(function(x){return '<option'+(loc==x?' selected':'')+'>'+x+'</option>'}).join('')+'</select><div class="row"><span>'+(sg?'Biaya sewa':'Harga paket')+'</span><b>'+rp(c.i.p)+'</b></div>'+(sg?'<div class="row"><span>Deposit jaminan</span><b>'+rp(c.i.dep)+'</b></div>':'<div class="row"><span>DP 30%</span><b>'+rp(c.due)+'</b></div><div class="row"><span>Pelunasan (paling lambat H-7)</span><b>'+rp(c.rest)+'</b></div>')+(c.tr?'<div class="row"><span>Biaya transport</span><b>'+rp(c.tr)+'</b></div>':'')+'<div class="row"><span>Biaya layanan 3%</span><b>'+rp(c.fee)+'</b></div><div class="row"><span>Dibayar sekarang</span><b>'+rp(c.total)+'</b></div><h2 style="font-size:16px;margin-top:16px">'+(sg?'Pembatalan':'Aturan refund')+'</h2><div class="row"><span>'+(sg?'H-3 atau lebih':'Batal H-7 atau lebih')+'</span><b>100%</b></div>'+(sg?'':'<div class="row"><span>H-6 sampai H-3</span><b>50%</b></div>')+'<div class="row"><span>H-2 sampai hari H</span><b>0%</b></div><p class="mut">Vendor batal: semua dana kembali.'+(sg?' Deposit dikembalikan setelah barang kembali dalam kondisi baik.':'')+'</p>'+act+'</div></div>'},
+checkout:function(){var c=calc(),lu=S.mode=='lunas';return '<div class="w" style="padding-top:24px">'+stp(2)+'</div><div class="w two" style="padding-top:16px"><div class="card pad"><h2>'+(lu?'Pembayaran pelunasan':'Pilih metode pembayaran')+'</h2><div class="msg" style="background:var(--pl);color:var(--p)">Mode demo: pembayaran sandbox, tidak ada uang sungguhan.</div>'+[['QRIS','Semua e-wallet dan m-banking'],['Virtual Account','BCA, BNI, BRI, Mandiri'],['E-wallet','GoPay, ShopeePay, DANA']].map(function(m){return '<button class="pill '+(S.pay==m[0]?'sel':'')+'" data-a="pay" data-v="'+m[0]+'"><span>'+m[0]+'</span><span class="mut">'+m[1]+'</span></button>'}).join('')+'<label for="scn" style="margin-top:14px">Skenario uji (sandbox)</label><select id="scn"><option value="sukses"'+(S.sc=='sukses'?' selected':'')+'>Pembayaran sukses</option><option value="gagal"'+(S.sc=='gagal'?' selected':'')+'>Pembayaran gagal</option><option value="kedaluwarsa"'+(S.sc=='kedaluwarsa'?' selected':'')+'>Pembayaran kedaluwarsa</option></select><p class="mut">Pilih skenario, lalu simulasikan. Status diperbarui lewat notifikasi dari gateway.</p><button class="btn blk" data-a="paynow">Simulasikan pembayaran</button></div><div class="card pad"><h2>Rincian</h2>'+(lu?'<div class="row"><span>Pelunasan (sisa 70%)</span><b>'+rp(c.rest)+'</b></div><div class="row"><span>Total</span><b>'+rp(c.rest)+'</b></div><p class="mut">Batas pelunasan H-7. Jika kedaluwarsa, booking dibatalkan dan DP mengikuti aturan refund.</p>':'<div class="row"><span>'+c.i.n+'</span><b>'+rp(c.due)+'</b></div>'+(c.tr?'<div class="row"><span>Biaya transport</span><b>'+rp(c.tr)+'</b></div>':'')+'<div class="row"><span>Biaya layanan</span><b>'+rp(c.fee)+'</b></div><div class="row"><span>Total</span><b>'+rp(c.total)+'</b></div><p class="mut">Dana ditahan dan baru cair setelah syarat terpenuhi.</p>')+'<p class="mut">Pembayaran memakai '+S.pay+'.</p></div></div>'},
+status:function(){var c=calc(),st=S.stage,sg=S.item=='s',rq=S.req,rc='',W=function(x){return '<div class="w sec">'+x+'</div>'},bad='background:var(--bad);color:var(--badt)';
+if(rq&&(rq.status!='approved'||st<=0)){var Q=VD[rq.vid];rc='<div class="card pad" style="margin-bottom:16px"><h2>Permintaan ke '+Q.n+'</h2><div class="row"><span>Lokasi acara</span><b>'+rq.city+'</b></div><div class="row"><span>Kota vendor</span><b>'+Q.k+'</b></div>'+(rq.status=='pending'?'<div class="msg" style="background:var(--pl);color:var(--p)">Menunggu persetujuan vendor. Kamu bisa lanjut setelah vendor menyetujui.</div>':rq.status=='approved'?'<div class="msg" style="background:var(--ok);color:var(--okt)">Disetujui vendor'+(rq.tr?', biaya transport '+rp(rq.tr):'')+'. Lanjutkan tanda tangan perjanjian dan bayar DP.</div><a class="btn" data-a="item" data-v="'+rq.vid+'" href="#vendor">Lanjut tanda tangan dan bayar DP</a>':'<div class="msg" style="'+bad+'">Permintaan ditolak vendor.</div><a class="btn" href="#daftar">Cari vendor lain</a>')+'</div>'}
+if(st==-1)return W(rc+'<div class="card pad"><div class="msg" style="'+bad+'">Pembayaran gagal. Booking belum terkunci dan tidak ada dana yang ditahan.</div><a class="btn" href="#checkout">Coba bayar lagi</a></div>');
+if(st==-2)return W(rc+'<div class="card pad"><div class="msg" style="'+bad+'">Pembayaran kedaluwarsa. Tanggal dibuka kembali untuk pelanggan lain.</div><a class="btn" href="#checkout">Buat pembayaran baru</a></div>');
+if(st==-3)return W('<div class="card pad"><div class="msg" style="'+bad+'">Pelunasan melewati batas H-7. Booking dibatalkan dan DP mengikuti aturan refund.</div><a class="btn" href="#daftar">Cari Vendor</a></div>');
+if(st==0)return W(rc||'<div class="card pad"><h2>Belum ada booking aktif</h2><p class="mut">Mulai dari mencari vendor, lalu bayar di checkout.</p><a class="btn" href="#daftar">Cari Vendor</a></div>');
+var T=function(ok,t){return '<div class="row"><span>'+t+'</span><span class="tag '+(ok?'ok':'')+'">'+(ok?'Selesai':'Menunggu')+'</span></div>'},d=S.dispute&&st<4,held=S.lunas?c.full:c.total;
+return '<div class="w" style="padding-top:24px">'+stp(3)+'</div><div class="w two" style="padding-top:16px"><div class="card pad"><h2>Booking LK-2611 &middot; '+c.i.n+'</h2>'+(d?'<div class="msg" style="'+bad+'">Keluhan diajukan. Pencairan ditahan sampai admin memutuskan.</div>':'')+(st==4?'<div class="msg" style="background:var(--pl);color:var(--p)">Sengketa sudah diputuskan admin.</div>':'')+T(1,'Perjanjian ditandatangani')+T(1,sg?'Dibayar, dana ditahan ('+rp(held)+')':'DP dibayar ('+rp(c.total)+')')+(sg?'':T(S.lunas,'Pelunasan '+rp(c.rest)+' (paling lambat H-7)'))+T(st>=2,sg?'Vendor menandai barang kembali':'Vendor menandai acara selesai')+T(st>=3,'Anda konfirmasi, dana cair ke vendor')+'<p>'+(st==1&&!S.lunas&&!sg&&!d?'<button class="btn" data-a="payrest">Bayar pelunasan</button> ':'')+(st==1&&S.lunas&&!d?'<span class="mut">Menunggu vendor menandai selesai. </span>':'')+(st==2&&!d?'<button class="btn" data-a="confirm">Konfirmasi selesai</button> ':'')+(st<3&&!d?'<button class="btn o" data-a="complain">Ajukan keluhan</button>':'')+'</p></div><div class="card pad"><h2>Bukti blockchain</h2><p class="mut">Perjanjian dan status booking tercatat di blockchain (testnet). Siapa saja bisa mengeceknya dengan kode booking, tanpa data pribadi.</p><a class="btn o" href="#verifikasi">Lihat bukti publik</a></div></div>'},
+dashboard:function(){var c=calc(),st=S.stage,sg=S.item=='s',rq=S.req,held=st==1?(S.lunas?c.full:c.total):st==2?c.full:0,lb=st>=3?'Dana cair':st==2?'Menunggu konfirmasi pelanggan':S.dispute?'Sengketa':S.lunas?'Lunas, dana ditahan':'DP dibayar',nr='';
+if(rq&&rq.status=='pending'){var Q=VD[rq.vid];nr='<div class="card pad" style="margin-bottom:16px;border:2px solid var(--p)"><h2>Permintaan baru <span class="tag bad">1</span></h2><div class="row"><span>Pelanggan</span><b>Rani</b></div><div class="row"><span>Layanan</span><b>'+Q.n+'</b></div><div class="row"><span>Lokasi acara</span><b>'+rq.city+'</b></div><div class="row"><span>Kota usahamu</span><b>'+Q.k+'</b></div><label for="trs" style="margin-top:12px">Biaya transport</label><select id="trs"><option value="0">Tanpa biaya transport</option><option value="50000">Rp50.000</option><option value="100000">Rp100.000</option><option value="150000">Rp150.000</option></select><p><button class="btn" data-a="vapp">Setujui</button> <button class="btn o" data-a="vrej">Tolak</button></p></div>'}
+return '<div class="w sec"><h2>Dashboard Vendor</h2>'+nr+'<div class="grid"><div class="card pad"><span class="mut">Booking masuk</span><h2 style="font-size:32px;margin:4px 0 0">'+(st>0?1:0)+'</h2></div><div class="card pad"><span class="mut">Dana ditahan</span><h2 style="font-size:32px;margin:4px 0 0">'+rp(held)+'</h2></div><div class="card pad"><span class="mut">Sudah dicairkan</span><h2 style="font-size:32px;margin:4px 0 0">'+rp(st==3?c.i.p+c.tr:0)+'</h2></div></div><div class="card pad" style="margin-top:16px"><h2>Daftar booking</h2>'+(st>0?'<div class="row"><b>LK-2611 &middot; '+c.i.n+'</b><span class="tag '+(st>=3?'ok':'')+'">'+lb+'</span></div><p>'+(st==1&&S.lunas&&!S.dispute?'<button class="btn" data-a="vdone">Tandai selesai</button>':st==1&&!S.lunas?'<span class="mut">Menunggu pelunasan dari pelanggan.</span>':'')+'</p>':'<p class="mut">Belum ada booking aktif.</p>')+'<p class="mut">Dana cair setelah pelanggan mengonfirmasi atau 48 jam tanpa keluhan.</p></div></div>'},
+
+admin:function(){var c=calc(),st=S.stage,d=S.dispute&&st<4,ch=st==3?'Released':st==4?'Resolved':st==2?'Completed':'DPPaid',D=[['vendor','Lepas ke vendor','100% dana'],['sebagian','Refund sebagian','50% ke pelanggan'],['penuh','Refund penuh','100% ke pelanggan']];var sg=d?'<h2>Sengketa #SG-01</h2><span class="tag bad">Pencairan ditahan</span><div class="row"><span>Booking</span><b>LK-2611 &middot; '+c.i.n+'</b></div><div class="row"><span>Pelapor</span><b>Pelanggan</b></div><div class="row"><span>Dana ditahan</span><b>'+rp(c.total)+'</b></div><p class="mut">Perjanjian terkunci (hash 0x7a3f&hellip;c91e), jadi keputusan mengacu isi yang sama untuk kedua pihak.</p>'+D.map(function(x){return '<button class="pill '+(S.dec==x[0]?'sel':'')+'" data-a="dec" data-v="'+x[0]+'"><span>'+x[1]+'</span><span class="mut">'+x[2]+'</span></button>'}).join('')+'<button class="btn blk" data-a="savedec">Simpan keputusan</button>':'<h2>Sengketa</h2><p class="mut">'+(st==4?'Sengketa terakhir sudah diputuskan.':'Tidak ada sengketa aktif.')+'</p>';return '<div class="w sec"><h2>Panel Admin</h2></div><div class="w two" style="padding-top:8px"><div class="card pad">'+sg+'</div><div><div class="card pad" style="margin-bottom:24px"><h2>Log transaksi</h2><div class="log">'+(st>0?'POST /webhook ... signature valid<br>idempotency: event diproses 1x<br>status booking: '+ch+'<br>catat ke kontrak (Sepolia): OK':'Belum ada event.')+'</div></div><div class="card pad"><h2>Rekonsiliasi</h2><div class="row"><span>Transaksi di sistem</span><b>'+(st>0?1:0)+'</b></div><div class="row"><span>Transaksi di gateway</span><b>'+(st>0?1:0)+'</b></div><div class="row"><span>Selisih</span><b>0</b></div></div></div></div>'},
+masuk:function(){return '<div class="w sec" style="max-width:480px"><div class="card pad"><h2>Masuk sebagai Pelanggan</h2><p class="mut">Pelanggan masuk dengan akun Google, tanpa membuat password baru.</p><button class="btn blk" data-a="google">Masuk dengan Google</button></div></div>'},
+'masuk-vendor':function(){return lf('vendor','Masuk Vendor','vendor_demo')},
+'masuk-admin':function(){return lf('admin','Masuk Admin','admin_demo')},
+verifikasi:function(){var st=S.stage,ch=st==3?'Released':st==4?'Resolved':st==2?'Completed':'DPPaid',ok=S.vf.toUpperCase()=='LK-2611'&&st>0;return '<div class="w sec" style="max-width:560px"><div class="card pad"><h2>Verifikasi Booking</h2><p class="mut">Masukkan kode booking untuk melihat bukti di blockchain (testnet). Tidak perlu login.</p><label for="vf">Kode booking</label><input type="text" id="vf" value="'+(S.vf||'LK-2611')+'"><p><button class="btn" data-a="verify">Cek</button></p>'+(S.vf?(ok?'<div class="row"><span>Hash perjanjian</span><b>0x7a3f&hellip;c91e</b></div><div class="row"><span>Status tercatat</span><b>'+ch+'</b></div><div class="row"><span>Transaksi</span><b>0x91b2&hellip;04ad</b></div><p class="mut">Hanya hash dan status yang dicatat, tanpa data pribadi.</p>':'<div class="msg" style="background:var(--bad);color:var(--badt)">Kode tidak ditemukan atau belum ada transaksi.</div>'):'')+'</div></div>'},
+cara:function(){var st=[['Pilih vendor dan paket','Lihat harga, lingkup kerja, dan aturan refund sebelum memesan.'],['Setujui perjanjian','Kedua pihak menyetujui isi perjanjian. Isinya terkatat dan tidak bisa diubah sepihak.'],['Bayar lewat QRIS, VA, atau e-wallet','Dana ditahan dan belum menjadi hak vendor sampai syarat terpenuhi.'],['Acara selesai, dana cair','Vendor menandai selesai, pelanggan konfirmasi, lalu dana dicairkan. Tanpa konfirmasi dalam 48 jam, dana otomatis cair.'],['Ada masalah? Ajukan keluhan','Pencairan ditahan dan admin memutuskan berdasarkan perjanjian dan bukti.']];return '<div class="w sec"><h1 style="font-size:clamp(30px,4vw,44px)">Cara Kerja LockIn</h1><p class="mut" style="max-width:560px;font-size:16px">Pembayaranmu dijaga dari awal sampai acara selesai.</p><div class="stp">'+st.map(function(s,i){return '<div><i>'+(i+1)+'</i><span><b>'+s[0]+'</b><span class="mut">'+s[1]+'</span></span></div>'}).join('')+'</div><div class="grid" style="margin-top:28px"><div class="card pad"><h2>Untuk pelanggan</h2><p class="mut">DP aman, aturan refund jelas sebelum bayar, dan bukti yang bisa dicek.</p><a class="btn" href="#daftar">Cari Vendor</a></div><div class="card pad"><h2>Untuk vendor</h2><p class="mut">Jadwal terkunci setelah DP dan pembayaran pasti.</p><a class="btn o" href="#daftar-vendor">Daftar jadi vendor</a></div><div class="card pad"><h2>Cek bukti booking</h2><p class="mut">Siapa saja bisa mengecek status dengan kode booking.</p><a class="btn o" href="#verifikasi">Cek booking</a></div></div></div>'},
+'daftar-vendor':function(){return '<div class="w sec" style="max-width:560px"><div class="card pad"><h2>Daftar jadi vendor</h2><p class="mut">Isi data singkat. Tim LockIn akan menghubungi dan memverifikasi usahamu sebelum tampil di katalog.</p><label for="vn">Nama usaha</label><input type="text" id="vn"><label for="vk" style="margin-top:12px">Jenis jasa</label><select id="vk"><option>PA Wisuda</option><option>Graduation Content Creator</option><option>Hijab &amp; Hair Stylist</option><option>MUA</option><option>Sewa Acrylic Standing Sign</option></select><label for="vw" style="margin-top:12px">Nomor WhatsApp</label><input type="text" id="vw"><p><button class="btn blk" data-a="vreg">Kirim pendaftaran</button></p><p class="mut">Sudah punya akun? <a href="#masuk-vendor" style="color:var(--p);font-weight:700">Masuk</a></p></div></div>'}
+};
+var AC={status:'customer',checkout:'customer',dashboard:'vendor',admin:'admin'},LG={customer:'masuk',vendor:'masuk-vendor',admin:'masuk-admin'},HM={customer:'beranda',vendor:'dashboard',admin:'admin'};
+function lf(r,t,h){return '<div class="w sec" style="max-width:480px"><div class="card pad"><h2>'+t+'</h2><p class="mut">Akun dibuat dan diverifikasi oleh tim LockIn.</p><label for="u">Username</label><input type="text" id="u" autocomplete="username"><label for="p" style="margin-top:12px">Password</label><input type="password" id="p" autocomplete="current-password" style="width:100%;border:1px solid var(--b);border-radius:12px;padding:12px;background:var(--c);color:var(--t)"><p><button class="btn blk" data-a="login" data-v="'+r+'">Masuk</button></p><p class="mut">Akun demo: '+h+' / demo123</p>'+(r=='vendor'?'<p class="mut">Belum punya akun? <a href="#daftar-vendor" style="color:var(--p);font-weight:700">Daftar jadi vendor</a></p>':'')+'</div></div>'}
+function stp(n){var L=['Perjanjian','Pembayaran','Status'];return '<div class="stepper">'+L.map(function(t,i){return '<span class="'+(i+1==n?'on':i+1<n?'dn':'')+'"><i>'+(i+1<n?'&#10003;':i+1)+'</i>'+t+'</span>'+(i<2?'<em></em>':'')}).join('')+'</div>'}
+function nav(){var r=S.role,l='',a='';if(!r||r=='customer')l='<a href="#beranda">Beranda</a><a href="#daftar">Cari Vendor</a><a href="#cara">Cara Kerja</a>'+(r?'<a href="#status">Booking Saya</a>':'');else l=r=='vendor'?'<a href="#dashboard">Dashboard'+(S.req&&S.req.status=='pending'?' <span class="tag bad">1</span>':'')+'</a>':'<a href="#admin">Panel Admin</a>';if(r)a='<details class="mn"><summary aria-label="Menu akun"><span class="av">'+S.user.charAt(0).toUpperCase()+'</span><span>'+S.user+'</span></summary><div class="dd">'+(r=='customer'?'<a href="#status">Booking Saya</a>':r=='vendor'?'<a href="#dashboard">Dashboard</a>':'<a href="#admin">Panel Admin</a>')+'<a href="#beranda" data-a="out">Keluar</a></div></details>';else a='<a class="btn" href="#masuk">Masuk</a>';document.getElementById('nv').innerHTML=l;document.getElementById('ac').innerHTML=a;var cur='#'+(location.hash||'#beranda').slice(1);[].forEach.call(document.querySelectorAll('#nv a'),function(x){x.classList.toggle('on',x.getAttribute('href')==cur)})}
+function render(){var r=(location.hash||'#beranda').slice(1);if(!pages[r])r='beranda';var need=AC[r];if(need&&S.role!=need){if(S.role){toast('Halaman ini khusus '+need);location.hash='#'+HM[S.role];return}S.next=r;toast('Silakan masuk dulu');location.hash='#'+LG[need];return}nav();document.getElementById('app').innerHTML=pages[r]();window.scrollTo(0,0)}
+window.addEventListener('hashchange',render);
+document.addEventListener('change',function(e){var t=e.target.id;if(t=='agr')S.agree=e.target.checked;if(t=='scn')S.sc=e.target.value;if(t=='cty'){S.city=e.target.value;if(S.city!='Semua kota')S.cc=S.city;render()}if(t=='loc'){S.cc=e.target.value;render()}});
+function go(n){location.hash='#'+n;render()}
+document.addEventListener('click',function(e){var a=e.target.closest('[data-a]');if(!a)return;var k=a.dataset.a,v=a.dataset.v;
+if(k=='cat'){S.cat=v;render()}
+else if(k=='item'){S.vid=+v;S.item=VD[S.vid].c=='Sign'?'s':'g'}
+else if(k=='pay'){S.pay=v;render()}
+else if(k=='dec'){S.dec=v;render()}
+else if(k=='tocheck'){if(!S.agree){toast('Centang persetujuan perjanjian dulu');return}S.mode='dp';if(S.role!='customer'){S.next='checkout';toast('Masuk dulu sebagai pelanggan');go('masuk');return}go('checkout')}
+else if(k=='req'){if(S.role!='customer'){S.next='vendor';toast('Masuk dulu sebagai pelanggan');go('masuk');return}S.req={vid:S.vid,city:S.cc,status:'pending',tr:0};toast('Permintaan dikirim ke vendor');go('status')}
+else if(k=='vapp'){S.req.tr=+document.getElementById('trs').value;S.req.status='approved';render();toast('Permintaan disetujui. Pelanggan bisa lanjut ke perjanjian dan DP')}
+else if(k=='vrej'){S.req.status='rejected';render();toast('Permintaan ditolak')}
+else if(k=='payrest'){S.mode='lunas';go('checkout')}
+else if(k=='paynow'){if(S.mode=='lunas'){if(S.sc=='sukses'){S.lunas=true;toast('Pelunasan berhasil')}else if(S.sc=='gagal')toast('Pembayaran gagal. Coba lagi sebelum H-7');else S.stage=-3;S.mode='dp'}else{S.stage=S.sc=='sukses'?1:S.sc=='gagal'?-1:-2;S.dispute=false;S.lunas=(S.item=='s'&&S.stage==1)}go('status')}
+else if(k=='google'){S.role='customer';S.user='Rani';var n=S.next||'beranda';S.next=null;go(n)}
+else if(k=='login'){var u=document.getElementById('u').value.trim(),p=document.getElementById('p').value;if(!((v=='vendor'&&u=='vendor_demo'||v=='admin'&&u=='admin_demo')&&p=='demo123')){toast('Username atau password salah');return}S.role=v;S.user=v=='vendor'?'Glow Studio':'Admin';var m=S.next&&AC[S.next]==v?S.next:HM[v];S.next=null;go(m)}
+else if(k=='out'){S.role=null;S.user='';S.next=null;go('beranda')}
+else if(k=='search'){var mp={'PA Wisuda':'PA','Graduation Content Creator':'GCC','Hijab & Hair Stylist':'Stylist','MUA':'MUA','Acrylic Standing Sign':'Sign'},sv=document.getElementById('b'),dd=document.getElementById('d');S.cat=sv&&mp[sv.value]||'Semua';if(dd){S.cc=dd.value;S.city=dd.value}}
+else if(k=='vreg'){if(!document.getElementById('vn').value.trim()||!document.getElementById('vw').value.trim()){toast('Isi nama usaha dan nomor WhatsApp');return}toast('Pendaftaran terkirim. Tim kami akan menghubungi lewat WhatsApp');go('beranda')}
+else if(k=='vdone'){S.stage=2;render();toast('Ditandai selesai. Menunggu konfirmasi pelanggan')}
+else if(k=='confirm'){S.stage=3;render();toast('Dana dicairkan ke vendor')}
+else if(k=='complain'){S.dispute=true;render();toast('Keluhan diajukan ke admin')}
+else if(k=='savedec'){S.stage=4;render();toast('Keputusan tersimpan dan status diperbarui')}
+else if(k=='verify'){S.vf=document.getElementById('vf').value.trim();render()}
+});
+render();
+</script>
+</body>
 </html>
