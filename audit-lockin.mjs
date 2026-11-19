@@ -6,6 +6,10 @@
  */
 
 import "dotenv/config";
+import ws from "ws";
+if (!globalThis.WebSocket) {
+  globalThis.WebSocket = ws;
+}
 import {
   Contract,
   id,

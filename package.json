@@ -7,7 +7,7 @@
   "scripts": {
     "start": "node backend/src/index.js",
     "dev": "node --watch backend/src/index.js",
-    "test": "node --test backend/tests/*.test.mjs",
+    "test": "node --test backend/tests",
     "audit": "node audit-lockin.mjs"
   },
   "engines": {
