@@ -384,15 +384,17 @@ async function api(req, res, url) {
       // Mode Midtrans aktif
       if (isMidtransConfigured() && d.outcome !== 'failed' && d.outcome !== 'expired') {
         const orderId = `LOCKIN-${paymentType}-${b.id}-${randomBytes(4).toString('hex')}`;
-        let redirectUrl;
-        try { redirectUrl = await createSnapPayment({ orderId, amount }); }
+        let snapRes;
+        try { snapRes = await createSnapPayment({ orderId, amount }); }
         catch (err) { fail(502, 'Gagal membuat checkout Midtrans: ' + err.message); }
+        const redirectUrl = typeof snapRes === 'string' ? snapRes : snapRes.redirectUrl;
+        const token = typeof snapRes === 'object' ? snapRes.token : null;
         const payData = { id: randomBytes(12).toString('hex'), booking_id: b.id, method: d.method || 'Midtrans', amount, outcome: 'pending', created_at: now(), provider_order_id: orderId, redirect_url: redirectUrl, payment_type: paymentType };
         localPayments.set(payData.id, payData);
         if (supabase) {
           try { await supabase.from('payments').insert(payData); } catch {}
         }
-        return send(res, 200, { redirect_url: redirectUrl, reused: false, id: b.id });
+        return send(res, 200, { redirect_url: redirectUrl, token, reused: false, id: b.id });
       }
 
       // Mode simulasi (tanpa Midtrans)

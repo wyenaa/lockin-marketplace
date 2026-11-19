@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>LockIn: Vendor Wisuda dengan Pembayaran Aman & Audit Blockchain</title>
+<script src="https://app.sandbox.midtrans.com/snap/snap.js" data-client-key="SB-Mid-client-F2RE9X89PKA1txpB7LdfyOrT"></script>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Caveat:wght@700&display=swap">
 <style>
 :root{--bg:#F6F9FF;--c:#fff;--t:#0F172A;--m:#475569;--p:#1D4ED8;--pl:#DBEAFE;--b:#E2E8F0;--a:#C2410C;--ok:#DCFCE7;--okt:#166534;--bad:#FEE2E2;--badt:#991B1B;--hero:#DCEAFF;color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
@@ -331,6 +332,43 @@ var AC={status:'customer',checkout:'customer',dashboard:'vendor',admin:'admin'},
 function lf(r,t,h){return '<div class="w sec" style="max-width:480px"><div class="card pad"><h2>'+t+'</h2><p class="mut">Akun resmi diverifikasi oleh tim LockIn.</p><label for="u">Username</label><input type="text" id="u" autocomplete="username"><label for="p" style="margin-top:12px">Password</label><input type="password" id="p" autocomplete="current-password" style="width:100%;border:1px solid var(--b);border-radius:12px;padding:12px;background:var(--c);color:var(--t)"><p style="margin-top:16px"><button class="btn blk" data-a="login" data-v="'+r+'">Masuk Sekarang</button></p><p class="mut">Gunakan akun demo: <b>'+h+' / demo123</b></p>'+(r=='vendor'?'<p class="mut">Belum punya akun? <a href="#daftar-vendor" style="color:var(--p);font-weight:700">Daftar jadi vendor</a></p>':'')+'</div></div>'}
 function stp(n){var L=['Perjanjian','Pembayaran','Status'];return '<div class="stepper">'+L.map(function(t,i){return '<span class="'+(i+1==n?'on':i+1<n?'dn':'')+'"><i>'+(i+1<n?'&#10003;':i+1)+'</i>'+t+'</span>'+(i<2?'<em></em>':'')}).join('')+'</div>'}
 
+function openSnapModal(token, redirectUrl, bookingId) {
+  if (window.snap && typeof window.snap.pay === 'function' && token) {
+    window.snap.pay(token, {
+      onSuccess: function(result) {
+        toast('Pembayaran Berhasil! Mengupdate status escrow...');
+        fetch('/api/bookings/' + bookingId + '/sync-payment', { method: 'POST' }).finally(function() {
+          S.stage = 1;
+          if (S.mode === 'lunas') S.lunas = true;
+          go('status');
+        });
+      },
+      onPending: function(result) {
+        toast('Status: Menunggu penyelesaian pembayaran di simulator.');
+        S.stage = 1;
+        go('status');
+      },
+      onError: function(result) {
+        toast('Pembayaran ditolak / gagal.');
+        go('status');
+      },
+      onClose: function() {
+        toast('Pop-up ditutup.');
+        go('status');
+      }
+    });
+  } else {
+    // In-page overlay popup modal langsung di halaman pembayaran
+    var existingModal = document.getElementById('snap-inpage-modal');
+    if (existingModal) existingModal.remove();
+    var modal = document.createElement('div');
+    modal.id = 'snap-inpage-modal';
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,0.75);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(5px);';
+    modal.innerHTML = '<div style="position:relative;width:100%;max-width:440px;height:650px;max-height:92vh;background:#fff;border-radius:24px;overflow:hidden;box-shadow:0 25px 50px -12px rgba(0,0,0,0.35);display:flex;flex-direction:column;"><div style="display:flex;justify-content:space-between;align-items:center;padding:12px 20px;border-bottom:1px solid #e2e8f0;background:#f8fafc"><div style="display:flex;align-items:center;gap:8px"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#10B981"></span><b style="font-size:14px;color:#1e293b">Midtrans Sandbox Payment</b></div><button onclick="document.getElementById(\'snap-inpage-modal\').remove();go(\'status\')" style="background:none;border:none;font-size:26px;cursor:pointer;color:#64748b;line-height:1;padding:0 4px">&times;</button></div><iframe src="' + (redirectUrl || ('https://app.sandbox.midtrans.com/snap/v4/redirection/' + token)) + '" style="flex:1;border:none;width:100%;height:100%"></iframe></div>';
+    document.body.appendChild(modal);
+  }
+}
+
 function nav(){
   var r=S.role,l='',a='';
   if(!r||r=='customer')l='<a href="#beranda">Beranda</a><a href="#daftar">Cari Vendor</a><a href="#cara">Cara Kerja</a>'+(r?'<a href="#status">Booking Saya</a>':'');
@@ -443,13 +481,12 @@ document.addEventListener('click',function(e){
         var pData = await pRes.json();
         if(btn) { btn.disabled = false; btn.innerText = '💳 Bayar via Midtrans Sandbox (Snap Gateway)'; }
 
-        if(pData.redirect_url) {
+        if(pData.redirect_url || pData.token) {
           S.midtransUrl = pData.redirect_url;
           S.stage = 1;
           S.dispute = false;
-          toast('Membuka transaksi Midtrans Sandbox di tab baru...');
-          window.open(pData.redirect_url, '_blank');
-          go('status');
+          toast('Membuka pop-up pembayaran Midtrans...');
+          openSnapModal(pData.token, pData.redirect_url, bookingId);
         } else {
           toast('Gagal membuka Midtrans: ' + (pData.error || 'Server error'));
         }

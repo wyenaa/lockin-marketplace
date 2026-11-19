@@ -116,29 +116,6 @@ npm run dev
 
 Buka browser di: **`http://127.0.0.1:4000`**
 
-### 2. Konfigurasi Environment (`.env`)
-Salin file `.env.example` menjadi `.env` lalu sesuaikan isinya:
-
-```env
-PORT=4000
-HOST=127.0.0.1
-
-# Midtrans Sandbox
-MIDTRANS_SERVER_KEY=SB-Mid-server-F2RE9X89PKA1txpB7LdfyOrT
-MIDTRANS_SIGNATURE_SECRET_KEY=Mid-server-e2ACtqlTmx6SNo1oen3kOUf-
-
-# Ethereum Sepolia Testnet
-SEPOLIA_RPC_URL=https://sepolia.infura.io/v3/6bed20d701af40ea993a700a900ae490
-SEPOLIA_WRITER_PRIVATE_KEY=124d815bf003d1890e0f9ce791cea5699833d7664600cc792f49763c8bd6e2fa
-SEPOLIA_CONTRACT_ADDRESS=0xdDF5D4Ad584679A7c2E76765097DBeD0393F6F6f
-
-# Supabase (Database Cloud)
-SUPABASE_URL=https://xxxx.supabase.co
-SUPABASE_SERVICE_ROLE_KEY=ey...
-```
-
----
-
 ## 🧪 Testing & Audit
 
 ### Menjalankan Unit Test

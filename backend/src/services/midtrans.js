@@ -25,7 +25,7 @@ export async function createSnapPayment({ orderId, amount }) {
   if (!result.redirect_url.startsWith('https://app.sandbox.midtrans.com/')) {
     throw new Error('URL checkout bukan domain Midtrans Sandbox yang diharapkan.');
   }
-  return result.redirect_url;
+  return { token: result.token, redirectUrl: result.redirect_url };
 }
 
 /**
