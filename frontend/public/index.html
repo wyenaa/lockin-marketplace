@@ -295,7 +295,7 @@ if(!sg){
 
 return '<div class="w"><a class="back" href="#daftar">&larr; Kembali ke katalog vendor</a>'+(ok?'<div>'+stp(1)+'</div>':'')+'</div><div class="w two" style="padding-top:12px"><div><div class="card pad" style="margin-bottom:24px"><h2>'+v.n+'</h2><span class="tag">'+CAT[v.c]+'</span> <span class="tag">'+v.k+'</span><p class="mut">'+v.t+'</p><p><b style="color:var(--a);font-size:20px">'+pr(v)+'</b></p><h2 style="font-size:17px;margin-top:18px">Portofolio Layanan</h2><div class="gal">'+gal(v,6)+'</div></div>'+pkgHTML+(ok?'<div class="card pad"><h2>Perjanjian Digital Terkunci</h2>'+(sg?'<h2 style="font-size:16px">Pilih tanggal sewa</h2><div class="cal">'+d+'</div><p class="mut">Tanggal dicoret sudah disewa. Satu barang hanya untuk satu pelanggan per hari.</p><div class="row"><span>Serah terima</span><b>Kondisi barang difoto kedua pihak</b></div><div class="row"><span>Terlambat kembali</span><b>Denda per hari sesuai perjanjian</b></div><div class="row"><span>Rusak atau hilang</span><b>Dipotong dari deposit sesuai bukti</b></div>':'<div class="row"><span>Lingkup kerja</span><b>'+(c.i.pkgName||'Sesuai paket yang disepakati')+'</b></div><div class="row"><span>Jam mulai & toleransi</span><b>Disepakati, toleransi 15 menit</b></div><div class="row"><span>Perubahan jadwal</span><b>Wajib persetujuan kedua pihak</b></div><div class="row"><span>Force majeure</span><b>Diatur lengkap dalam perjanjian</b></div>')+'<p class="mut">Setelah disetujui, hash perjanjian (SHA-256) dicatat permanen di blockchain Sepolia.</p></div>':'')+'</div><div class="card pad"><h2>Ringkasan Booking</h2><label for="loc">Lokasi acara</label><select id="loc" style="margin-bottom:12px">'+CITIES.map(function(x){return '<option'+(loc==x?' selected':'')+'>'+x+'</option>'}).join('')+'</select><div class="row"><span>Paket dipilih</span><b>'+(c.i.pkgName||'Standar')+'</b></div><div class="row"><span>'+(sg?'Biaya sewa':'Harga paket')+'</span><b>'+rp(c.i.p)+'</b></div>'+(sg?'<div class="row"><span>Deposit jaminan</span><b>'+rp(c.i.dep)+'</b></div>':'<div class="row"><span>DP 30%</span><b>'+rp(c.due)+'</b></div><div class="row"><span>Pelunasan (paling lambat H-7)</span><b>'+rp(c.rest)+'</b></div>')+(c.tr?'<div class="row"><span>Biaya transport</span><b>'+rp(c.tr)+'</b></div>':'')+'<div class="row"><span>Biaya layanan 3%</span><b>'+rp(c.fee)+'</b></div><div class="row" style="border-bottom:2px solid var(--t);padding:14px 0"><span style="font-size:16px;font-weight:700">Dibayar Sekarang</span><b style="font-size:18px;color:var(--p)">'+rp(c.total)+'</b></div><h2 style="font-size:16px;margin-top:16px">'+(sg?'Pembatalan':'Aturan Refund Transparan')+'</h2><div class="row"><span>'+(sg?'H-3 atau lebih':'Batal H-7 atau lebih')+'</span><b>100% dana kembali</b></div>'+(sg?'':'<div class="row"><span>H-6 sampai H-3</span><b>50% dana kembali</b></div>')+'<div class="row"><span>H-2 sampai hari H</span><b>0% (hangus)</b></div><p class="mut">Jika vendor berhalangan hadir: 100% dana langsung dikembalikan.'+(sg?' Deposit dikembalikan setelah barang kembali utuh.':'')+'</p>'+act+'</div></div>'},
 
-checkout:function(){var c=calc(),lu=S.mode=='lunas';return '<div class="w" style="padding-top:24px">'+stp(2)+'</div><div class="w two" style="padding-top:16px"><div class="card pad"><h2>'+(lu?'Pembayaran Pelunasan':'Pilih Metode Pembayaran')+'</h2><div class="msg" style="background:var(--pl);color:var(--p)">Mode demo: pembayaran sandbox terhubung ke Midtrans, tidak ada uang sungguhan.</div>'+[['QRIS','Semua e-wallet dan mobile banking'],['Virtual Account','BCA, BNI, BRI, Mandiri, Permata'],['E-wallet','GoPay, ShopeePay, DANA, OVO']].map(function(m){return '<button class="pill '+(S.pay==m[0]?'sel':'')+'" data-a="pay" data-v="'+m[0]+'"><span><b>'+m[0]+'</b></span><span class="mut">'+m[1]+'</span></button>'}).join('')+'<label for="scn" style="margin-top:14px">Skenario Uji Pembayaran (Sandbox)</label><select id="scn"><option value="sukses"'+(S.sc=='sukses'?' selected':'')+'>Pembayaran Sukses (Settlement)</option><option value="gagal"'+(S.sc=='gagal'?' selected':'')+'>Pembayaran Gagal (Deny / Cancel)</option><option value="kedaluwarsa"'+(S.sc=='kedaluwarsa'?' selected':'')+'>Pembayaran Kedaluwarsa (Expired)</option></select><p class="mut">Pilih skenario lalu klik tombol di bawah untuk simulasi notifikasi webhook gateway.</p><button class="btn blk" data-a="paynow">Simulasikan Pembayaran Sekarang</button></div><div class="card pad"><h2>Rincian Tagihan</h2>'+(lu?'<div class="row"><span>Pelunasan (sisa 70%)</span><b>'+rp(c.rest)+'</b></div><div class="row"><span>Total tagihan</span><b>'+rp(c.rest)+'</b></div><p class="mut">Batas waktu pelunasan H-7 acara. Jika lewat batas, booking otomatis dibatalkan.</p>':'<div class="row"><span>'+c.i.n+' ('+c.i.pkgName+')</span><b>'+rp(c.due)+'</b></div>'+(c.tr?'<div class="row"><span>Biaya transport</span><b>'+rp(c.tr)+'</b></div>':'')+'<div class="row"><span>Biaya layanan</span><b>'+rp(c.fee)+'</b></div><div class="row"><span style="font-weight:700">Total Dibayar</span><b style="color:var(--p);font-size:18px">'+rp(c.total)+'</b></div><p class="mut">Dana ditahan di rekening escrow dan baru dicairkan setelah syarat terpenuhi.</p>')+'<p class="mut">Metode dipilih: <b>'+S.pay+'</b></p></div></div>'},
+checkout:function(){var c=calc(),lu=S.mode=='lunas';return '<div class="w" style="padding-top:24px">'+stp(2)+'</div><div class="w two" style="padding-top:16px"><div class="card pad"><h2>'+(lu?'Pembayaran Pelunasan':'Pilih Metode Pembayaran')+'</h2><div class="msg" style="background:var(--pl);color:var(--p)">Mode demo: pembayaran sandbox terhubung ke Midtrans, tidak ada uang sungguhan.</div>'+[['QRIS','Semua e-wallet dan mobile banking'],['Virtual Account','BCA, BNI, BRI, Mandiri, Permata'],['E-wallet','GoPay, ShopeePay, DANA, OVO']].map(function(m){return '<button class="pill '+(S.pay==m[0]?'sel':'')+'" data-a="pay" data-v="'+m[0]+'"><span><b>'+m[0]+'</b></span><span class="mut">'+m[1]+'</span></button>'}).join('')+'<p style="margin-top:20px"><button class="btn blk" data-a="paymidtrans" id="btn-midtrans" style="font-size:15px;padding:14px;background:#1D4ED8;display:flex;align-items:center;justify-content:center;gap:8px">💳 Bayar via Midtrans Sandbox (Snap Gateway)</button></p><div style="margin-top:12px;padding:12px;border-radius:12px;background:#F0FDF4;border:1px solid #BBF7D0;font-size:13px;color:#166534"><b>💡 Info Midtrans Sandbox:</b><br>Klik tombol biru di atas untuk membuka pembayaran Midtrans Snap. Anda bisa menyimulasikan bayar QRIS / Virtual Account lewat <a href="https://simulator.sandbox.midtrans.com/qris" target="_blank" style="color:#059669;font-weight:700;text-decoration:underline">Simulator QRIS</a> atau <a href="https://simulator.sandbox.midtrans.com/bca/va" target="_blank" style="color:#059669;font-weight:700;text-decoration:underline">Simulator VA</a>.</div><div style="margin-top:18px;border-top:1px dashed var(--b);padding-top:14px"><label for="scn">Opsi Pengujian Cepat (Tanpa Midtrans Gateway)</label><select id="scn"><option value="sukses"'+(S.sc=='sukses'?' selected':'')+'>Pembayaran Sukses (Settlement)</option><option value="gagal"'+(S.sc=='gagal'?' selected':'')+'>Pembayaran Gagal (Deny / Cancel)</option><option value="kedaluwarsa"'+(S.sc=='kedaluwarsa'?' selected':'')+'>Pembayaran Kedaluwarsa (Expired)</option></select><button class="btn o" data-a="paynow" style="margin-top:8px;width:100%">⚡ Uji Cepat Lokal</button></div></div><div class="card pad"><h2>Rincian Tagihan</h2>'+(lu?'<div class="row"><span>Pelunasan (sisa 70%)</span><b>'+rp(c.rest)+'</b></div><div class="row"><span>Total tagihan</span><b>'+rp(c.rest)+'</b></div><p class="mut">Batas waktu pelunasan H-7 acara. Jika lewat batas, booking otomatis dibatalkan.</p>':'<div class="row"><span>'+c.i.n+' ('+c.i.pkgName+')</span><b>'+rp(c.due)+'</b></div>'+(c.tr?'<div class="row"><span>Biaya transport</span><b>'+rp(c.tr)+'</b></div>':'')+'<div class="row"><span>Biaya layanan</span><b>'+rp(c.fee)+'</b></div><div class="row"><span style="font-weight:700">Total Dibayar</span><b style="color:var(--p);font-size:18px">'+rp(c.total)+'</b></div><p class="mut">Dana ditahan di rekening escrow dan baru dicairkan setelah syarat terpenuhi.</p>')+'<p class="mut">Metode dipilih: <b>'+S.pay+'</b></p></div></div>'},
 
 status:function(){var c=calc(),st=S.stage,sg=S.item=='s',rq=S.req,rc='',W=function(x){return '<div class="w sec" style="padding-bottom:32px">'+x+'</div>'},bad='background:var(--bad);color:var(--badt)';
 if(rq&&(rq.status!='approved'||st<=0)){var Q=VD[rq.vid];rc='<div class="card pad" style="margin-bottom:16px"><h2>Permintaan ke '+Q.n+'</h2><div class="row"><span>Lokasi acara</span><b>'+rq.city+'</b></div><div class="row"><span>Kota vendor</span><b>'+Q.k+'</b></div>'+(rq.status=='pending'?'<div class="msg" style="background:var(--pl);color:var(--p)">Menunggu persetujuan vendor. Kamu bisa lanjut setelah vendor menyetujui.</div>':rq.status=='approved'?'<div class="msg" style="background:var(--ok);color:var(--okt)">Disetujui vendor'+(rq.tr?', biaya transport '+rp(rq.tr):'')+'. Lanjutkan tanda tangan perjanjian dan bayar DP.</div><a class="btn" data-a="item" data-v="'+rq.vid+'" href="#vendor">Lanjut tanda tangan dan bayar DP</a>':'<div class="msg" style="'+bad+'">Permintaan ditolak vendor.</div><a class="btn" href="#daftar">Cari vendor lain</a>')+'</div>'}
@@ -303,8 +303,12 @@ if(st==-1)return W(rc+'<div class="card pad"><div class="msg" style="'+bad+'">Pe
 if(st==-2)return W(rc+'<div class="card pad"><div class="msg" style="'+bad+'">Pembayaran kedaluwarsa. Tanggal dibuka kembali untuk pelanggan lain.</div><a class="btn" href="#checkout">Buat pembayaran baru</a></div>');
 if(st==-3)return W('<div class="card pad"><div class="msg" style="'+bad+'">Pelunasan melewati batas H-7. Booking dibatalkan dan DP mengikuti aturan refund.</div><a class="btn" href="#daftar">Cari Vendor</a></div>');
 if(st==0)return W(rc||'<div class="card pad"><h2>Belum Ada Booking Aktif</h2><p class="mut">Kamu belum memiliki transaksi pemesanan. Mulai cari vendor wisudamu sekarang.</p><a class="btn" href="#daftar">Cari Vendor Sekarang</a></div>');
+
+var curBid = S.bookingId || 'LK-2611';
+var midtransBox = S.midtransUrl ? '<div class="card pad" style="margin-bottom:16px;border:2px solid #3B82F6;background:#EFF6FF"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><span class="tag" style="background:#1D4ED8;color:#fff">Midtrans Sandbox Snap</span><span style="font-size:12px;font-weight:700;color:#1D4ED8">Gateway Aktif</span></div><h3 style="margin:4px 0 2px">Booking Ref: '+curBid+'</h3><p class="mut" style="margin:0 0 10px">Pembayaran terhubung dengan gateway Midtrans Sandbox.</p><div style="display:flex;gap:8px;flex-wrap:wrap"><a href="'+S.midtransUrl+'" target="_blank" class="btn" style="background:#1D4ED8">Buka Halaman Midtrans Snap ↗</a><button class="btn o" data-a="syncpay" style="background:#fff">🔄 Sinkronkan Status Pembayaran</button></div><div style="margin-top:10px;padding:8px 10px;background:#fff;border-radius:8px;font-size:12px;color:#1E3A8A;border:1px solid #BFDBFE"><b>Petunjuk Simulasi Sukses:</b> Di tab Midtrans, pilih QRIS atau Virtual Account. Lalu bayar di <a href="https://simulator.sandbox.midtrans.com/qris" target="_blank" style="font-weight:700;color:#1D4ED8;text-decoration:underline">Simulator QRIS</a> atau <a href="https://simulator.sandbox.midtrans.com/bca/va" target="_blank" style="font-weight:700;color:#1D4ED8;text-decoration:underline">Simulator VA BCA</a>, lalu klik <b>Sinkronkan Status</b>.</div></div>' : '';
+
 var T=function(ok,t){return '<div class="row"><span>'+t+'</span><span class="tag '+(ok?'ok':'')+'">'+(ok?'Selesai':'Menunggu')+'</span></div>'},d=S.dispute&&st<4,held=S.lunas?c.full:c.total;
-return '<div class="w" style="padding-top:24px">'+stp(3)+'</div><div class="w two" style="padding-top:16px"><div class="card pad"><h2>Booking LK-2611 &middot; '+c.i.n+'</h2>'+(d?'<div class="msg" style="'+bad+'">Keluhan diajukan. Pencairan ditahan sampai admin memutuskan.</div>':'')+(st==4?'<div class="msg" style="background:var(--pl);color:var(--p)">Sengketa sudah diputuskan admin.</div>':'')+T(1,'Perjanjian ditandatangani')+T(1,sg?'Dibayar, dana ditahan ('+rp(held)+')':'DP dibayar ('+rp(c.total)+')')+(sg?'':T(S.lunas,'Pelunasan '+rp(c.rest)+' (paling lambat H-7)'))+T(st>=2,sg?'Vendor menandai barang kembali':'Vendor menandai acara selesai')+T(st>=3,'Anda konfirmasi, dana cair ke vendor')+'<p style="margin-top:20px">'+(st==1&&!S.lunas&&!sg&&!d?'<button class="btn" data-a="payrest">Bayar pelunasan sekarang</button> ':'')+(st==1&&S.lunas&&!d?'<span class="mut">Menunggu hari pelaksanaan & konfirmasi vendor. </span>':'')+(st==2&&!d?'<button class="btn" data-a="confirm">Konfirmasi selesai (Cairkan Dana)</button> ':'')+(st<3&&!d?'<button class="btn o" data-a="complain">Ajukan keluhan / sengketa</button>':'')+'</p></div><div class="card pad"><h2>Bukti Blockchain On-Chain</h2><p class="mut">Perjanjian dan status booking ini tercatat secara kekal di smart contract Ethereum Sepolia. Siapa saja dapat memverifikasi keabsahannya.</p><a class="btn o blk" href="#verifikasi">Lihat Bukti Verifikasi Publik</a></div></div>'},
+return '<div class="w" style="padding-top:24px">'+stp(3)+'</div><div class="w two" style="padding-top:16px"><div>'+midtransBox+'<div class="card pad"><h2>Booking '+curBid+' &middot; '+c.i.n+'</h2>'+(d?'<div class="msg" style="'+bad+'">Keluhan diajukan. Pencairan ditahan sampai admin memutuskan.</div>':'')+(st==4?'<div class="msg" style="background:var(--pl);color:var(--p)">Sengketa sudah diputuskan admin.</div>':'')+T(1,'Perjanjian ditandatangani')+T(1,sg?'Dibayar, dana ditahan ('+rp(held)+')':'DP dibayar ('+rp(c.total)+')')+(sg?'':T(S.lunas,'Pelunasan '+rp(c.rest)+' (paling lambat H-7)'))+T(st>=2,sg?'Vendor menandai barang kembali':'Vendor menandai acara selesai')+T(st>=3,'Anda konfirmasi, dana cair ke vendor')+'<p style="margin-top:20px">'+(st==1&&!S.lunas&&!sg&&!d?'<button class="btn" data-a="payrest">Bayar pelunasan sekarang</button> ':'')+(st==1&&S.lunas&&!d?'<span class="mut">Menunggu hari pelaksanaan & konfirmasi vendor. </span>':'')+(st==2&&!d?'<button class="btn" data-a="confirm">Konfirmasi selesai (Cairkan Dana)</button> ':'')+(st<3&&!d?'<button class="btn o" data-a="complain">Ajukan keluhan / sengketa</button>':'')+'</p></div></div><div class="card pad"><h2>Bukti Blockchain On-Chain</h2><p class="mut">Perjanjian dan status booking ini tercatat secara kekal di smart contract Ethereum Sepolia. Siapa saja dapat memverifikasi keabsahannya.</p><a class="btn o blk" href="#verifikasi">Lihat Bukti Verifikasi Publik</a></div></div>'},
 
 dashboard:function(){var c=calc(),st=S.stage,sg=S.item=='s',rq=S.req,held=st==1?(S.lunas?c.full:c.total):st==2?c.full:0,lb=st>=3?'Dana cair':st==2?'Menunggu konfirmasi pelanggan':S.dispute?'Sengketa':S.lunas?'Lunas, dana ditahan':'DP dibayar',nr='';
 if(rq&&rq.status=='pending'){var Q=VD[rq.vid];nr='<div class="card pad" style="margin-bottom:16px;border:2px solid var(--p)"><h2>Permintaan Masuk <span class="tag bad">1</span></h2><div class="row"><span>Pelanggan</span><b>Rani (Wisudawan)</b></div><div class="row"><span>Layanan</span><b>'+Q.n+'</b></div><div class="row"><span>Lokasi acara</span><b>'+rq.city+'</b></div><div class="row"><span>Kota usahamu</span><b>'+Q.k+'</b></div><label for="trs" style="margin-top:12px">Biaya transport tambahan</label><select id="trs"><option value="0">Tanpa biaya transport</option><option value="50000">Rp50.000</option><option value="100000">Rp100.000</option><option value="150000">Rp150.000</option></select><p style="margin-top:14px"><button class="btn" data-a="vapp">Setujui Permintaan</button> <button class="btn o" data-a="vrej">Tolak</button></p></div>'}
@@ -385,6 +389,107 @@ document.addEventListener('click',function(e){
   else if(k=='vapp'){S.req.tr=+document.getElementById('trs').value;S.req.status='approved';render();toast('Permintaan disetujui');}
   else if(k=='vrej'){S.req.status='rejected';render();toast('Permintaan ditolak');}
   else if(k=='payrest'){S.mode='lunas';go('checkout')}
+  else if(k=='paymidtrans'){
+    var btn = e.target.closest('button');
+    if(btn) { btn.disabled = true; btn.innerText = 'Menghubungkan Midtrans...'; }
+    toast('Menghubungkan ke Midtrans Snap Sandbox...');
+
+    (async function(){
+      try {
+        // 1. Pastikan user terautentikasi di backend
+        await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: 'user@lockin.demo', password: 'LockInDemo123!' })
+        }).catch(function(){});
+
+        var vendorId = (S.vid != null ? Number(S.vid) : 0) + 1;
+        if(vendorId > 6 || vendorId < 1) vendorId = 1;
+        var futureDate = new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0];
+
+        // 2. Buat atau perbarui booking di backend
+        var bookingId = S.bookingId;
+        if(!bookingId || S.mode === 'dp') {
+          var bRes = await fetch('/api/bookings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              vendorId: vendorId,
+              date: futureDate,
+              location: S.loc || 'Malang',
+              startTime: '08:00',
+              agreed: true
+            })
+          });
+          var bData = await bRes.json();
+          if(bData.id) {
+            bookingId = bData.id;
+            S.bookingId = bookingId;
+          }
+        }
+
+        if(!bookingId) bookingId = 'LK-2611';
+
+        // 3. Panggil API pembayaran Snap
+        var pRes = await fetch('/api/bookings/' + bookingId + '/payment', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            method: S.pay || 'QRIS',
+            outcome: 'success'
+          })
+        });
+
+        var pData = await pRes.json();
+        if(btn) { btn.disabled = false; btn.innerText = '💳 Bayar via Midtrans Sandbox (Snap Gateway)'; }
+
+        if(pData.redirect_url) {
+          S.midtransUrl = pData.redirect_url;
+          S.stage = 1;
+          S.dispute = false;
+          toast('Membuka transaksi Midtrans Sandbox di tab baru...');
+          window.open(pData.redirect_url, '_blank');
+          go('status');
+        } else {
+          toast('Gagal membuka Midtrans: ' + (pData.error || 'Server error'));
+        }
+      } catch(err) {
+        if(btn) { btn.disabled = false; btn.innerText = '💳 Bayar via Midtrans Sandbox (Snap Gateway)'; }
+        toast('Koneksi Midtrans gagal: ' + err.message);
+      }
+    })();
+  }
+  else if(k=='syncpay'){
+    var btn = e.target.closest('button');
+    if(btn) { btn.disabled = true; btn.innerText = 'Memeriksa Midtrans...'; }
+    toast('Memeriksa status pembayaran dari Midtrans Sandbox...');
+    (async function(){
+      try {
+        var bid = S.bookingId || 'LK-2611';
+        var res = await fetch('/api/bookings/' + bid + '/sync-payment', { method: 'POST' });
+        var data = await res.json();
+        if(btn) { btn.disabled = false; btn.innerText = '🔄 Sinkronkan Status Pembayaran'; }
+        if(data.result && data.result.paymentStatus === 'PAID') {
+          S.stage = 1;
+          if(S.mode === 'lunas') S.lunas = true;
+          toast('Pembayaran Midtrans Sukses! Tercatat di Escrow & Sepolia.');
+          render();
+        } else if(data.result && data.result.paymentStatus === 'PENDING') {
+          toast('Status Midtrans: Menunggu pembayaran di simulator.');
+        } else if(data.booking && ['DPPaid', 'Paid'].includes(data.booking.state)) {
+          S.stage = 1;
+          if(data.booking.state === 'Paid') S.lunas = true;
+          toast('Pembayaran terkonfirmasi: ' + data.booking.state);
+          render();
+        } else {
+          toast(data.error || 'Status: Belum ada pembayaran sukses yang diterima.');
+        }
+      } catch(err) {
+        if(btn) { btn.disabled = false; btn.innerText = '🔄 Sinkronkan Status Pembayaran'; }
+        toast('Gagal sinkronisasi: ' + err.message);
+      }
+    })();
+  }
   else if(k=='paynow'){
     if(S.mode=='lunas'){
       if(S.sc=='sukses'){S.lunas=true;toast('Pelunasan berhasil dikonfirmasi')}

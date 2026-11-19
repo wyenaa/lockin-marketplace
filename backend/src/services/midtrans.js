@@ -8,7 +8,7 @@ export async function createSnapPayment({ orderId, amount }) {
   if (!serverKey) throw new Error('MIDTRANS_SERVER_KEY belum diisi di .env');
   const auth = Buffer.from(`${serverKey}:`).toString('base64');
   const port = process.env.PORT || 4000;
-  const finishUrl = `http://127.0.0.1:${port}/#/bookings`;
+  const finishUrl = `http://127.0.0.1:${port}/#status`;
   const response = await fetch('https://app.sandbox.midtrans.com/snap/v1/transactions', {
     method: 'POST',
     headers: { Authorization: `Basic ${auth}`, Accept: 'application/json', 'Content-Type': 'application/json' },

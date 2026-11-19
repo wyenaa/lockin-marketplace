@@ -310,6 +310,9 @@ async function api(req, res, url) {
     // Cek konflik jadwal
     for (const b of localBookings.values()) {
       if (String(b.vendor_id) === String(v.id) && b.event_date === date && !['Expired', 'Cancelled', 'Refunded'].includes(b.state)) {
+        if (b.user_id === user.id && b.state === 'Pending') {
+          return send(res, 200, await getBooking(b.id, user));
+        }
         fail(409, 'Vendor sudah dipesan pada tanggal ini. Pilih tanggal lain.');
       }
     }
@@ -452,7 +455,7 @@ async function api(req, res, url) {
       if (!pay) fail(404, 'Belum ada transaksi pembayaran Midtrans.');
       try {
         const status = await fetchMidtransStatus(pay.provider_order_id);
-        const result = await recordNotification(status);
+        const result = await recordNotification(status, { localBookings, localPayments, localAudit });
         return send(res, 200, { result, booking: b });
       } catch (err) { fail(502, 'Gagal memeriksa pembayaran: ' + err.message); }
     }
@@ -509,7 +512,7 @@ const server = http.createServer(async (req, res) => {
     // Webhook Midtrans
     if (url.pathname === '/webhooks/midtrans' && req.method === 'POST') {
       const d = await body(req);
-      return handleMidtransWebhook(req, res, d);
+      return handleMidtransWebhook(req, res, d, { localBookings, localPayments, localAudit });
     }
 
     // Return URL setelah Midtrans payment
