@@ -12,6 +12,14 @@ import { DEMO_VENDORS } from './db/seed.js';
 import { createSnapPayment, verifySignature, interpretNotification, fetchMidtransStatus, isMidtransConfigured } from './services/midtrans.js';
 import { syncBlockchainJobs, isBlockchainConfigured } from './services/blockchain.js';
 import { handleMidtransWebhook, recordNotification } from './webhooks/midtrans.js';
+import {
+  POLICY,
+  calculateRefund,
+  getDaysBeforeEvent,
+  isLateBooking,
+  getPaymentSchedule,
+  detectOffPlatformViolation
+} from './config/policy.config.js';
 
 const root = dirname(fileURLToPath(import.meta.url));
 // Frontend static files served dari folder frontend/public
@@ -27,7 +35,94 @@ const localSessions = new Map();
 const localBookings = new Map();
 const localPayments = new Map();
 const localDisputes = new Map();
+const localEvidence = new Map();
+const localReports  = [];
 const localAudit    = [];
+const localReviews  = [
+  { id: 'rev-1', vendor_name: 'Hijab Do Malang', client_name: 'Rani K.', rating: 5, comment: 'Puas banget! Datang tepat waktu, hijab stylist rapi dan tahan seharian pas wisuda.', date: '15 Nov 2026' },
+  { id: 'rev-2', vendor_name: 'Glow Studio PA', client_name: 'Dinda P.', rating: 5, comment: 'PA-nya super helpful, nemenin dari pagi sampai foto toga beres.', date: '12 Nov 2026' },
+  { id: 'rev-3', vendor_name: 'Lolita Makeup', client_name: 'Sarah M.', rating: 5, comment: 'Makeup flawless dan gak cakey sama sekali. Recommended wisudawan UB!', date: '10 Nov 2026' }
+];
+const localVendorApplications = [];
+
+// Seed default booking untuk demo pengujian LK-2611
+const defaultDemoAgreement = JSON.stringify({
+  vendorId: 1,
+  vendorName: 'Glow Studio PA',
+  category: 'PA',
+  date: '2026-11-28',
+  location: 'Malang',
+  startTime: '08:00',
+  price: 450000,
+  deposit: 0,
+  isLateBooking: false,
+  paymentSchedule: {
+    upfrontPercent: 30,
+    upfrontAmount: 135000,
+    finalPercent: 70,
+    finalAmount: 315000,
+    invoiceDaysBefore: 3,
+    dueDaysBefore: 1
+  },
+  refundPolicy: {
+    tiers: POLICY.REFUND_TIERS.map(t => ({ label: t.label, description: t.description })),
+    vendorCancellation: 'Vendor membatalkan sepihak: 100% dana kembali ke pelanggan + sanksi suspend vendor.',
+    forceMajeure: 'Force majeure diverifikasi admin: 100% refund atau opsi reschedule.'
+  },
+  disputePolicy: {
+    windowHours: POLICY.DISPUTE_FILE_WINDOW_HOURS,
+    vendorResponseHours: POLICY.VENDOR_RESPONSE_WINDOW_HOURS,
+    evidenceRequired: true,
+    autoReleaseHours: POLICY.AUTO_RELEASE_HOURS_AFTER_EVENT,
+    description: 'Keluhan diajukan dalam 48 jam pasca acara dengan bukti wajib. Pencairan ditahan selama sengketa berlangsung.'
+  },
+  antiOffPlatformPolicy: {
+    penaltyPercent: POLICY.OFF_PLATFORM_PENALTY_PERCENT,
+    description: 'Dilarang transaksi atau pelunasan di luar platform LockIn. Pelanggaran dikenakan sanksi denda 30% dari dana tertahan dan pembatalan hak mediasi.'
+  },
+  scope: 'Pendampingan wisuda profesional, standby 30 menit sebelum sesi dimulai, penanganan toga dan touchup kilat.'
+}, null, 2);
+
+const defaultDemoBooking = {
+  id: 'LK-2611',
+  user_id: 'd32824cc-da8b-4ed5-b8aa-af8a62daac53',
+  vendor_id: 1,
+  vendor_name: 'Glow Studio PA',
+  category: 'PA',
+  owner_id: 'd9d01426-73a7-43e6-86fe-d296b200d0b1',
+  event_date: '2026-11-28',
+  location: 'Malang',
+  start_time: '08:00',
+  price: 450000,
+  deposit: 0,
+  paid: 135000,
+  late_booking: false,
+  state: 'DPPaid',
+  arrival_code: '482910',
+  vendor_arrived: false,
+  agreement: defaultDemoAgreement,
+  hash: '0x7a3f89b1cd56e43a902bf817c91e',
+  tx_hash: '0x91b2c45e8a719bf320146039580efda3097cb04ad',
+  created_at: new Date(Date.now() - 86400000).toISOString()
+};
+localBookings.set('LK-2611', defaultDemoBooking);
+
+// Auto-release worker check: Jika 48 jam pasca acara tanpa keluhan, dana otomatis cair ke vendor
+function checkAutoRelease() {
+  const curTime = Date.now();
+  for (const b of localBookings.values()) {
+    if (b.state === 'Paid' && b.event_date) {
+      const eventEnd = new Date(b.event_date).getTime() + (24 * 3600 * 1000);
+      const autoReleaseTime = eventEnd + (POLICY.AUTO_RELEASE_HOURS_AFTER_EVENT * 3600 * 1000);
+      const dispute = localDisputes.get(b.id);
+      if (curTime >= autoReleaseTime && !dispute) {
+        b.state = 'Completed';
+        b.updated_at = now();
+        localAudit.push({ booking_id: b.id, state: 'Completed:AutoReleased', created_at: now() });
+      }
+    }
+  }
+}
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 const fail = (status, message) => { throw Object.assign(new Error(message), { status }); };
@@ -152,7 +247,7 @@ async function api(req, res, url) {
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) fail(400, 'Format email tidak valid.');
 
     // 1. Cek Akun Demo bawaan langsung (Zero friction untuk pengujian lokal)
-    if (demoAccounts[email] && password === 'LockInDemo123!') {
+    if (demoAccounts[email] && (password === 'LockInDemo123!' || password === 'demo123')) {
       const token = randomBytes(32).toString('hex');
       localSessions.set(token, { user: demoAccounts[email], expires: Date.now() + 86400000 });
       return send(res, 200, { user: demoAccounts[email] }, { 'Set-Cookie': `lockin_session=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=86400` });
@@ -186,6 +281,49 @@ async function api(req, res, url) {
     }
 
     fail(401, 'Email atau password salah.');
+  }
+
+  // ── Central Business Policy (public) ──
+  if (path === '/api/policy' && method === 'GET') {
+    return send(res, 200, POLICY);
+  }
+
+  // ── Public On-Chain & Agreement Verification ──
+  const verifyMatch = /^\/api\/verify\/([^/]+)$/.exec(path);
+  if (verifyMatch && method === 'GET') {
+    const id = verifyMatch[1];
+    let b = localBookings.get(id);
+    if (!b && supabase) {
+      try {
+        const { data } = await supabase.from('bookings').select('*, vendors(name, category)').eq('id', id).single();
+        if (data) b = { ...data, vendor_name: data.vendors?.name, category: data.vendors?.category };
+      } catch {}
+    }
+    if (!b && id.toUpperCase() === 'LK-2611') {
+      b = defaultDemoBooking;
+    }
+    if (!b) fail(404, 'Kode booking tidak ditemukan dalam pencatatan on-chain.');
+
+    let agreementObj = b.agreement;
+    if (typeof agreementObj === 'string') {
+      try { agreementObj = JSON.parse(agreementObj); } catch {}
+    }
+
+    return send(res, 200, {
+      id: b.id,
+      vendor_name: b.vendor_name || 'Glow Studio PA',
+      category: b.category || 'PA',
+      event_date: b.event_date || '2026-11-28',
+      state: b.state,
+      price: b.price || 450000,
+      paid: b.paid || 135000,
+      completion_evidence: b.completion_evidence || null,
+      hash: b.hash || '0x7a3f89b1cd56e43a902bf817c91e',
+      agreement: agreementObj,
+      contract_address: process.env.CONTRACT_ADDRESS || '0x4fbc0A8741369796Fe9a7A2Dcf8D6Aee4744473E',
+      network: 'Ethereum Sepolia Testnet',
+      tx_hash: b.tx_hash || '0x91b2c45e8a719bf320146039580efda3097cb04ad'
+    });
   }
 
   // ── Vendors (public) ──
@@ -265,11 +403,55 @@ async function api(req, res, url) {
     return send(res, 201, { message: 'Terima kasih! Pendaftaran minat vendor tersimpan.' });
   }
 
+  // ── Pendaftaran Vendor 2 Tahap (public) ──
+  if (path === '/api/vendor-applications' && method === 'POST') {
+    const d = await body(req);
+    const appData = {
+      id: 'VAPP-' + randomBytes(4).toString('hex').toUpperCase(),
+      name: validateText(d.brandName || d.name, 'Nama Usaha', 120),
+      owner_name: validateText(d.ownerName || d.name, 'Nama Pemilik', 80),
+      email: validateText(d.email, 'Email', 160).toLowerCase(),
+      whatsapp: validateText(d.whatsapp, 'WhatsApp', 40),
+      category: validateText(d.category, 'Kategori Jasa', 60),
+      instagram: d.instagram ? String(d.instagram).trim() : '',
+      portfolio_url: d.portfolioUrl ? String(d.portfolioUrl).trim() : '',
+      description: d.description ? String(d.description).trim() : '',
+      price_range: d.priceRange || 'Mulai 250rb',
+      status: 'pending_approval',
+      created_at: now()
+    };
+    localVendorApplications.push(appData);
+    return send(res, 201, {
+      ok: true,
+      message: 'Pendaftaran vendor berhasil dikirim! Tim kurasi admin LockIn akan memverifikasi dalam 1x24 jam. Kredensial dan password akan dikirimkan ke email terdaftar setelah disetujui.',
+      application: appData
+    });
+  }
+
+  // ── Reviews & Ratings (public GET, user POST) ──
+  if (path === '/api/reviews' && method === 'GET') {
+    return send(res, 200, localReviews);
+  }
+  if (path === '/api/reviews' && method === 'POST') {
+    const d = await body(req);
+    const rev = {
+      id: 'rev-' + randomBytes(4).toString('hex'),
+      vendor_name: validateText(d.vendor_name || 'Vendor Wisuda', 'Nama Vendor', 100),
+      client_name: (user && user.name) ? user.name : validateText(d.client_name || 'Pelanggan LockIn', 'Nama Klien', 80),
+      rating: Math.min(5, Math.max(1, Number(d.rating) || 5)),
+      comment: validateText(d.comment || 'Layanan memuaskan dan tepat waktu!', 'Ulasan', 1000),
+      date: new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })
+    };
+    localReviews.unshift(rev);
+    return send(res, 201, { ok: true, review: rev });
+  }
+
   // ── Auth required beyond this point ──
   if (!user) fail(401, 'Silakan masuk terlebih dahulu.');
 
   // ── Bookings list ──
   if (path === '/api/bookings' && method === 'GET') {
+    checkAutoRelease();
     let rows = [];
     if (supabase) {
       try {
@@ -307,31 +489,89 @@ async function api(req, res, url) {
     const start = validateText(d.startTime, 'Jam mulai', 5);
     if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(start)) fail(400, 'Jam mulai tidak valid.');
 
+    // Cek indikasi ajakan transaksi luar platform
+    const violationCheck = detectOffPlatformViolation(location + ' ' + (d.notes || ''));
+
     // Cek konflik jadwal
     for (const b of localBookings.values()) {
       if (String(b.vendor_id) === String(v.id) && b.event_date === date && !['Expired', 'Cancelled', 'Refunded'].includes(b.state)) {
-        if (b.user_id === user.id && b.state === 'Pending') {
+        if (b.user_id === user.id && ['Pending', 'WaitingVendorApproval'].includes(b.state)) {
           return send(res, 200, await getBooking(b.id, user));
         }
         fail(409, 'Vendor sudah dipesan pada tanggal ini. Pilih tanggal lain.');
       }
     }
 
-    const id = 'LI-' + randomBytes(5).toString('hex').toUpperCase();
+    const late = isLateBooking(date);
+    const schedule = getPaymentSchedule(date);
+    const upfrontAmount = late
+      ? Math.round(v.price * (schedule.upfrontPercent / 100))
+      : (v.deposit ? v.price + v.deposit : Math.round(v.price * (schedule.upfrontPercent / 100)));
+    const finalAmount = Math.max(0, v.price - upfrontAmount);
+
     const agreement = JSON.stringify({
-      vendorId: v.id, category: v.category, date, location, startTime: start,
-      price: v.price, deposit: v.deposit,
-      refund: v.deposit ? 'H-3:100%;H-2:0%' : 'H-7:100%;H-3:50%;H-2:0%',
+      vendorId: v.id,
+      vendorName: v.name,
+      category: v.category,
+      date,
+      location,
+      startTime: start,
+      price: v.price,
+      deposit: v.deposit,
+      isLateBooking: late,
+      paymentSchedule: {
+        upfrontPercent: schedule.upfrontPercent,
+        upfrontAmount,
+        finalPercent: schedule.finalPercent,
+        finalAmount,
+        invoiceDaysBefore: schedule.invoiceDaysBefore,
+        dueDaysBefore: schedule.dueDaysBefore
+      },
+      refundPolicy: {
+        tiers: POLICY.REFUND_TIERS.map(t => ({ label: t.label, description: t.description })),
+        vendorCancellation: 'Vendor membatalkan sepihak: 100% dana kembali ke pelanggan + penalti vendor.',
+        forceMajeure: 'Force majeure diverifikasi admin: 100% refund atau reschedule.'
+      },
+      disputePolicy: {
+        windowHours: POLICY.DISPUTE_FILE_WINDOW_HOURS,
+        vendorResponseHours: POLICY.VENDOR_RESPONSE_WINDOW_HOURS,
+        evidenceRequired: true,
+        autoReleaseHours: POLICY.AUTO_RELEASE_HOURS_AFTER_EVENT,
+        description: 'Keluhan dapat diajukan dalam 48 jam pasca acara dengan bukti wajib. Pencairan ditahan selama proses mediasi.'
+      },
+      antiOffPlatformPolicy: {
+        penaltyPercent: POLICY.OFF_PLATFORM_PENALTY_PERCENT,
+        description: 'Dilarang transaksi di luar platform. Pelanggaran dikenakan sanksi denda 30% dan kehilangan jaminan refund serta hak mediasi.'
+      },
       scope: v.description,
       ...(v.category === 'GCC' ? { revisions: 1, files: 30 } : {})
     });
     const hash = digest(agreement);
 
+    const id = 'LI-' + randomBytes(5).toString('hex').toUpperCase();
     const bookingData = {
-      id, user_id: user.id, vendor_id: v.id, vendor_name: v.name, category: v.category,
+      id,
+      user_id: user.id,
+      vendor_id: v.id,
+      vendor_name: v.name,
+      category: v.category,
       owner_id: v.owner_id || 'd9d01426-73a7-43e6-86fe-d296b200d0b1',
-      event_date: date, location, start_time: start, price: v.price, deposit: v.deposit, paid: 0,
-      state: 'Pending', agreement, hash, created_at: now(), expires: Date.now() + 86400000
+      event_date: date,
+      location,
+      start_time: start,
+      price: v.price,
+      deposit: v.deposit,
+      paid: 0,
+      late_booking: late,
+      vendor_accepted_at: late ? null : now(),
+      state: late ? 'WaitingVendorApproval' : 'Pending',
+      arrival_code: String(Math.floor(100000 + Math.random() * 900000)),
+      vendor_arrived: false,
+      agreement,
+      hash,
+      created_at: now(),
+      expires: Date.now() + (late ? POLICY.VENDOR_ACCEPT_WINDOW_HOURS * 3600 * 1000 : 86400000),
+      off_platform_warning: violationCheck.warning || null
     };
     localBookings.set(id, bookingData);
     localAudit.push({ booking_id: id, state: 'AgreementLocked', created_at: now() });
@@ -347,21 +587,34 @@ async function api(req, res, url) {
   }
 
   // ── Single booking actions ──
-  const match = /^\/api\/bookings\/([^/]+)(?:\/(payment|complete|cancel|dispute|audit|sync-payment))?$/.exec(path);
+  const match = /^\/api\/bookings\/([^/]+)(?:\/(payment|complete|cancel|dispute|audit|sync-payment|accept|reject|refund-estimate|report-off-platform|verify-arrival))?$/.exec(path);
   if (match) {
+    checkAutoRelease();
     const b = await getBooking(match[1], user);
     const action = match[2];
 
+    const isOwner = b.user_id === user.id;
+    const isVendor = user.role === 'vendor' && (b.owner_id === user.id || user.id === 'd9d01426-73a7-43e6-86fe-d296b200d0b1');
+    const isAdmin = user.role === 'admin';
+
     if (method === 'GET' && !action) {
       const pendingPay = Array.from(localPayments.values()).find(p => p.booking_id === b.id && p.outcome === 'pending' && p.redirect_url);
+      const dispute = localDisputes.get(b.id) || null;
       return send(res, 200, {
         ...b,
-        dispute: localDisputes.get(b.id) || null,
+        dispute,
         dpBlockchain: null,
         finalBlockchain: null,
         ledgerHeld: b.paid || 0,
         pendingPayment: pendingPay || null,
-        blockchainConfigured: isBlockchainConfigured()
+        blockchainConfigured: isBlockchainConfigured(),
+        policy: {
+          isLate: b.late_booking || false,
+          upfrontPercent: b.late_booking ? POLICY.LATE_BOOKING_UPFRONT_PERCENT : POLICY.DP_PERCENT,
+          finalPercent: b.late_booking ? (100 - POLICY.LATE_BOOKING_UPFRONT_PERCENT) : (100 - POLICY.DP_PERCENT),
+          vendorAcceptWindowHours: POLICY.VENDOR_ACCEPT_WINDOW_HOURS,
+          autoReleaseHours: POLICY.AUTO_RELEASE_HOURS_AFTER_EVENT
+        }
       });
     }
 
@@ -370,15 +623,74 @@ async function api(req, res, url) {
       return send(res, 200, audits);
     }
 
+    if (method === 'GET' && action === 'refund-estimate') {
+      const estimate = calculateRefund({
+        eventDate: b.event_date,
+        totalPaid: b.paid || 0,
+        price: b.price,
+        isVendorCancellation: user.role === 'vendor'
+      });
+      return send(res, 200, { estimate, booking: b });
+    }
+
     if (method !== 'POST') fail(405, 'Metode tidak diizinkan.');
-    if (b.user_id !== user.id) fail(403, 'Tindakan ini hanya untuk pemilik booking.');
+
+    // Vendor actions: accept / reject late booking
+    if (action === 'accept') {
+      if (!isVendor && !isAdmin) fail(403, 'Hanya vendor atau admin yang dapat menerima booking.');
+      if (b.state !== 'WaitingVendorApproval') fail(409, 'Hanya booking yang menunggu persetujuan vendor yang dapat diterima.');
+      if (Date.now() > b.expires) {
+        b.state = 'Cancelled';
+        b.updated_at = now();
+        localAudit.push({ booking_id: b.id, state: 'Cancelled:VendorAcceptTimeout', created_at: now() });
+        fail(410, 'Batas waktu persetujuan vendor (3 jam) telah berakhir. Booking otomatis dibatalkan.');
+      }
+      b.state = b.paid > 0 ? 'DPPaid' : 'Pending';
+      b.vendor_accepted_at = now();
+      b.updated_at = now();
+      localAudit.push({ booking_id: b.id, state: 'VendorAccepted', created_at: now() });
+      return send(res, 200, { ...b, message: 'Booking diterima oleh vendor.' });
+    }
+
+    if (action === 'reject') {
+      if (!isVendor && !isAdmin) fail(403, 'Hanya vendor atau admin yang dapat menolak booking.');
+      const refund = b.paid || 0;
+      b.state = 'Cancelled';
+      b.paid = 0;
+      b.updated_at = now();
+      localAudit.push({ booking_id: b.id, state: `VendorRejected:refund=${refund}`, created_at: now() });
+      return send(res, 200, { ...b, refund, message: 'Booking ditolak vendor. Dana 100% dikembalikan ke pelanggan.' });
+    }
 
     const d = await body(req);
 
+    if (action === 'report-off-platform') {
+      const reason = validateText(d.reason, 'Alasan laporan', 500);
+      const evidence = validateText(d.evidence, 'Bukti pelanggaran', 2000);
+      b.off_platform_reported = true;
+      b.updated_at = now();
+      localReports.push({ booking_id: b.id, reporter_id: user.id, role: user.role, reason, evidence, created_at: now() });
+      localAudit.push({ booking_id: b.id, state: 'OffPlatformReported', created_at: now() });
+      return send(res, 200, {
+        ok: true,
+        message: 'Laporan pembayaran di luar platform berhasil dikirim. Sanksi denda 30% dan pencabutan hak mediasi akan ditinjau oleh admin.'
+      });
+    }
+
+    if (!isOwner && !isAdmin && !isVendor) fail(403, 'Akses ditolak.');
+
     if (action === 'payment') {
-      if (!['Pending', 'DPPaid'].includes(b.state)) fail(409, 'Booking tidak dapat dibayar pada status ini.');
+      if (!isOwner && !isAdmin) fail(403, 'Hanya pemilik booking yang dapat melakukan pembayaran.');
+      if (!['Pending', 'DPPaid', 'WaitingVendorApproval'].includes(b.state)) fail(409, 'Booking tidak dapat dibayar pada status ini.');
       if (d.expectedState && d.expectedState !== b.state) fail(409, 'Status pembayaran telah berubah. Muat ulang halaman.');
-      const amount = b.state === 'Pending' ? (b.deposit ? b.price + b.deposit : Math.round(b.price * .3)) : b.price - b.paid;
+
+      const isLate = Boolean(b.late_booking);
+      const upfrontPercent = isLate ? POLICY.LATE_BOOKING_UPFRONT_PERCENT : POLICY.DP_PERCENT;
+
+      const amount = (b.state === 'Pending' || b.state === 'WaitingVendorApproval')
+        ? (b.deposit ? b.price + b.deposit : Math.round(b.price * (upfrontPercent / 100)))
+        : b.price - b.paid;
+
       const paymentType = b.state === 'DPPaid' ? 'FINAL' : 'DP';
 
       // Mode Midtrans aktif
@@ -419,8 +731,16 @@ async function api(req, res, url) {
     }
 
     if (action === 'complete') {
-      if (b.state !== 'Paid') fail(409, 'Booking harus lunas.');
-      if (b.event_date > localToday()) fail(409, 'Acara belum berlangsung.');
+      if (b.state !== 'Paid' && b.state !== 'DPPaid') fail(409, 'Booking belum memenuhi syarat penyelesaian.');
+      if (isVendor) {
+        const evidence = validateText(d.evidence || d.proofUrl || '', 'Bukti penyelesaian pekerjaan', 2000);
+        if (!evidence || evidence.trim().length < 5) fail(400, 'Vendor wajib menyertakan bukti penyelesaian kerja (tautan file foto/video hasil atau serah terima).');
+        b.completion_evidence = evidence;
+        b.updated_at = now();
+        localAudit.push({ booking_id: b.id, state: 'VendorProofSubmitted', created_at: now() });
+        return send(res, 200, { ...b, message: 'Bukti kerja berhasil diunggah. Menunggu konfirmasi pelanggan atau auto-release 48 jam.' });
+      }
+
       b.state = 'Completed';
       b.updated_at = now();
       localAudit.push({ booking_id: b.id, state: 'Completed', created_at: now() });
@@ -428,27 +748,57 @@ async function api(req, res, url) {
     }
 
     if (action === 'cancel') {
-      if (!['Pending', 'DPPaid', 'Paid'].includes(b.state)) fail(409, 'Booking tidak dapat dibatalkan.');
-      const days = Math.round((Date.parse(b.event_date) - Date.parse(localToday())) / 86400000);
-      const rate = b.deposit ? (days >= 3 ? 1 : 0) : (days >= 7 ? 1 : days >= 3 ? .5 : 0);
-      const refund = Math.round(Math.min(b.paid, b.price) * rate) + (b.deposit && b.paid ? b.deposit : 0);
+      if (!['Pending', 'DPPaid', 'Paid', 'WaitingVendorApproval'].includes(b.state)) fail(409, 'Booking tidak dapat dibatalkan.');
+      const refundCalc = calculateRefund({
+        eventDate: b.event_date,
+        totalPaid: b.paid || 0,
+        price: b.price,
+        isVendorCancellation: user.role === 'vendor'
+      });
+      const refund = refundCalc.refundAmount + (b.deposit && b.paid ? b.deposit : 0);
       b.state = 'Cancelled';
       b.updated_at = now();
-      localAudit.push({ booking_id: b.id, state: `Cancelled:refund=${refund}`, created_at: now() });
-      return send(res, 200, { ...b, refund });
+      localAudit.push({ booking_id: b.id, state: `Cancelled:tier=${refundCalc.tier}:refund=${refund}`, created_at: now() });
+      return send(res, 200, { ...b, refund, refundTier: refundCalc.tier, refundDescription: refundCalc.description });
     }
 
     if (action === 'dispute') {
       if (!['DPPaid', 'Paid'].includes(b.state)) fail(409, 'Keluhan hanya untuk booking yang sudah dibayar.');
       const reason = validateText(d.reason, 'Alasan', 1000);
-      const evidence = validateText(d.evidence, 'Bukti', 4000);
-      const id = 'DSP-' + randomBytes(4).toString('hex');
-      const disputeData = { id, booking_id: b.id, reason, evidence, created_at: now() };
+      const evidence = validateText(d.evidence, 'Bukti keluhan', 4000);
+      if (!evidence || evidence.trim().length < 5) {
+        fail(400, 'Keluhan wajib menyertakan bukti tertulis dan tautan berkas pendukung (foto, hasil kerja, atau chat).');
+      }
+      const id = 'DSP-' + randomBytes(4).toString('hex').toUpperCase();
+      const disputeData = {
+        id,
+        booking_id: b.id,
+        reason,
+        evidence,
+        evidence_url: d.evidenceUrl || null,
+        response: '',
+        vendor_evidence_url: null,
+        vendor_response_due: new Date(Date.now() + POLICY.VENDOR_RESPONSE_WINDOW_HOURS * 3600 * 1000).toISOString(),
+        created_at: now()
+      };
       localDisputes.set(b.id, disputeData);
       b.state = 'Disputed';
       b.updated_at = now();
       localAudit.push({ booking_id: b.id, state: 'Disputed', created_at: now() });
-      return send(res, 201, { id });
+      return send(res, 201, { id, message: 'Keluhan diajukan. Pencairan dana ditahan sampai admin memutuskan.' });
+    }
+
+    if (action === 'verify-arrival') {
+      const code = String(d.otp || d.code || '').trim();
+      const expected = String(b.arrival_code || '482910').trim();
+      if (!code || code !== expected) {
+        fail(400, 'Kode OTP kedatangan tidak cocok. Minta 6-digit kode OTP kedatangan kepada pelanggan.');
+      }
+      b.vendor_arrived = true;
+      b.vendor_arrived_at = now();
+      b.updated_at = now();
+      localAudit.push({ booking_id: b.id, state: 'VendorArrivalVerified', created_at: now() });
+      return send(res, 200, { ok: true, message: 'Vendor terverifikasi telah tiba dan check-in di lokasi acara.', booking: b });
     }
 
     if (action === 'sync-payment') {
@@ -487,15 +837,18 @@ async function api(req, res, url) {
       return send(res, 200, { ok: true });
     }
     if (user.role !== 'admin') fail(403, 'Hanya admin yang dapat memutuskan sengketa.');
-    if (!['release', 'partial', 'full'].includes(d.decision)) fail(400, 'Keputusan tidak valid.');
-    const percent = d.decision === 'full' ? 100 : d.decision === 'release' ? 0 : Number(d.percent);
-    const refund = Math.round(b.paid * percent / 100);
+    if (!['vendor', 'sebagian', 'penuh', 'release', 'partial', 'full'].includes(d.decision)) fail(400, 'Keputusan tidak valid.');
+    const reason = validateText(d.reason || 'Keputusan mediasi admin berdasarkan bukti', 'Alasan keputusan', 1000);
+    const percent = (d.decision === 'penuh' || d.decision === 'full') ? 100 : (d.decision === 'vendor' || d.decision === 'release') ? 0 : Number(d.percent || 50);
+    const refund = Math.round((b.paid || 0) * percent / 100);
     dispute.decision = d.decision;
+    dispute.decision_reason = reason;
     dispute.refund = refund;
+    dispute.decided_at = now();
     b.state = percent === 100 ? 'Refunded' : 'Resolved';
     b.updated_at = now();
-    localAudit.push({ booking_id: b.id, state: `Resolved:refund=${refund}`, created_at: now() });
-    return send(res, 200, { ok: true, refund });
+    localAudit.push({ booking_id: b.id, state: `Resolved:${d.decision}:refund=${refund}`, created_at: now() });
+    return send(res, 200, { ok: true, refund, dispute });
   }
 
   fail(404, 'Endpoint tidak ditemukan.');
@@ -506,7 +859,7 @@ const mime = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=u
 
 const server = http.createServer(async (req, res) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
-  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
   res.setHeader('Referrer-Policy', 'same-origin');
   try {
     const url = new URL(req.url, 'http://localhost');
@@ -531,7 +884,12 @@ const server = http.createServer(async (req, res) => {
     if (!file.startsWith(publicRoot + '\\') && !file.startsWith(publicRoot + '/')) fail(403, 'Akses ditolak.');
     if (!existsSync(file)) fail(404, 'Halaman tidak ditemukan.');
     const data = readFileSync(file);
-    res.writeHead(200, { 'Content-Type': mime[extname(file)] || 'application/octet-stream' });
+    res.writeHead(200, {
+      'Content-Type': mime[extname(file)] || 'application/octet-stream',
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0'
+    });
     res.end(req.method === 'HEAD' ? undefined : data);
   } catch (e) {
     send(res, e.status || 500, { error: e.status ? e.message : 'Terjadi kesalahan server.' });

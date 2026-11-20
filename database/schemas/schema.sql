@@ -41,21 +41,25 @@ CREATE TABLE IF NOT EXISTS public.vendors (
 
 -- ── Bookings ───────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS public.bookings (
-  id          TEXT PRIMARY KEY,
-  user_id     UUID REFERENCES public.users(id),
-  vendor_id   UUID REFERENCES public.vendors(id),
-  event_date  TEXT NOT NULL,
-  location    TEXT,
-  start_time  TEXT,
-  price       INTEGER NOT NULL,
-  deposit     INTEGER DEFAULT 0,
-  paid        INTEGER DEFAULT 0,
-  state       TEXT NOT NULL DEFAULT 'Pending',
-  agreement   TEXT,
-  hash        TEXT,
-  expires     BIGINT,
-  created_at  TIMESTAMPTZ DEFAULT NOW(),
-  updated_at  TIMESTAMPTZ DEFAULT NOW()
+  id                  TEXT PRIMARY KEY,
+  user_id             UUID REFERENCES public.users(id),
+  vendor_id           UUID REFERENCES public.vendors(id),
+  event_date          TEXT NOT NULL,
+  location            TEXT,
+  start_time          TEXT,
+  price               INTEGER NOT NULL,
+  deposit             INTEGER DEFAULT 0,
+  paid                INTEGER DEFAULT 0,
+  state               TEXT NOT NULL DEFAULT 'Pending',
+  late_booking        BOOLEAN DEFAULT FALSE,
+  vendor_accepted_at  TIMESTAMPTZ,
+  completion_evidence TEXT,
+  off_platform_reported BOOLEAN DEFAULT FALSE,
+  agreement           TEXT,
+  hash                TEXT,
+  expires             BIGINT,
+  created_at          TIMESTAMPTZ DEFAULT NOW(),
+  updated_at          TIMESTAMPTZ DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS bookings_user_id_idx    ON public.bookings(user_id);
 CREATE INDEX IF NOT EXISTS bookings_vendor_id_idx  ON public.bookings(vendor_id);
@@ -77,17 +81,35 @@ CREATE TABLE IF NOT EXISTS public.payments (
 CREATE INDEX IF NOT EXISTS payments_booking_id_idx ON public.payments(booking_id);
 CREATE UNIQUE INDEX IF NOT EXISTS payments_provider_order_id_uidx ON public.payments(provider_order_id) WHERE provider_order_id IS NOT NULL;
 
--- ── Disputes ───────────────────────────────────────────────
+-- ── Disputes & Sengketa ────────────────────────────────────
 CREATE TABLE IF NOT EXISTS public.disputes (
-  id          TEXT PRIMARY KEY,
-  booking_id  TEXT UNIQUE REFERENCES public.bookings(id),
-  reason      TEXT,
-  evidence    TEXT,
-  response    TEXT DEFAULT '',
-  decision    TEXT,
-  refund      INTEGER DEFAULT 0,
+  id                  TEXT PRIMARY KEY,
+  booking_id          TEXT UNIQUE REFERENCES public.bookings(id),
+  reason              TEXT NOT NULL,
+  evidence            TEXT NOT NULL,
+  evidence_url        TEXT,
+  response            TEXT DEFAULT '',
+  vendor_evidence_url TEXT,
+  decision            TEXT,
+  decision_reason     TEXT,
+  refund              INTEGER DEFAULT 0,
+  vendor_response_due TIMESTAMPTZ,
+  decided_at          TIMESTAMPTZ,
+  created_at          TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ── Bukti Kerja & Sengketa (Evidence Records) ───────────────
+CREATE TABLE IF NOT EXISTS public.evidence_records (
+  id          BIGSERIAL PRIMARY KEY,
+  booking_id  TEXT REFERENCES public.bookings(id),
+  uploader_id UUID REFERENCES public.users(id),
+  role        TEXT NOT NULL CHECK (role IN ('customer', 'vendor', 'admin')),
+  category    TEXT NOT NULL CHECK (category IN ('COMPLETION_PROOF', 'DISPUTE_PROOF', 'VENDOR_RESPONSE', 'OFF_PLATFORM_REPORT')),
+  file_url    TEXT NOT NULL,
+  description TEXT,
   created_at  TIMESTAMPTZ DEFAULT NOW()
 );
+CREATE INDEX IF NOT EXISTS evidence_booking_id_idx ON public.evidence_records(booking_id);
 
 -- ── Audit Trail ────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS public.audit (

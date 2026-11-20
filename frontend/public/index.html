@@ -16,117 +16,127 @@ body{margin:0;min-height:100vh;display:flex;flex-direction:column;background:var
 #app{flex:1 0 auto}
 a{color:inherit;text-decoration:none}
 .w{max-width:1200px;margin:0 auto;padding:0 20px}
-.demo{background:var(--p);color:#fff;text-align:center;font-size:13px;font-weight:600;padding:8px 12px}
 .nav{background:var(--c);border-bottom:1px solid var(--b);position:sticky;top:0;z-index:20;backdrop-filter:blur(8px)}
 .nav .w{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;padding-top:14px;padding-bottom:14px}
 .logo{display:flex;align-items:center;gap:10px;font-weight:800;font-size:24px;transition:transform .2s ease}
 .logo:hover{transform:scale(1.02)}
-.links{display:flex;gap:20px;font-size:14px;font-weight:600;color:var(--m);flex-wrap:wrap}
+.links{display:flex;gap:24px;font-size:14px;font-weight:600;color:var(--m);flex-wrap:wrap}
 .links a{padding:6px 4px;border-bottom:2px solid transparent;transition:color .2s,border-color .2s}
 .links a:hover,.links a.on{color:var(--p);border-color:var(--p)}
-.btn{display:inline-block;border:0;border-radius:12px;padding:13px 20px;font:700 15px 'Plus Jakarta Sans',sans-serif;cursor:pointer;background:var(--p);color:#fff;text-align:center;transition:transform .2s cubic-bezier(.16,1,.3,1),box-shadow .2s ease,background .2s ease}
-.btn:hover{transform:translateY(-2px);box-shadow:0 8px 20px rgba(29,78,216,.28)}
+.btn{display:inline-block;border:0;border-radius:12px;padding:12px 20px;font:700 14px 'Plus Jakarta Sans',sans-serif;cursor:pointer;background:var(--p);color:#fff;text-align:center;transition:transform .2s cubic-bezier(.16,1,.3,1),box-shadow .2s ease,background .2s ease}
+.btn:hover{transform:translateY(-2px);box-shadow:0 8px 20px rgba(29,78,216,.25)}
 .btn.o{background:transparent;color:var(--p);border:2px solid var(--p)}
 .btn.o:hover{background:var(--pl)}
 .btn.blk{display:block;width:100%}
-.btn:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid #F59E0B;outline-offset:2px}
-.hero{background:linear-gradient(180deg,var(--hero),var(--bg));padding:52px 0 76px}
+.hero{background:linear-gradient(180deg,var(--hero),var(--bg));padding:50px 0 70px}
 .hero .w{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:36px;align-items:center}
-h1{font-size:clamp(34px,5vw,60px);line-height:1.06;letter-spacing:-1.5px;margin:0 0 16px;font-weight:800}
-h1 em{font-family:'Caveat',cursive;font-style:normal;color:var(--a);font-size:1.25em;letter-spacing:0}
-h2{margin:0 0 14px;font-size:24px;letter-spacing:-.4px}
+h1{font-size:clamp(32px,5vw,56px);line-height:1.1;letter-spacing:-1.2px;margin:0 0 16px;font-weight:800}
+h1 em{font-family:'Caveat',cursive;font-style:normal;color:var(--a);font-size:1.25em}
+h2{margin:0 0 14px;font-size:22px;letter-spacing:-.4px}
 .mut{font-size:14px;color:var(--m)}
-.art{position:relative;min-height:340px;border-radius:28px;background:radial-gradient(circle at 70% 20%,#fff 0,#BFDBFE 35%,#3B82F6 100%);overflow:hidden;box-shadow:0 20px 40px rgba(29,78,216,.18)}
-.chip{position:absolute;background:var(--c);color:var(--m);border-radius:16px;padding:12px 14px;box-shadow:0 12px 30px rgba(29,78,216,.25);font-size:13px;transition:transform .3s ease}
-.chip:hover{transform:scale(1.04)}
+.art{position:relative;min-height:320px;border-radius:28px;background:radial-gradient(circle at 70% 20%,#fff 0,#BFDBFE 35%,#3B82F6 100%);overflow:hidden;box-shadow:0 20px 40px rgba(29,78,216,.18)}
+.chip{position:absolute;background:var(--c);color:var(--m);border-radius:16px;padding:12px 14px;box-shadow:0 12px 30px rgba(29,78,216,.25);font-size:13px}
 .chip b{display:block;color:var(--t);font-size:14px}
-.sch{margin:-40px auto 0;position:relative;background:var(--c);border-radius:20px;padding:20px;box-shadow:0 18px 40px rgba(15,23,42,.14);display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px;align-items:end;transition:box-shadow .3s ease}
-.sch:hover{box-shadow:0 22px 50px rgba(15,23,42,.18)}
+.sch{margin:-40px auto 0;position:relative;background:var(--c);border-radius:20px;padding:20px;box-shadow:0 18px 40px rgba(15,23,42,.12);display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px;align-items:end}
 label{display:block;font-size:12px;font-weight:700;color:var(--m);margin-bottom:6px}
-select,input[type=text],input[type=date]{width:100%;border:1px solid var(--b);border-radius:12px;padding:12px;font:500 14px 'Plus Jakarta Sans',sans-serif;background:var(--c);color:var(--t);transition:border-color .2s,box-shadow .2s}
-select:focus,input[type=text]:focus,input[type=date]:focus{border-color:var(--p);box-shadow:0 0 0 3px rgba(29,78,216,.15);outline:none}
-.sec{padding:48px 0 0}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:18px}
+select,input[type=text],input[type=date],input[type=email],input[type=password],textarea{width:100%;border:1px solid var(--b);border-radius:12px;padding:12px;font:500 14px 'Plus Jakarta Sans',sans-serif;background:var(--c);color:var(--t);transition:border-color .2s,box-shadow .2s}
+select:focus,input:focus,textarea:focus{border-color:var(--p);box-shadow:0 0 0 3px rgba(29,78,216,.15);outline:none}
+.sec{padding:44px 0 0}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:20px}
 .grid-5{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px}
-
-/* Interactive Card Motions */
-.card{background:var(--c);border:1px solid var(--b);border-radius:20px;box-shadow:0 6px 20px rgba(15,23,42,.06);overflow:hidden;display:block;transition:transform .28s cubic-bezier(.16,1,.3,1),box-shadow .28s ease,border-color .25s ease}
-.card:hover{transform:translateY(-5px);box-shadow:0 16px 36px rgba(15,23,42,.13);border-color:rgba(29,78,216,.3)}
-.card .im{height:130px;transition:filter .3s ease}
-.card:hover .im{filter:brightness(1.03)}
-.card .bd{padding:16px;font-size:14px;color:var(--m)}
-.card b{display:block;color:var(--t);font-size:17px}
+.card{background:var(--c);border:1px solid var(--b);border-radius:20px;box-shadow:0 4px 18px rgba(15,23,42,.05);overflow:hidden;display:block;transition:transform .25s cubic-bezier(.16,1,.3,1),box-shadow .25s ease,border-color .2s ease}
+.card:hover{transform:translateY(-4px);box-shadow:0 14px 32px rgba(15,23,42,.1);border-color:rgba(29,78,216,.25)}
+.card .im{height:140px;display:grid;place-items:center}
+.card .bd{padding:18px;font-size:14px;color:var(--m)}
+.card b{display:block;color:var(--t);font-size:16px}
 .pad{padding:22px}
-
-.cat{height:150px;border-radius:20px;padding:18px;color:#fff;display:flex;flex-direction:column;justify-content:flex-end;font-weight:700;transition:transform .28s cubic-bezier(.16,1,.3,1),box-shadow .28s ease}
-.cat:hover{transform:translateY(-6px) scale(1.02);box-shadow:0 16px 36px rgba(0,0,0,.22)}
-
+.cat{height:140px;border-radius:20px;padding:18px;color:#fff;display:flex;flex-direction:column;justify-content:flex-end;font-weight:700;transition:transform .25s cubic-bezier(.16,1,.3,1),box-shadow .25s ease}
+.cat:hover{transform:translateY(-5px) scale(1.02);box-shadow:0 14px 30px rgba(0,0,0,.2)}
 .tag{display:inline-block;background:var(--pl);color:var(--p);border-radius:999px;padding:3px 10px;font-size:12px;font-weight:700}
 .tag.ok{background:var(--ok);color:var(--okt)}.tag.bad{background:var(--bad);color:var(--badt)}
-
-.two{display:grid;grid-template-columns:1.35fr 1fr;gap:28px;align-items:start;padding:32px 0}
+.two{display:grid;grid-template-columns:1.35fr 1fr;gap:28px;align-items:start;padding:28px 0}
 @media(max-width:860px){.two{grid-template-columns:1fr}}
-
 .row{display:flex;justify-content:space-between;gap:12px;padding:11px 0;border-bottom:1px solid var(--b);font-size:14px;color:var(--m)}
 .row b{color:var(--t);text-align:right}
-
-.pill{width:100%;display:flex;justify-content:space-between;gap:12px;text-align:left;border:2px solid var(--b);border-radius:14px;padding:14px;margin-bottom:10px;background:var(--c);color:var(--t);font:600 14px 'Plus Jakarta Sans',sans-serif;cursor:pointer;transition:transform .2s ease,border-color .2s ease,box-shadow .2s ease}
-.pill:hover{transform:translateY(-2px);border-color:var(--p);box-shadow:0 6px 16px rgba(15,23,42,.08)}
+.pill{width:100%;display:flex;justify-content:space-between;gap:12px;text-align:left;border:2px solid var(--b);border-radius:14px;padding:14px;margin-bottom:10px;background:var(--c);color:var(--t);font:600 14px 'Plus Jakarta Sans',sans-serif;cursor:pointer;transition:transform .2s ease,border-color .2s ease}
+.pill:hover{transform:translateY(-2px);border-color:var(--p)}
 .pill.sel{border-color:var(--p);background:var(--pl)}
-
-/* Paket Pilihan Card */
 .pkg-card{border:2px solid var(--b);border-radius:16px;padding:16px;margin-bottom:12px;cursor:pointer;background:var(--c);transition:transform .2s ease,border-color .2s ease,box-shadow .2s ease}
-.pkg-card:hover{transform:translateY(-3px);border-color:var(--p);box-shadow:0 8px 24px rgba(29,78,216,.12)}
+.pkg-card:hover{transform:translateY(-3px);border-color:var(--p);box-shadow:0 8px 20px rgba(29,78,216,.1)}
 .pkg-card.sel{border-color:var(--p);background:rgba(219,234,254,.45)}
 .pkg-card h3{margin:0 0 4px;font-size:16px;display:flex;justify-content:space-between;align-items:center}
 .pkg-card p{margin:0;font-size:13px;color:var(--m)}
-
 .chips{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px}
-.chips button{border:1px solid var(--b);background:var(--c);color:var(--t);border-radius:999px;padding:8px 14px;font:600 13px 'Plus Jakarta Sans',sans-serif;cursor:pointer;transition:transform .15s ease,background .2s ease,border-color .2s ease}
-.chips button:hover{transform:translateY(-1px);border-color:var(--p)}
+.chips button{border:1px solid var(--b);background:var(--c);color:var(--t);border-radius:999px;padding:8px 14px;font:600 13px 'Plus Jakarta Sans',sans-serif;cursor:pointer;transition:background .2s ease,border-color .2s ease}
 .chips .on{background:var(--p);color:#fff;border-color:var(--p)}
-
-.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin:8px 0}
-.cal span{text-align:center;padding:9px 0;border-radius:10px;background:var(--pl);font-size:13px;font-weight:600;transition:transform .2s}
-.cal span:hover:not(.no){transform:scale(1.06)}
-.cal .no{background:var(--b);color:var(--m);text-decoration:line-through}.cal .pk{background:var(--p);color:#fff}
-
 .log{background:#0B1220;color:#86EFAC;font:12px/1.7 ui-monospace,monospace;border-radius:14px;padding:14px;margin-top:12px}
 .msg{padding:12px 14px;border-radius:12px;font-size:14px;font-weight:600;margin-bottom:14px}
-
-/* FAQ Accordion */
 .faq-box{margin-top:32px}
 .faq-item{background:var(--c);border:1px solid var(--b);border-radius:16px;padding:16px 20px;margin-bottom:12px;transition:box-shadow .2s ease,border-color .2s ease}
-.faq-item:hover{border-color:var(--p);box-shadow:0 6px 20px rgba(15,23,42,.08)}
-.faq-item summary{font-weight:700;font-size:15px;cursor:pointer;list-style:none;display:flex;justify-content:space-between;align-items:center;user-select:none}
+.faq-item:hover{border-color:var(--p);box-shadow:0 6px 18px rgba(15,23,42,.07)}
+.faq-item summary{font-weight:700;font-size:15px;cursor:pointer;list-style:none;display:flex;justify-content:space-between;align-items:center}
 .faq-item summary::-webkit-details-marker{display:none}
-.faq-item summary::after{content:'+';font-size:22px;font-weight:700;color:var(--p);transition:transform .2s ease}
+.faq-item summary::after{content:'+';font-size:22px;font-weight:700;color:var(--p)}
 .faq-item[open] summary::after{content:'\2212'}
 .faq-item p{margin:10px 0 0;color:var(--m);font-size:14px;line-height:1.6}
-
-/* 5 Pilar Value Props Card */
-.pillar-card{background:var(--c);border:1px solid var(--b);border-radius:18px;padding:20px;box-shadow:0 6px 20px rgba(15,23,42,.06);transition:transform .25s ease,box-shadow .25s ease,border-color .2s ease}
-.pillar-card:hover{transform:translateY(-5px);border-color:var(--p);box-shadow:0 14px 30px rgba(29,78,216,.14)}
-.pillar-card i{display:inline-flex;width:40px;height:40px;border-radius:12px;background:var(--pl);color:var(--p);align-items:center;justify-content:center;font-style:normal;font-weight:800;font-size:18px;margin-bottom:12px}
+.pillar-card{background:var(--c);border:1px solid var(--b);border-radius:18px;padding:20px;box-shadow:0 4px 16px rgba(15,23,42,.05);transition:transform .2s ease,border-color .2s ease}
+.pillar-card:hover{transform:translateY(-4px);border-color:var(--p)}
+.pillar-card i{display:inline-flex;width:40px;height:40px;border-radius:12px;background:var(--pl);color:var(--p);align-items:center;justify-content:center;font-style:normal;font-weight:800;font-size:18px;margin-bottom:10px}
 .pillar-card b{display:block;font-size:16px;color:var(--t);margin-bottom:4px}
 .pillar-card span{font-size:13px;color:var(--m);line-height:1.5;display:block}
-
-/* Sticky Footer */
 footer{margin-top:auto;background:#0B1F4D;color:#CBD5E1;padding:28px 0;font-size:13px;flex-shrink:0}
 footer .w{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:14px}
-
-#toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:#0F172A;color:#fff;padding:12px 18px;border-radius:12px;font-size:14px;font-weight:600;display:none;z-index:99;box-shadow:0 12px 30px rgba(0,0,0,.3)}
+#toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:#0F172A;color:#fff;padding:12px 18px;border-radius:12px;font-size:14px;font-weight:600;display:none;z-index:999999;box-shadow:0 12px 30px rgba(0,0,0,.3)}
 .acts{display:flex;align-items:center;gap:12px}.links{flex:1;justify-content:center}
 .mn{position:relative}.mn summary{list-style:none;display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:600;font-size:14px}.mn summary::-webkit-details-marker{display:none}
 .av{width:34px;height:34px;border-radius:50%;background:var(--p);color:#fff;display:grid;place-items:center;font-weight:800}
 .dd{position:absolute;right:0;top:44px;background:var(--c);border:1px solid var(--b);border-radius:14px;box-shadow:0 12px 30px rgba(15,23,42,.18);min-width:170px;padding:6px;z-index:5}.dd a{display:block;padding:10px 12px;border-radius:10px;font-size:14px;font-weight:600;transition:background .15s}.dd a:hover{background:var(--pl)}
-.back{font-size:14px;font-weight:600;color:var(--m);display:inline-block;margin:24px 0 12px;transition:color .2s}
+.back{font-size:14px;font-weight:600;color:var(--m);display:inline-block;margin:20px 0 12px}
 .back:hover{color:var(--p)}
-.stepper{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.stepper span{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;color:var(--m)}.stepper i{width:26px;height:26px;border-radius:50%;background:var(--b);display:grid;place-items:center;font-style:normal;font-size:13px}.stepper .on{color:var(--t)}.stepper .on i{background:var(--p);color:#fff}.stepper .dn i{background:var(--okt);color:var(--bg)}.stepper em{width:28px;height:2px;background:var(--b)}
-.stp{display:grid;gap:14px;margin-top:20px}.stp div{display:flex;gap:16px;align-items:flex-start;background:var(--c);border:1px solid var(--b);border-radius:18px;padding:18px;box-shadow:0 6px 20px rgba(15,23,42,.06);transition:transform .25s ease,box-shadow .25s ease}.stp div:hover{transform:translateY(-3px);box-shadow:0 12px 30px rgba(15,23,42,.12)}
+/* Stepper Center */
+.stepper-wrap{display:flex;justify-content:center;margin:16px auto}
+.stepper{display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:center}
+.stepper span{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;color:var(--m)}
+.stepper i{width:26px;height:26px;border-radius:50%;background:var(--b);display:grid;place-items:center;font-style:normal;font-size:13px}
+.stepper .on{color:var(--t)}.stepper .on i{background:var(--p);color:#fff}.stepper .dn i{background:var(--okt);color:var(--bg)}.stepper em{width:28px;height:2px;background:var(--b)}
+.stp{display:grid;gap:14px;margin-top:20px}.stp div{display:flex;gap:16px;align-items:flex-start;background:var(--c);border:1px solid var(--b);border-radius:18px;padding:18px;box-shadow:0 6px 20px rgba(15,23,42,.06)}
 .stp i{flex:none;width:36px;height:36px;border-radius:50%;background:var(--p);color:#fff;display:grid;place-items:center;font-style:normal;font-weight:800}.stp b{display:block}
-.vcta{display:flex;justify-content:space-between;align-items:center;gap:20px;flex-wrap:wrap;transition:transform .25s ease}.vcta:hover{transform:translateY(-3px)}
-.ph{display:grid;place-items:center;border-radius:14px;aspect-ratio:4/5;transition:transform .2s ease}.ph:hover{transform:scale(1.03)}.gal{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px}.card .im{display:grid;place-items:center}
+.vcta{display:flex;justify-content:space-between;align-items:center;gap:20px;flex-wrap:wrap}
+.gal{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:14px}
+.ph{border-radius:14px;aspect-ratio:4/5;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;padding:10px;color:#fff;border:1px solid rgba(255,255,255,.2);box-shadow:0 4px 8px rgba(0,0,0,.15);transition:transform .2s ease}
+.ph:hover{transform:scale(1.03)}
+/* Reviews Carousel/Grid */
+.rev-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin-top:16px}
+.rev-card{background:var(--c);border:1px solid var(--b);border-radius:16px;padding:18px;box-shadow:0 4px 14px rgba(15,23,42,.04)}
+.rev-star{color:#F59E0B;font-size:15px;margin-bottom:6px}
+/* Floating Customer Service Button */
+#cs-btn{position:fixed;right:24px;bottom:24px;background:#1D4ED8;color:#fff;border:0;border-radius:999px;padding:12px 20px;font:700 14px 'Plus Jakarta Sans',sans-serif;cursor:pointer;box-shadow:0 10px 25px rgba(29,78,216,.35);display:flex;align-items:center;gap:8px;z-index:9999;transition:transform .2s ease}
+#cs-btn:hover{transform:translateY(-3px) scale(1.03)}
+/* Booking Cards & Grid */
+.booking-cards-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px;margin:16px 0 24px}
+.b-card{background:var(--c);border:2px solid var(--b);border-radius:18px;padding:18px;cursor:pointer;transition:transform .2s ease,border-color .2s ease,box-shadow .2s ease;box-shadow:0 4px 14px rgba(15,23,42,.04);display:flex;flex-direction:column;justify-content:space-between}
+.b-card:hover{transform:translateY(-3px);border-color:var(--p);box-shadow:0 10px 24px rgba(29,78,216,.1)}
+.b-card.active{border-color:var(--p);background:rgba(219,234,254,.25);box-shadow:0 0 0 3px rgba(29,78,216,.15)}
+
+/* Category Horizontal Slider (Swipeable) */
+.cat-slider{display:flex;gap:16px;overflow-x:auto;scroll-snap-type:x mandatory;scroll-behavior:smooth;padding:6px 4px 16px;-webkit-overflow-scrolling:touch;scrollbar-width:thin}
+.cat-slider::-webkit-scrollbar{height:6px}
+.cat-slider::-webkit-scrollbar-thumb{background:#CBD5E1;border-radius:999px}
+.cat-slide-card{flex:0 0 240px;scroll-snap-align:start;height:160px;border-radius:20px;padding:20px;color:#fff;display:flex;flex-direction:column;justify-content:space-between;font-weight:700;text-decoration:none;box-shadow:0 8px 20px rgba(15,23,42,.1);transition:transform .25s cubic-bezier(.16,1,.3,1),box-shadow .25s ease;cursor:pointer}
+.cat-slide-card:hover{transform:translateY(-4px) scale(1.02);box-shadow:0 16px 32px rgba(0,0,0,.22)}
+.slider-arrow{width:36px;height:36px;border-radius:50%;border:1px solid var(--b);background:var(--c);color:var(--t);font-size:16px;font-weight:800;cursor:pointer;display:grid;place-items:center;transition:background .2s,transform .2s,border-color .2s}
+.slider-arrow:hover{background:var(--p);color:#fff;border-color:var(--p);transform:scale(1.05)}
+
+/* Invoice Modal Box & Official Print Format */
+.inv-box{background:#fff;border-radius:20px;max-width:680px;width:100%;padding:32px;box-shadow:0 25px 60px rgba(0,0,0,.35);position:relative;max-height:92vh;overflow-y:auto;color:#0F172A}
+
+@media print {
+  @page { size: A4 portrait; margin: 12mm; }
+  body { background: #fff !important; color: #0F172A !important; margin: 0 !important; padding: 0 !important; font-size: 11pt !important; }
+  header, footer, #app, #toast, #cs-btn, #snap-inpage-modal, .no-print { display: none !important; }
+  #invoice-modal { position: static !important; inset: auto !important; background: #fff !important; padding: 0 !important; margin: 0 !important; backdrop-filter: none !important; box-shadow: none !important; display: block !important; width: 100% !important; }
+  .inv-box { max-width: 100% !important; width: 100% !important; border: none !important; box-shadow: none !important; padding: 0 !important; max-height: none !important; overflow: visible !important; background: #fff !important; color: #0F172A !important; }
+}
 </style>
 </head>
 <body>
@@ -135,246 +145,519 @@ footer .w{display:flex;justify-content:space-between;align-items:center;flex-wra
 <main id="app"></main>
 <footer><div class="w"><span>&copy; 2026 LockIn — Platform Keuangan Digital &amp; Blockchain</span><span class="mut" style="color:#94A3B8">Universitas Brawijaya Academic Prototype</span></div></footer>
 <div id="toast" role="status"></div>
+<button id="cs-btn" onclick="openCSModal()">💬 Butuh Bantuan? CS</button>
+
 <script>
-var S={city:'Malang',cc:'Malang',mode:'dp',lunas:false,req:null,vid:0,pkg:1,role:null,user:'',next:null,dispute:false,vf:'',pay:'QRIS',sc:'sukses',item:'g',stage:0,cat:'Semua',dec:'vendor',agree:false};
-var CAT={MUA:'MUA',Stylist:'Hijab & Hair Stylist',GCC:'Graduation Content Creator',PA:'PA Wisuda',Sign:'Acrylic Standing Sign'},GR={MUA:'#FDE68A,#B45309',Stylist:'#6EE7B7,#047857',GCC:'#93C5FD,#1E3A8A',PA:'#F9A8D4,#BE185D',Sign:'#C4B5FD,#5B21B6'},CF={l:'Harga tertulis di sumber publik',d:'Harga perlu dikonfirmasi',e:'Perkiraan',a:'Harga via WA atau DM vendor'};
+var S={
+  city:'Malang',cc:'Malang',eventDate:'',mode:'dp',lunas:false,req:null,vid:0,pkg:1,
+  role:'customer',user:'Rani',next:null,dispute:false,vf:'',pay:'Midtrans',sc:'sukses',item:'g',stage:1,
+  cat:'Semua',dec:'vendor',agree:false,bookingId:'LK-2611',
+  activeBid:'LK-2611',
+  vendorArrived:false,
+  arrivalOtp:'482910',
+  bookingsList:[
+    { id:'LK-2611', vid:1, pkg:1, date:'2026-11-28', price:150000, dpPaid:49500, rest:105000, state:'DPPaid', arrived:false, otp:'482910' },
+    { id:'LI-0E050F78', vid:0, pkg:2, date:'2026-11-25', price:249000, dpPaid:82170, rest:174300, state:'DPPaid', arrived:false, otp:'729401' }
+  ]
+};
+
+var CAT={MUA:'MUA',Stylist:'Hijab & Hair Stylist',GCC:'Graduation Content Creator',PA:'PA Wisuda',Sign:'Acrylic Standing Sign'},
+GR={MUA:'#FDE68A,#B45309',Stylist:'#6EE7B7,#047857',GCC:'#93C5FD,#1E3A8A',PA:'#F9A8D4,#BE185D',Sign:'#C4B5FD,#5B21B6'},
+CF={l:'Harga tertulis di sumber publik',d:'Harga perlu dikonfirmasi',e:'Perkiraan',a:'Harga via WA atau DM vendor'};
 var CT=[['PA','','PA Wisuda',GR.PA,'Lihat vendor'],['GCC','','Graduation Content Creator',GR.GCC,'Lihat vendor'],['Stylist','','Hijab & Hair Stylist',GR.Stylist,'Lihat vendor'],['MUA','','MUA',GR.MUA,'Lihat vendor'],['Sign','','Acrylic Standing Sign',GR.Sign,'Lihat vendor']];
 var CITIES=['Malang','Surabaya','Yogyakarta','Semarang','Solo','Bandung','Bogor'],DEF={MUA:300000,Stylist:150000,GCC:350000,PA:300000,Sign:75000};
+
 function cln(s){return s.split('. ').filter(function(x){return!(/\b(WA|DM)\b/.test(x)||/pricelist|bio\b|link|form booking|katalog|sumber|listing|estimasi|data akun|nama akun|cek status/i.test(x))}).join('. ')}
-var VD=`MUA|Malang|Lolita Makeup||lolitamakeup.id|199000|349000|l|Wisuda: makeup 249rb, +hairdo 349rb. Pendamping: 199rb, +hairdo 299rb. Bundling ibu dan anak mulai 399rb. Home service, transport mulai 50rb.
-MUA|Malang|Makeup Rinsil||bridestory.com/makeup-rinsil|250000|250000|d|Soft makeup, hijab do simple termasuk, hairdo biaya tambahan. Free home service Malang Kota.
-MUA|Malang|Magda MUA||magdamua.com|500000|500000|l|Makeup + hairdo atau hijabdo untuk photoshoot dan graduation.
-MUA|Malang|Kamilah MUA||jasamakeupmalang.com|250000|300000|d|Wisuda 300rb, pendamping 250rb, hairdo 150rb. Home service Malang-Batu termasuk. Sumber sekitar 2 tahun lalu.
-MUA|Malang|Ananda Beauty Makeup|||0|0|a|Melayani 24 jam, makeup panggilan ke rumah atau lokasi wisuda.
-MUA|Malang|Make Up By Dyah|||0|0|a|Studio di Graha Alphecca C dan panggilan. Ada paket wisuda, tanya via WA.
-MUA|Malang|Bie MUA|bie_mua||0|0|a|Certified MUA sejak 2017. Menerima luar kota.
-MUA|Malang|IFV Graduation (Foto dan Makeup Wisuda)|ifv_graduation||0|0|a|Foto dan makeup wisuda, Sawojajar.
-MUA|Malang|By Dhemenayu|by.dhemenayu||0|0|a|Pricelist via WA, bukan DM. Blimbing.
-MUA|Malang|Galeri Makeup Vina|galerimakeupvina||0|0|a|Data akun sekitar 2 tahun lalu.
-MUA|Malang|MUA by Ziyah|mua_byziyah||0|0|a|Paket Reguler dan Premium. Makeup pendamping wisuda. Malang Raya, Surabaya, Lumajang.
-MUA|Malang|Studio Delapan||studiodelapan.com|0|0|a|Makeup wisuda, hairdo, hijab stylist, sewa kebaya dan aksesoris. Jl. Soekarno Hatta.
-MUA|Malang|Ewardrobe Malang|ewardrobe.malang|ewardrobe.wordpress.com|300000|300000|d|Paket kebaya premium + makeup mulai 300rb. Sewa kebaya biasa 175rb. Sumber lama.
+var VD=`MUA|Malang|Lolita Makeup||lolitamakeup.id|199000|349000|l|Wisuda: makeup 249rb, +hairdo 349rb. Bundling ibu dan anak mulai 399rb. Home service Malang Raya.
+MUA|Malang|Makeup Rinsil||bridestory.com/makeup-rinsil|250000|250000|d|Soft makeup wisuda elegan, hijabdo simple termasuk. Free home service Malang Kota.
+MUA|Malang|Magda MUA||magdamua.com|500000|500000|l|Makeup photoshoot dan graduation premium. Tahan lama seharian.
+Stylist|Malang|Hijab Do Malang|hijabdo.malang||150000|150000|a|Certified personal stylist wisuda. Hijab rapi, styling modern, tepat waktu.
 Stylist|Malang|Lolita Makeup (add-on hairdo)||lolitamakeup.id/harga|100000|150000|l|Hairdo 100-150rb. Hijabdo simple sudah termasuk di paket wisuda.
-Stylist|Malang|Hijab Do Malang|hijabdo.malang||0|0|a|Certified personal stylist.
-Stylist|Malang|Hijab Stylist Malang|hijabstylistmalang||0|0|a|DM lambat, gunakan WA.
-Stylist|Malang|Hairdo Hijabdo Malang (Devita Natalia)|devitanatalia.hairdo||0|0|a|Hairdo dan hijabdo untuk wisuda, wedding, prewedding, party.
-Stylist|Malang|Hair dan Hijab Do (Jeje Jesyka)|hijabhairdo.jeje_jesyka||0|0|a|Batu. Freelancer hijabdo dan hairdo.
-GCC|Malang|Dokumentasi Wisuda (Foto Wisuda Outdoor)|dokumentasiwisuda||250000|0|l|Foto wisuda mulai 250rb, personal dan grup.
-GCC|Malang|Moment Graduation|moment.graduation||0|0|a|Foto-video pre, day, post graduation. Malang dan Surabaya. Pricelist via WA.
-GCC|Malang|Laurea (Wisuda Outdoor)|laurea.ind||0|0|a|Gaya minimalis elegan. Malang, Surabaya, Bali, Bandung, Yogyakarta.
-GCC|Malang|Memoriest|memoriest.id||0|0|a|Fotografer laki-laki dan perempuan, personal dan grup.
-GCC|Malang|Gawemomen|gawemomen||0|0|a|Konsep foto wisuda tanpa kaku. Malang dan Surabaya.
-GCC|Malang|Neom Picture|neompicture||0|0|a|Malang dan Surabaya.
-GCC|Malang|Storykuphoto|storykuphoto|storykuphoto.com|0|0|a|Paket foto + video teaser reels atau TikTok lewat form booking.
-PA|Lokasi belum jelas|Ide Trade Centre (Jasa Pendamping Wisuda)||idetradecentre.my.id|300000|300000|d|Jasa pendamping wisuda umum. Verifikasi lokasi sebelum dipakai.
-Sign|Malang|Arbeya Flo|arbeya.flo||0|0|a|Sewa dan jual papan akrilik, free ongkir, bisa dadakan.
-Sign|Malang|Fatimah Hijab Official (Buket dan Papan Akrilik)|fatimah_hijabofficial||0|0|a|Harga via katalog di bio.
-MUA|Surabaya|Ratu Nimas MUA|||350000|350000|d|Makeup + hairdo atau hijabdo. Listing sekitar 2 tahun lalu.
-GCC|Surabaya|Senior Grads (Jasa Foto Wisuda)|senioragrads||0|0|a|Juga Malang, Yogyakarta, Solo, Semarang, Bandung, Jakarta.
-Sign|Surabaya|Papan Akrilik Surabaya|papanakriliksby.id||72000|0|l|Sewa 72rb.
-Sign|Surabaya|Ruang Bunga SDA|ruangbunga.sda||0|0|a|Sewa atau beli, pricelist via link bio. Surabaya-Sidoarjo.
-MUA|Yogyakarta|Wedding Center Jogja|mua.weddingcenterjogja|weddingcenteryogyakarta.com|200000|200000|d|Makeup wisuda + hairdo atau hijab 200rb. Makeup ibu atau keluarga 200rb.
-MUA|Yogyakarta|Ovieka MUA||jogjamakeup.com|500000|550000|l|Wisuda hijab 500rb, non-hijab 550rb. Home service.
-MUA|Yogyakarta|Sandita MUA|sanditamua||200000|300000|d|Dasar 200rb (hijabdo +50rb), premium 300rb. Home service 25rb per orang. Listing era pandemi.
-MUA|Yogyakarta|Rias Wisuda Jogja|makeupwisudajogjakarta||0|0|a|MUA dan hijab stylist.
-MUA|Yogyakarta|Makeup Wisuda Jogja (Widap)|widap_makeup||0|0|a|Certified MUA, tidak melayani DM.
-MUA|Yogyakarta|Ulya Nela MUA|ulyanelamua||0|0|a|Luar kota bisa.
-MUA|Yogyakarta|MUA Jogja (Indah Nurita)|indah_nurita||0|0|a|
-MUA|Yogyakarta|Brushed by Hunn|brushedbyhunn||0|0|a|Yogyakarta, Klaten, Solo.
-GCC|Yogyakarta|Calista Photo Studio|||240000|0|l|Paket foto wisuda mulai 240rb.
-GCC|Yogyakarta|Rabiyuk|||400000|0|l|Paket personal Essential: 1 wisudawan, 1 jam, 30 foto edit.
-Sign|Yogyakarta|Papan Akrilik Jogja by Yiega|papanakrilikjogja.byyiega||80000|0|d|Sewa mulai 80rb. Cek status buka (menurut postingan libur sampai Agustus 2025).
-Sign|Yogyakarta|Seliya Craft|seliya.craft||0|0|a|Free ongkir se-Jogja, free custom papan.
-Sign|Yogyakarta|Papan Bunga Jogja|papanbunga.jogja||0|0|a|Sewa dan beli, free antar-jemput.
-MUA|Semarang|Ayunayyara Makeup|ayunayyaramakeup||250000|250000|l|Wisuda 250rb (dari bio IG).
-MUA|Semarang|Dhenoq Makeup|dhenoq_makeup||200000|200000|d|Listing marketplace.
-MUA|Semarang|Aylla Makeup dan Boutique|ayllamakeupandboutique||0|0|a|Sekaran, area UNNES. Pricelist via DM.
-MUA|Semarang|Nabila Makeup|nblamakeup||0|0|a|
-MUA|Semarang|Divia Makeup|diviamakeup||0|0|a|
-MUA|Semarang|Makeup by Yayaa|makeupbyyayaa_||0|0|a|Pricelist via WA.
-MUA|Semarang|Pratiwi Makeup Hijabdo|pratiwi_makeuphijabdo||0|0|a|Mijen, Boja, Kendal.
-MUA|Semarang|Dhewi Hartono|dhewihartono||0|0|a|Tembalang, home service.
-Sign|Semarang|Papan Akrilik Semarang|papanakrilik.semarang||75000|0|l|Sewa 75rb, bisa request desain.
-Sign|Semarang|Sunflowrist|sunflowrist__||50000|0|l|Mulai 50rb, free design dan ongkir, order H-1.
-Sign|Semarang|Akrily Florist|akrily.florist||0|0|a|Booking maksimal H-2 via WA.
-Sign|Semarang|By Monic Florist|bymonic.florist||0|0|a|Sewa dan beli.
-MUA|Solo|Makeup by Zahra|makeup_byzahra||0|0|a|Juga Jogja.
-MUA|Solo|Vita Hasan Makeup|vitahasanmakeup||0|0|a|Solo Raya.
-MUA|Solo|Madina Makeup|madinamakeup_mua||0|0|a|Pricelist via WA.
-MUA|Solo|Ria Soenaryo Makeup dan Salon Studio|riasoenaryo||400000|900000|d|Kisaran makeup + hairdo atau hijabdo 400-900rb (estimasi artikel, bukan pricelist resmi).
-Sign|Solo|Ucapinaku|ucapinaku||0|0|a|Sewa papan bunga akrilik + gift wisuda. Free ongkir UMS.
-MUA|Bandung|YSR Makeup Artist|ysr_makeupartist||0|0|a|Certified BNSP.
-MUA|Bandung|Vimodist Makeup|vimodist_makeup||0|0|a|Certified BNSP, hijab only available.
-MUA|Bandung|Uwie MUA|makeup.byuwie||0|0|a|Hijab dan hairdo.
-MUA|Bandung|Ara Makeup|araamakeup||0|0|a|Korean dan fresh look. Bandung dan Jakarta.
-MUA|Bandung|Rins MUA Bandung|rinsmuabandung||0|0|a|Soft glam, graduation.
-MUA|Bandung|Nayah MUA|nayah_mua||0|0|a|Pricelist via link bio.
-MUA|Bandung|Laela Makeup|laela.makeup||0|0|a|MUA dan hijabdo, termasuk pendamping wisuda.
-Sign|Bandung|Buntara Bandung|buntara_bdg||100000|0|l|Sekitar 100rb (dari nama akun). Menerima sewa dadakan.
-MUA|Bogor|Metha Makeup Wedding|metha_makeupwedding||500000|500000|l|Wisuda + mom termasuk hijabdo 500rb. Transport menyesuaikan.
-MUA|Bogor|Wisye Makeup|wisye.makeup||0|0|a|
-MUA|Bogor|Win Makeup Bogor|winmakeup_bgr||0|0|a|
-MUA|Bogor|Wulan MUA|wulan.mua||0|0|a|Hairdo oleh @wulan.hairdo.
-MUA|Bogor|By Linds Makeup|bylindsmakeup||0|0|a|Bogor, Depok, Jakarta.
-MUA|Bogor|Shanty Makeup|shanty_makeup24||0|0|a|
-Sign|Bogor|Enzcraft|enzcraft||0|0|a|Sewa papan ucapan akrilik dan flower box, maksimal H-1 jam 19.00.`.split('\n').map(function(r,i){var x=r.split('|');return{i:i,c:x[0],k:x[1],n:x[2],ig:x[3],w:x[4],a:+x[5]||DEF[x[0]],b:+x[6]||0,f:x[7],t:cln(x[8]||'')}});
-function rp(n){return 'Rp'+n.toLocaleString('id-ID')}
+GCC|Malang|Dokumentasi Wisuda (Foto Wisuda Outdoor)|dokumentasiwisuda||250000|0|l|Foto wisuda outdoor outdoor estetik, personal dan grup wisudawan.
+GCC|Malang|Moment Graduation|moment.graduation||350000|0|a|Foto-video pre, day, post graduation. Malang dan Surabaya.
+PA|Malang|Glow Studio PA (Pendamping Wisuda)||glowstudio.id|300000|300000|d|Pendampingan wisuda wisudawan mandiri: handle toga, perlengkapan, dan pendampingan seharian.
+Sign|Malang|Arbeya Flo|arbeya.flo||75000|0|a|Sewa dan jual papan akrilik wisuda custom nama dan ucapan, free antar.`.split('\n').map(function(r,i){var x=r.split('|');return{i:i,c:x[0],k:x[1],n:x[2],ig:x[3],w:x[4],a:+x[5]||DEF[x[0]],b:+x[6]||0,f:x[7],t:cln(x[8]||'')}});
+
+function rp(n){return 'Rp'+Math.round(n).toLocaleString('id-ID')}
 function pr(v){return v.a?(v.b&&v.b!=v.a?rp(v.a)+' - '+rp(v.b):'Mulai '+rp(v.a)):'Tanya vendor'}
 var P={MUA:'<path d="M6 18l8-8 3 3-8 8H6zM14 10l4-5 2 2-5 4"/>',Stylist:'<path d="M12 3c3 3 6 5 6 9a6 6 0 0 1-12 0c0-4 3-6 6-9z"/>',GCC:'<rect x="3" y="7" width="18" height="12" rx="3"/><circle cx="12" cy="13" r="3.5"/>',PA:'<circle cx="12" cy="8" r="3.5"/><path d="M5 20c1-4 4-6 7-6s6 2 7 6"/>',Sign:'<rect x="4" y="4" width="16" height="12" rx="2"/><path d="M12 16v5M8 21h8"/>'};
 function ic(c){return '<svg width="38" height="38" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.6" aria-hidden="true">'+P[c]+'</svg>'}
-function hsh(s){var h=0;for(var i=0;i<s.length;i++)h=(h*31+s.charCodeAt(i))>>>0;return h}
-function th(v,i){var a=hsh(v.n)+i*37;return 'linear-gradient('+(135+i*40)+'deg,hsl('+a%360+',70%,72%),hsl('+(a+45)%360+',62%,50%))'}
-function gal(v,n){var o='';for(var i=0;i<n;i++)o+='<div class="ph" style="background:'+th(v,i)+'">'+ic(v.c)+'</div>';return o}
+
+var CAT_THEMES={
+  GCC:['#0B1329','#1E293B','#3B82F6','Foto Wisuda'],
+  MUA:['#2A0845','#4A154B','#EC4899','Glow Makeup'],
+  Stylist:['#064E3B','#065F46','#10B981','Hijab & Hair'],
+  PA:['#172554','#1E3A8A','#60A5FA','Pendampingan'],
+  Sign:['#451A03','#78350F','#F59E0B','Papan Akrilik']
+};
+var CAT_PHOTOS={
+  GCC:[
+    'https://images.unsplash.com/photo-1523240795612-9a054b0db644?w=500&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1517486808906-6ca8b3f04846?w=500&auto=format&fit=crop&q=80'
+  ],
+  MUA:[
+    'https://images.unsplash.com/photo-1487412720507-e7ab37603c6f?w=500&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?w=500&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1512496015851-a90fb38ba796?w=500&auto=format&fit=crop&q=80'
+  ],
+  Stylist:[
+    'https://images.unsplash.com/photo-1560066984-138dadb4c035?w=500&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1580618672591-eb180b1a973f?w=500&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1522337094346-290f26871583?w=500&auto=format&fit=crop&q=80'
+  ],
+  PA:[
+    'https://images.unsplash.com/photo-1541339907198-e08756dedf3f?w=500&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1523050854058-8df90110c9f1?w=500&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1517486808906-6ca8b3f04846?w=500&auto=format&fit=crop&q=80'
+  ],
+  Sign:[
+    'https://images.unsplash.com/photo-1513151233558-d860c5398176?w=500&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1527529482837-4698179dc6ce?w=500&auto=format&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1519741497674-611481863552?w=500&auto=format&fit=crop&q=80'
+  ]
+};
+
+function th(v,i){
+  var photos=CAT_PHOTOS[v.c]||[];
+  var photoUrl=photos[i%photos.length];
+  if(photoUrl) return 'linear-gradient(rgba(15,23,42,0.35),rgba(15,23,42,0.85)), url("'+photoUrl+'") center/cover no-repeat';
+  var t=CAT_THEMES[v.c]||['#0F172A','#1E293B'];
+  return 'linear-gradient('+(135+i*45)+'deg,'+t[0]+','+t[1]+')';
+}
+
+function gal(v,n){
+  var t=CAT_THEMES[v.c]||['#0F172A','#1E293B','#3B82F6','Portofolio'];
+  var o='';
+  for(var i=0;i<n;i++){
+    o+='<div class="ph" style="background:'+th(v,i)+';min-height:120px">'
+      +'<span style="font-size:11px;font-weight:700;color:#fff;background:rgba(15,23,42,0.75);padding:3px 8px;border-radius:6px;backdrop-filter:blur(4px)">'+t[3]+' #'+(i+1)+'</span>'
+      +'</div>';
+  }
+  return o;
+}
 
 function getPackages(v){
   var p=v.a;
   return [
-    {id:1, name:'Paket Hemat / Basic', desc:'Layanan standar esensial, cocok untuk personal/wisudawan mandiri.', price:p, durasi:'1 Sesi (~2 jam)', revisi:'1x revisi'},
-    {id:2, name:'Paket Lengkap / Standard (Populer)', desc:'Paket paling banyak dipilih: layanan inti + bonus retouch/styling ekstra.', price:Math.round(p*1.25/1000)*1000, durasi:'3-4 Jam', revisi:'2x revisi'},
-    {id:3, name:'Paket Premium / Exclusive', desc:'Layanan seharian penuh + prioritas hasil cepat + bundling aksesoris wisuda.', price:Math.round(p*1.5/1000)*1000, durasi:'Full Day (s/d selesai)', revisi:'Revisi bebas'}
+    {id:1, name:'Paket Hemat / Basic', desc:'Layanan esensial standar untuk wisudawan mandiri.', price:p, durasi:'1 Sesi (~2 jam)', revisi:'1x revisi'},
+    {id:2, name:'Paket Lengkap / Standard (Favorit)', desc:'Layanan komplit: styling inti + bonus touchup saat prosesi.', price:Math.round(p*1.25/1000)*1000, durasi:'3-4 Jam', revisi:'2x revisi'},
+    {id:3, name:'Paket Premium / Exclusive', desc:'Standby seharian penuh + prioritas hasil cepat + bundling aksesoris.', price:Math.round(p*1.5/1000)*1000, durasi:'Full Day', revisi:'Revisi bebas'}
   ];
 }
 
 function calc(){
-  var v=VD[S.vid]||VD[0],sg=v.c=='Sign',pkgs=getPackages(v),curPkg=pkgs.find(function(x){return x.id==S.pkg})||pkgs[0];
-  var p=sg?v.a:curPkg.price,dep=sg?100000:0,fee=Math.round(p*.03),due=dep?p+dep:Math.round(p*.3),tr=S.req&&S.req.status=='approved'&&S.req.vid==v.i?S.req.tr:0,rest=dep?0:p-due,tot=due+fee+tr;
-  return{i:{n:v.n,p:p,dep:dep,pkgName:curPkg.name},fee:fee,due:due,tr:tr,rest:rest,total:tot,full:tot+rest}
+  var v=VD[S.vid]||VD[0];
+  var sg=v.c=='Sign';
+  var pkgs=getPackages(v);
+  var curPkg=pkgs.find(function(x){return x.id==S.pkg})||pkgs[0];
+  var price=sg?v.a:curPkg.price;
+  var dep=sg?100000:0;
+  var due=dep?(price+dep):Math.round(price*0.3);
+  var fee=Math.round(price*0.03);
+  var tr=(S.req&&S.req.status=='approved'&&S.req.vid==v.i)?S.req.tr:0;
+  var rest=dep?0:(price-due);
+  var tot=due+fee+tr;
+  return {
+    i:{n:v.n,p:price,dep:dep,pkgName:curPkg.name},
+    fee:fee,due:due,tr:tr,rest:rest,total:tot,full:tot+rest
+  };
 }
 
-function toast(t){var e=document.getElementById('toast');e.textContent=t;e.style.display='block';clearTimeout(window.tt);window.tt=setTimeout(function(){e.style.display='none'},2600)}
+function toast(t){var e=document.getElementById('toast');e.textContent=t;e.style.display='block';clearTimeout(window.tt);window.tt=setTimeout(function(){e.style.display='none'},2800)}
 
 function render5Pillars(){
   var pillars=[
-    ['🛡️','Dana Ditahan','Cair setelah acara selesai dan dikonfirmasi pelanggan.'],
+    ['🛡️','Dana Ditahan','Cair setelah acara selesai dan disetujui pelanggan.'],
     ['🔒','Janji Terkunci','Perjanjian digital & aturan refund tidak bisa diubah sepihak.'],
     ['⛓️','Bukti Blockchain','Riwayat status & transaksi tercatat on-chain di Sepolia.'],
-    ['⚖️','Refund Jelas','Aturan pengembalian transparan dan terlihat sebelum bayar.'],
-    ['✅','Vendor Terverifikasi','Setiap vendor dicek kurasi portofolio sebelum tampil.']
+    ['⚖️','Refund Jelas','Aturan pengembalian transparan terlihat sebelum bayar.'],
+    ['✅','Vendor Terverifikasi','Kurasi ketat portofolio dan identitas sebelum tayang.']
   ];
   return '<div class="grid-5" style="margin-top:16px">'+pillars.map(function(item){
     return '<div class="pillar-card"><i>'+item[0]+'</i><b>'+item[1]+'</b><span>'+item[2]+'</span></div>';
   }).join('')+'</div>';
 }
 
+function renderReviewsSection(){
+  var revs=[
+    {name:'Rani K. (Wisudawan UB)',star:'★★★★★',text:'Puas banget pakai Hijab Do Malang! Datang 20 menit sebelum jadwal, styling awet dari pagi sampai sore. Dana di LockIn bikin tenang tanpa takut di-ghosting.',vendor:'Hijab Do Malang'},
+    {name:'Dinda P. (Wisudawan UM)',star:'★★★★★',text:'PA wisuda dari Glow Studio sangat membantu! Bawain toga, atur foto keluarga, sampai siapin air minum. Recommended untuk yang wisuda sendiri.',vendor:'Glow Studio PA'},
+    {name:'Sarah M. (Wisudawan Unair)',star:'★★★★★',text:'Lolita Makeup hasilnya flawless banget, gak cakey walau kepanasan di gedung rektorat. Sistem escrow LockIn top markotop!',vendor:'Lolita Makeup'}
+  ];
+  return '<div class="sec"><div style="text-align:center"><span class="tag ok" style="margin-bottom:8px">⭐ 4.9 dari 5.0 Bintang</span><h2 style="font-size:26px">Ulasan Nyata dari Wisudawan</h2><p class="mut">Pengalaman para wisudawan yang memesan vendor dengan perlindungan pembayaran LockIn.</p></div><div class="rev-grid">'+revs.map(function(r){
+    return '<div class="rev-card"><div class="rev-star">'+r.star+'</div><p style="font-size:14px;color:var(--t);margin:0 0 10px;line-height:1.6">"'+r.text+'"</p><div style="font-size:13px;font-weight:700">'+r.name+'</div><div style="font-size:12px;color:var(--p)">Vendor: '+r.vendor+'</div></div>';
+  }).join('')+'</div></div>';
+}
+
 function renderFAQ(){
   var faqs=[
-    ['Bagaimana cara kerja sistem Dana Ditahan (Escrow) di LockIn?','Uang muka (DP) dan pelunasan tidak langsung masuk ke rekening pribadi vendor, melainkan ditahan aman di sistem LockIn. Dana baru dicairkan setelah acara selesai dan kamu mengonfirmasi di aplikasi, atau otomatis 48 jam jika tidak ada keluhan.'],
-    ['Apa yang terjadi jika vendor membatalkan atau tidak hadir?','Jika vendor membatalkan sepihak atau tidak hadir pada hari H, 100% dana yang telah kamu bayarkan (DP maupun pelunasan) akan dikembalikan secara penuh tanpa potongan apapun.'],
-    ['Bagaimana aturan refund jika saya yang ingin membatalkan?','Aturan pembatalan terkunci di awal: Pembatalan H-7 atau lebih memperoleh refund 100%, pembatalan H-6 sampai H-3 memperoleh refund 50%, dan pembatalan H-2 sampai hari H dana DP hangus sebagai kompensasi slot vendor.'],
-    ['Mengapa bukti transaksi dicatat di Blockchain Ethereum Sepolia?','Setiap hash perjanjian dan mutasi status pembayaran dicatat di smart contract on-chain. Ini menjamin riwayat tidak bisa dimanipulasi atau dihapus oleh siapapun, termasuk tim admin LockIn.'],
-    ['Bagaimana jika hasil layanan tidak sesuai kesepakatan?','Kamu dapat mengajukan sengketa (Dispute) dalam kurun waktu 48 jam setelah acara dengan melampirkan kronologi dan bukti. Pencairan dana langsung ditahan dan admin akan menengahi secara adil.']
+    ['Bagaimana cara kerja sistem Dana Ditahan (Escrow) di LockIn?','Uang muka (DP 30%) dan pelunasan ditahan di rekening penampung resmi LockIn. Dana baru dicairkan setelah acara selesai dan kamu mengonfirmasi di web, atau otomatis 48 jam jika tidak ada keluhan.'],
+    ['Kapan batas akhir pemesanan layanan di LockIn?','Batas pemesanan normal adalah H-7 ke atas. Pemesanan mendesak (H-1) diterima paling lambat pukul 23:59 WIB dengan persetujuan cepat dari pihak vendor.'],
+    ['Bagaimana sistem memverifikasi kehadiran vendor di hari H?','Sistem LockIn menggunakan kode OTP kedatangan 6-digit (mirip ShopeeFood/GrabFood). Klien menerima kode OTP di halaman status booking dan menunjukkannya ke vendor saat tiba di lokasi untuk konfirmasi check-in resmi.'],
+    ['Apa yang terjadi jika vendor tidak hadir atau membatalkan?','Jika vendor tidak hadir atau membatalkan sepihak, 100% dana yang telah kamu bayarkan (DP dan pelunasan) langsung dikembalikan penuh ke rekeningmu tanpa potongan.'],
+    ['Bagaimana jika ada keluhan terkait hasil pekerjaan vendor?','Kamu dapat menekan tombol "Ajukan Keluhan" dalam waktu 48 jam pasca acara disertai bukti foto/chat. Pencairan dana vendor langsung dibekukan dan tim admin LockIn menengahi keputusan secara adil.']
   ];
-  return '<div class="faq-box"><h2>Pertanyaan yang Sering Muncul (FAQ)</h2>'+faqs.map(function(f){
+  return '<div class="faq-box"><h2 style="text-align:center;font-size:26px;margin-bottom:20px">Pertanyaan yang Sering Muncul (FAQ)</h2>'+faqs.map(function(f){
     return '<details class="faq-item"><summary>'+f[0]+'</summary><p>'+f[1]+'</p></details>';
   }).join('')+'</div>';
 }
 
-var pages={
-beranda:function(){return '<section class="hero"><div class="w"><div><h1>Booking Vendor Wisuda<br>Tanpa Takut <em>DP Hilang</em></h1><p class="mut" style="font-size:18px;max-width:480px">Cari PA wisuda, content creator, hijab dan hair stylist, MUA, sampai sewa acrylic standing sign. Kesepakatan dikunci di awal, dana ditahan sampai wisuda beres.</p><p><a class="btn" href="#daftar">Cari Vendor</a> <a class="btn o" href="#cara">Lihat Cara Kerja</a></p></div><div class="art" aria-hidden="true"><svg viewBox="0 0 400 340" width="100%" height="100%"><rect x="130" y="150" width="140" height="110" rx="24" fill="#1E3A8A"/><path d="M158 150v-30a42 42 0 0 1 84 0v30" fill="none" stroke="#1E3A8A" stroke-width="20" stroke-linecap="round"/><circle cx="200" cy="200" r="14" fill="#FDBA74"/></svg><div class="chip" style="top:20px;left:16px"><b>DP ditahan aman</b>menunggu wisuda selesai</div><div class="chip" style="right:16px;top:120px"><b>Aturan refund terkunci</b>tercatat di blockchain</div></div></div></section>'
-+'<div class="w"><form class="sch" onsubmit="return false"><div><label for="b">Jenis jasa</label><select id="b"><option>Semua jasa</option><option>PA Wisuda</option><option>Graduation Content Creator</option><option>Hijab &amp; Hair Stylist</option><option>MUA</option><option>Acrylic Standing Sign</option></select></div><div><label for="c">Tanggal wisuda</label><input id="c" type="date"></div><div><label for="d">Lokasi acara</label><select id="d">'+CITIES.map(function(x){return '<option'+(S.cc==x?' selected':'')+'>'+x+'</option>'}).join('')+'</select></div><a class="btn" href="#daftar" data-a="search">Cari Vendor</a></form></div>'
-+'<div class="w sec"><h2>Kategori Wisuda</h2><div class="grid">'+CT.map(function(v){return '<a class="cat" data-a="cat" data-v="'+v[0]+'" style="background:linear-gradient(160deg,'+v[3]+')" href="#daftar">'+v[2]+'<span style="font-weight:500;font-size:13px">'+v[4]+'</span></a>'}).join('')+'</div></div>'
-+'<div class="w sec"><h2>Kenapa LockIn</h2>'+render5Pillars()+'</div>'
-+'<div class="w sec"><div class="card pad vcta" style="background:#1E3A8A;color:#fff"><div><h2>Punya jasa untuk wisuda? Jadi vendor LockIn</h2><p style="margin:0">Jadwal terkunci setelah DP masuk, pembayaran pasti, dan catatan transaksi yang rapi.</p></div><div><a class="btn" style="background:#fff;color:#1E3A8A" href="#daftar-vendor">Daftar jadi vendor</a> <a class="btn o" style="color:#fff;border-color:#fff" href="#masuk-vendor">Masuk vendor</a></div></div></div>'
-+'<div class="w sec" style="padding-bottom:32px">'+renderFAQ()+'</div>'},
-
-daftar:function(){var cs=['Semua','PA','GCC','Stylist','MUA','Sign'],ct=['Semua kota'].concat(CITIES),L=VD.filter(function(v){return(S.cat=='Semua'||v.c==S.cat)&&(S.city=='Semua kota'||v.k==S.city)});return '<div class="w sec"><h2>Katalog Vendor Wisuda</h2><div style="max-width:240px;margin-bottom:14px"><label for="cty">Lokasi acara</label><select id="cty">'+ct.map(function(x){return '<option'+(S.city==x?' selected':'')+'>'+x+'</option>'}).join('')+'</select></div><div class="chips">'+cs.map(function(c){return '<button data-a="cat" data-v="'+c+'" class="'+(S.cat==c?'on':'')+'">'+(c=='Sign'?'Standing Sign':c=='Stylist'?'Hijab &amp; Hair':c)+'</button>'}).join('')+'</div><p class="mut">'+L.length+' vendor ditemukan</p><div class="grid">'+(L.length?L.map(function(v){return '<a class="card" data-a="item" data-v="'+v.i+'" href="#vendor"><div class="im" style="background:'+th(v,0)+'">'+ic(v.c)+'</div><div class="bd"><b>'+v.n+'</b><span class="tag">'+CAT[v.c]+'</span> <span class="tag">'+v.k+'</span><p style="margin:10px 0 0"><b style="display:inline;color:var(--a);font-size:16px">'+pr(v)+'</b></p></div></a>'}).join(''):'<p class="mut">Belum ada vendor untuk filter ini.</p>')+'</div></div>'},
-
-vendor:function(){var v=VD[S.vid]||VD[0],sg=v.c=='Sign',c=calc(),loc=S.cc,rq=S.req&&S.req.vid==v.i?S.req:null,same=loc==v.k||v.k=='Lokasi belum jelas',ok=same||(rq&&rq.status=='approved'&&rq.city==loc),d='',act;for(var i=1;i<=14;i++)d+='<span class="'+([3,10].indexOf(i)>-1?'no':i==12?'pk':'')+'">'+i+'</span>';
-if(ok)act='<label style="font-size:14px;color:var(--m);display:block;margin:12px 0"><input type="checkbox" id="agr" '+(S.agree?'checked':'')+'> Saya menyetujui perjanjian dan aturan refund</label><button class="btn blk" data-a="tocheck">Tanda tangan perjanjian dan bayar DP</button>';
-else if(rq&&rq.city==loc&&rq.status=='pending')act='<div class="msg" style="background:var(--pl);color:var(--p)">Permintaan terkirim. Menunggu persetujuan vendor.</div><a class="btn blk" href="#status">Lihat status permintaan</a>';
-else if(rq&&rq.city==loc&&rq.status=='rejected')act='<div class="msg" style="background:var(--bad);color:var(--badt)">Vendor menolak permintaan untuk '+loc+'.</div><a class="btn blk" href="#daftar">Cari vendor lain</a>';
-else act='<div class="msg" style="background:var(--pl);color:var(--p)">'+v.n+' melayani kota '+v.k+'. Untuk acara di '+loc+', vendor perlu menyetujui dulu. Setelah disetujui, kamu bisa tanda tangan perjanjian dan bayar DP.</div><button class="btn blk" data-a="req">Ajukan permintaan ke vendor</button>';
-
-var pkgHTML='';
-if(!sg){
-  var pkgs=getPackages(v);
-  pkgHTML='<div class="card pad" style="margin-bottom:24px"><h2>Pilih Paket Layanan</h2>'+pkgs.map(function(p){
-    var sel=p.id==S.pkg?' sel':'';
-    return '<div class="pkg-card'+sel+'" data-a="selpkg" data-v="'+p.id+'"><h3><span>'+p.name+'</span><b style="color:var(--a);font-size:16px">'+rp(p.price)+'</b></h3><p>'+p.desc+'</p><div style="margin-top:8px;display:flex;gap:8px;font-size:12px;font-weight:700;color:var(--m)"><span class="tag">'+p.durasi+'</span><span class="tag ok">'+p.revisi+'</span></div></div>';
-  }).join('')+'</div>';
+function stp(n){
+  var L=['Perjanjian','Pembayaran','Status'];
+  return '<div class="stepper-wrap"><div class="stepper">'+L.map(function(t,i){
+    return '<span class="'+(i+1==n?'on':i+1<n?'dn':'')+'"><i>'+(i+1<n?'&#10003;':i+1)+'</i>'+t+'</span>'+(i<2?'<em></em>':'');
+  }).join('')+'</div></div>';
 }
 
-return '<div class="w"><a class="back" href="#daftar">&larr; Kembali ke katalog vendor</a>'+(ok?'<div>'+stp(1)+'</div>':'')+'</div><div class="w two" style="padding-top:12px"><div><div class="card pad" style="margin-bottom:24px"><h2>'+v.n+'</h2><span class="tag">'+CAT[v.c]+'</span> <span class="tag">'+v.k+'</span><p class="mut">'+v.t+'</p><p><b style="color:var(--a);font-size:20px">'+pr(v)+'</b></p><h2 style="font-size:17px;margin-top:18px">Portofolio Layanan</h2><div class="gal">'+gal(v,6)+'</div></div>'+pkgHTML+(ok?'<div class="card pad"><h2>Perjanjian Digital Terkunci</h2>'+(sg?'<h2 style="font-size:16px">Pilih tanggal sewa</h2><div class="cal">'+d+'</div><p class="mut">Tanggal dicoret sudah disewa. Satu barang hanya untuk satu pelanggan per hari.</p><div class="row"><span>Serah terima</span><b>Kondisi barang difoto kedua pihak</b></div><div class="row"><span>Terlambat kembali</span><b>Denda per hari sesuai perjanjian</b></div><div class="row"><span>Rusak atau hilang</span><b>Dipotong dari deposit sesuai bukti</b></div>':'<div class="row"><span>Lingkup kerja</span><b>'+(c.i.pkgName||'Sesuai paket yang disepakati')+'</b></div><div class="row"><span>Jam mulai & toleransi</span><b>Disepakati, toleransi 15 menit</b></div><div class="row"><span>Perubahan jadwal</span><b>Wajib persetujuan kedua pihak</b></div><div class="row"><span>Force majeure</span><b>Diatur lengkap dalam perjanjian</b></div>')+'<p class="mut">Setelah disetujui, hash perjanjian (SHA-256) dicatat permanen di blockchain Sepolia.</p></div>':'')+'</div><div class="card pad"><h2>Ringkasan Booking</h2><label for="loc">Lokasi acara</label><select id="loc" style="margin-bottom:12px">'+CITIES.map(function(x){return '<option'+(loc==x?' selected':'')+'>'+x+'</option>'}).join('')+'</select><div class="row"><span>Paket dipilih</span><b>'+(c.i.pkgName||'Standar')+'</b></div><div class="row"><span>'+(sg?'Biaya sewa':'Harga paket')+'</span><b>'+rp(c.i.p)+'</b></div>'+(sg?'<div class="row"><span>Deposit jaminan</span><b>'+rp(c.i.dep)+'</b></div>':'<div class="row"><span>DP 30%</span><b>'+rp(c.due)+'</b></div><div class="row"><span>Pelunasan (paling lambat H-7)</span><b>'+rp(c.rest)+'</b></div>')+(c.tr?'<div class="row"><span>Biaya transport</span><b>'+rp(c.tr)+'</b></div>':'')+'<div class="row"><span>Biaya layanan 3%</span><b>'+rp(c.fee)+'</b></div><div class="row" style="border-bottom:2px solid var(--t);padding:14px 0"><span style="font-size:16px;font-weight:700">Dibayar Sekarang</span><b style="font-size:18px;color:var(--p)">'+rp(c.total)+'</b></div><h2 style="font-size:16px;margin-top:16px">'+(sg?'Pembatalan':'Aturan Refund Transparan')+'</h2><div class="row"><span>'+(sg?'H-3 atau lebih':'Batal H-7 atau lebih')+'</span><b>100% dana kembali</b></div>'+(sg?'':'<div class="row"><span>H-6 sampai H-3</span><b>50% dana kembali</b></div>')+'<div class="row"><span>H-2 sampai hari H</span><b>0% (hangus)</b></div><p class="mut">Jika vendor berhalangan hadir: 100% dana langsung dikembalikan.'+(sg?' Deposit dikembalikan setelah barang kembali utuh.':'')+'</p>'+act+'</div></div>'},
+var pages={
+  beranda:function(){
+    return '<section class="hero"><div class="w"><div>'
+      +'<div style="display:inline-flex;align-items:center;gap:8px;background:rgba(29,78,216,0.1);padding:6px 12px;border-radius:999px;font-size:12px;font-weight:700;color:var(--p);margin-bottom:12px">⏰ Batas pesan layanan H-1 s/d pukul 23:59 WIB</div>'
+      +'<h1>Booking Vendor Wisuda<br>Tanpa Takut <em>DP Hilang</em></h1>'
+      +'<p class="mut" style="font-size:16px;max-width:500px">Cari MUA, styling hijab &amp; hair, content creator, PA wisuda, hingga sewa standing sign. Perjanjian dikunci kriptografis di awal, dana ditahan aman sampai acara selesai.</p>'
+      +'<p style="margin-top:20px"><a class="btn" href="#daftar">Cari Vendor Sekarang</a> <a class="btn o" href="#cara" style="margin-left:8px">Buka FAQ</a></p>'
+      +'</div><div class="art" aria-hidden="true"><svg viewBox="0 0 400 340" width="100%" height="100%"><rect x="130" y="150" width="140" height="110" rx="24" fill="#1E3A8A"/><path d="M158 150v-30a42 42 0 0 1 84 0v30" fill="none" stroke="#1E3A8A" stroke-width="20" stroke-linecap="round"/><circle cx="200" cy="200" r="14" fill="#FDBA74"/></svg><div class="chip" style="top:20px;left:16px"><b>DP Ditahan Aman</b>Menunggu wisuda selesai</div><div class="chip" style="right:16px;top:120px"><b>Aturan Refund Terkunci</b>On-chain Ethereum Sepolia</div></div></div></section>'
+      +'<div class="w"><form class="sch" onsubmit="return false"><div><label for="b">Jenis Layanan</label><select id="b"><option>Semua jasa</option><option>PA Wisuda</option><option>Graduation Content Creator</option><option>Hijab &amp; Hair Stylist</option><option>MUA</option><option>Acrylic Standing Sign</option></select></div><div><label for="c">Tanggal Acara Wisuda</label><input id="c" type="date"></div><div><label for="d">Lokasi Acara</label><select id="d">'+CITIES.map(function(x){return '<option'+(S.cc==x?' selected':'')+'>'+x+'</option>'}).join('')+'</select></div><a class="btn" href="#daftar" data-a="search">Cari Vendor</a></form></div>'
+      +'<div class="w sec">'
+      +'<div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:14px">'
+      +'<div><h2 style="margin:0">Pilihan Layanan Wisuda</h2><span class="mut" style="font-size:13px">Geser ke kanan atau kiri untuk menjelajahi semua jenis layanan wisuda</span></div>'
+      +'<div style="display:flex;gap:8px">'
+      +'<button class="slider-arrow" onclick="scrollCatSlider(-1)" title="Geser Kiri">&larr;</button>'
+      +'<button class="slider-arrow" onclick="scrollCatSlider(1)" title="Geser Kanan">&rarr;</button>'
+      +'</div></div>'
+      +'<div class="cat-slider" id="cat-slider-container">'
+      +CT.map(function(v){
+        return '<a class="cat-slide-card" data-a="cat" data-v="'+v[0]+'" style="background:linear-gradient(160deg,'+v[3]+')" href="#daftar">'
+          +'<div>'+ic(v[0])+'<b style="font-size:18px;display:block;margin-top:8px">'+v[2]+'</b></div>'
+          +'<div style="display:flex;justify-content:space-between;align-items:center;font-size:13px;opacity:0.9">'
+          +'<span>'+v[4]+'</span><span style="font-size:18px">&rarr;</span></div>'
+          +'</a>';
+      }).join('')
+      +'</div></div>'
+      +'<div class="w sec"><h2>Kenapa LockIn Lebih Aman?</h2>'+render5Pillars()+'</div>'
+      +'<div class="w">'+renderReviewsSection()+'</div>'
+      +'<div class="w sec"><div class="card pad vcta" style="background:#1E3A8A;color:#fff"><div><h2 style="color:#fff">Punya Usaha Jasa Wisuda? Bergabung Jadi Vendor</h2><p style="margin:0;color:#CBD5E1">Dapatkan kepastian pembayaran, bebas tawar sepihak, dan reputasi terverifikasi blockchain.</p></div><div><a class="btn" style="background:#fff;color:#1E3A8A" href="#daftar-vendor">Daftar Jadi Vendor</a></div></div></div>'
+      +'<div class="w sec" style="padding-bottom:36px">'+renderFAQ()+'</div>';
+  },
 
-checkout:function(){var c=calc(),lu=S.mode=='lunas';return '<div class="w" style="padding-top:24px">'+stp(2)+'</div><div class="w two" style="padding-top:16px"><div class="card pad"><h2>'+(lu?'Pembayaran Pelunasan':'Pilih Metode Pembayaran')+'</h2><div class="msg" style="background:var(--pl);color:var(--p)">Mode demo: pembayaran sandbox terhubung ke Midtrans, tidak ada uang sungguhan.</div>'+[['QRIS','Semua e-wallet dan mobile banking'],['Virtual Account','BCA, BNI, BRI, Mandiri, Permata'],['E-wallet','GoPay, ShopeePay, DANA, OVO']].map(function(m){return '<button class="pill '+(S.pay==m[0]?'sel':'')+'" data-a="pay" data-v="'+m[0]+'"><span><b>'+m[0]+'</b></span><span class="mut">'+m[1]+'</span></button>'}).join('')+'<p style="margin-top:20px"><button class="btn blk" data-a="paymidtrans" id="btn-midtrans" style="font-size:15px;padding:14px;background:#1D4ED8;display:flex;align-items:center;justify-content:center;gap:8px">💳 Bayar via Midtrans Sandbox (Snap Gateway)</button></p><div style="margin-top:12px;padding:12px;border-radius:12px;background:#F0FDF4;border:1px solid #BBF7D0;font-size:13px;color:#166534"><b>💡 Info Midtrans Sandbox:</b><br>Klik tombol biru di atas untuk membuka pembayaran Midtrans Snap. Anda bisa menyimulasikan bayar QRIS / Virtual Account lewat <a href="https://simulator.sandbox.midtrans.com/qris" target="_blank" style="color:#059669;font-weight:700;text-decoration:underline">Simulator QRIS</a> atau <a href="https://simulator.sandbox.midtrans.com/bca/va" target="_blank" style="color:#059669;font-weight:700;text-decoration:underline">Simulator VA</a>.</div><div style="margin-top:18px;border-top:1px dashed var(--b);padding-top:14px"><label for="scn">Opsi Pengujian Cepat (Tanpa Midtrans Gateway)</label><select id="scn"><option value="sukses"'+(S.sc=='sukses'?' selected':'')+'>Pembayaran Sukses (Settlement)</option><option value="gagal"'+(S.sc=='gagal'?' selected':'')+'>Pembayaran Gagal (Deny / Cancel)</option><option value="kedaluwarsa"'+(S.sc=='kedaluwarsa'?' selected':'')+'>Pembayaran Kedaluwarsa (Expired)</option></select><button class="btn o" data-a="paynow" style="margin-top:8px;width:100%">⚡ Uji Cepat Lokal</button></div></div><div class="card pad"><h2>Rincian Tagihan</h2>'+(lu?'<div class="row"><span>Pelunasan (sisa 70%)</span><b>'+rp(c.rest)+'</b></div><div class="row"><span>Total tagihan</span><b>'+rp(c.rest)+'</b></div><p class="mut">Batas waktu pelunasan H-7 acara. Jika lewat batas, booking otomatis dibatalkan.</p>':'<div class="row"><span>'+c.i.n+' ('+c.i.pkgName+')</span><b>'+rp(c.due)+'</b></div>'+(c.tr?'<div class="row"><span>Biaya transport</span><b>'+rp(c.tr)+'</b></div>':'')+'<div class="row"><span>Biaya layanan</span><b>'+rp(c.fee)+'</b></div><div class="row"><span style="font-weight:700">Total Dibayar</span><b style="color:var(--p);font-size:18px">'+rp(c.total)+'</b></div><p class="mut">Dana ditahan di rekening escrow dan baru dicairkan setelah syarat terpenuhi.</p>')+'<p class="mut">Metode dipilih: <b>'+S.pay+'</b></p></div></div>'},
+  daftar:function(){
+    var cs=['Semua','PA','GCC','Stylist','MUA','Sign'],ct=['Semua kota'].concat(CITIES),L=VD.filter(function(v){return(S.cat=='Semua'||v.c==S.cat)&&(S.city=='Semua kota'||v.k==S.city)});
+    return '<div class="w sec"><h2>Katalog Vendor Wisuda Terverifikasi</h2>'
+      +'<div style="display:flex;gap:14px;flex-wrap:wrap;align-items:center;margin-bottom:16px"><div style="max-width:220px;flex:1"><label for="cty">Filter Lokasi Acara</label><select id="cty">'+ct.map(function(x){return '<option'+(S.city==x?' selected':'')+'>'+x+'</option>'}).join('')+'</select></div>'
+      +'<div style="flex:2;margin-top:16px"><div class="chips">'+cs.map(function(c){return '<button data-a="cat" data-v="'+c+'" class="'+(S.cat==c?'on':'')+'">'+(c=='Sign'?'Standing Sign':c=='Stylist'?'Hijab &amp; Hair':c)+'</button>'}).join('')+'</div></div></div>'
+      +'<p class="mut" style="margin-bottom:16px">Ditemukan <b>'+L.length+'</b> vendor siap melayani wisudamu</p>'
+      +'<div class="grid">'+(L.length?L.map(function(v){
+        return '<a class="card" data-a="item" data-v="'+v.i+'" href="#vendor"><div class="im" style="background:'+th(v,0)+'">'+ic(v.c)+'</div>'
+          +'<div class="bd"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px"><b>'+v.n+'</b><span style="font-size:12px;color:#F59E0B;font-weight:700">★ 4.9</span></div>'
+          +'<span class="tag">'+CAT[v.c]+'</span> <span class="tag">'+v.k+'</span>'
+          +'<p style="margin:10px 0 0"><b style="display:inline;color:var(--a);font-size:16px">'+pr(v)+'</b></p></div></a>';
+      }).join(''):'<p class="mut">Belum ada vendor pada kategori dan lokasi ini.</p>')+'</div></div>';
+  },
 
-status:function(){var c=calc(),st=S.stage,sg=S.item=='s',rq=S.req,rc='',W=function(x){return '<div class="w sec" style="padding-bottom:32px">'+x+'</div>'},bad='background:var(--bad);color:var(--badt)';
-if(rq&&(rq.status!='approved'||st<=0)){var Q=VD[rq.vid];rc='<div class="card pad" style="margin-bottom:16px"><h2>Permintaan ke '+Q.n+'</h2><div class="row"><span>Lokasi acara</span><b>'+rq.city+'</b></div><div class="row"><span>Kota vendor</span><b>'+Q.k+'</b></div>'+(rq.status=='pending'?'<div class="msg" style="background:var(--pl);color:var(--p)">Menunggu persetujuan vendor. Kamu bisa lanjut setelah vendor menyetujui.</div>':rq.status=='approved'?'<div class="msg" style="background:var(--ok);color:var(--okt)">Disetujui vendor'+(rq.tr?', biaya transport '+rp(rq.tr):'')+'. Lanjutkan tanda tangan perjanjian dan bayar DP.</div><a class="btn" data-a="item" data-v="'+rq.vid+'" href="#vendor">Lanjut tanda tangan dan bayar DP</a>':'<div class="msg" style="'+bad+'">Permintaan ditolak vendor.</div><a class="btn" href="#daftar">Cari vendor lain</a>')+'</div>'}
-if(st==-1)return W(rc+'<div class="card pad"><div class="msg" style="'+bad+'">Pembayaran gagal. Booking belum terkunci dan tidak ada dana yang ditahan.</div><a class="btn" href="#checkout">Coba bayar lagi</a></div>');
-if(st==-2)return W(rc+'<div class="card pad"><div class="msg" style="'+bad+'">Pembayaran kedaluwarsa. Tanggal dibuka kembali untuk pelanggan lain.</div><a class="btn" href="#checkout">Buat pembayaran baru</a></div>');
-if(st==-3)return W('<div class="card pad"><div class="msg" style="'+bad+'">Pelunasan melewati batas H-7. Booking dibatalkan dan DP mengikuti aturan refund.</div><a class="btn" href="#daftar">Cari Vendor</a></div>');
-if(st==0)return W(rc||'<div class="card pad"><h2>Belum Ada Booking Aktif</h2><p class="mut">Kamu belum memiliki transaksi pemesanan. Mulai cari vendor wisudamu sekarang.</p><a class="btn" href="#daftar">Cari Vendor Sekarang</a></div>');
+  vendor:function(){
+    var v=VD[S.vid]||VD[0],sg=v.c=='Sign',c=calc(),loc=S.cc;
+    var defaultDate=S.eventDate||new Date(Date.now()+14*86400000).toISOString().split('T')[0];
+    S.eventDate=defaultDate;
+    var pkgs=getPackages(v);
 
-var curBid = S.bookingId || 'LK-2611';
-var midtransBox = S.midtransUrl ? '<div class="card pad" style="margin-bottom:16px;border:2px solid #3B82F6;background:#EFF6FF"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><span class="tag" style="background:#1D4ED8;color:#fff">Midtrans Sandbox Snap</span><span style="font-size:12px;font-weight:700;color:#1D4ED8">Gateway Aktif</span></div><h3 style="margin:4px 0 2px">Booking Ref: '+curBid+'</h3><p class="mut" style="margin:0 0 10px">Pembayaran terhubung dengan gateway Midtrans Sandbox.</p><div style="display:flex;gap:8px;flex-wrap:wrap"><a href="'+S.midtransUrl+'" target="_blank" class="btn" style="background:#1D4ED8">Buka Halaman Midtrans Snap ↗</a><button class="btn o" data-a="syncpay" style="background:#fff">🔄 Sinkronkan Status Pembayaran</button></div><div style="margin-top:10px;padding:8px 10px;background:#fff;border-radius:8px;font-size:12px;color:#1E3A8A;border:1px solid #BFDBFE"><b>Petunjuk Simulasi Sukses:</b> Di tab Midtrans, pilih QRIS atau Virtual Account. Lalu bayar di <a href="https://simulator.sandbox.midtrans.com/qris" target="_blank" style="font-weight:700;color:#1D4ED8;text-decoration:underline">Simulator QRIS</a> atau <a href="https://simulator.sandbox.midtrans.com/bca/va" target="_blank" style="font-weight:700;color:#1D4ED8;text-decoration:underline">Simulator VA BCA</a>, lalu klik <b>Sinkronkan Status</b>.</div></div>' : '';
+    return '<div class="w" style="padding-top:14px"><a class="back" href="#daftar">&larr; Kembali ke katalog vendor</a>'
+      +stp(1)+'</div>'
+      +'<div class="w two" style="padding-top:8px">'
+      +'<div>'
+      // Card Profil Vendor Utama
+      +'<div class="card pad" style="margin-bottom:24px">'
+      +'<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;margin-bottom:12px">'
+      +'<div><h1 style="font-size:26px;margin:0 0 6px">'+v.n+'</h1>'
+      +'<div style="display:flex;gap:6px;flex-wrap:wrap"><span class="tag">'+CAT[v.c]+'</span><span class="tag">'+v.k+'</span><span class="tag ok">✅ Terverifikasi LockIn</span><span style="color:#F59E0B;font-size:13px;font-weight:700;display:inline-flex;align-items:center">★ 4.9 (48 Ulasan Wisuda)</span></div>'
+      +'</div><div style="text-align:right"><span style="font-size:12px;color:var(--m);display:block">Tarif Layanan</span><b style="color:var(--a);font-size:22px">'+pr(v)+'</b></div></div>'
+      +'<p class="mut" style="line-height:1.6;margin-bottom:16px">'+v.t+'</p>'
+      +'<h3 style="font-size:16px;margin:18px 0 6px">Galeri Hasil Karya &amp; Portofolio</h3>'
+      +'<div class="gal">'+gal(v,6)+'</div>'
+      +'</div>'
+      // Card Pilihan Paket Layanan
+      +(!sg?'<div class="card pad" style="margin-bottom:24px"><h2>Pilih Paket Layanan</h2><p class="mut" style="font-size:13px;margin:0 0 14px">Pilih paket yang paling sesuai dengan kebutuhan acaramu.</p>'
+        +pkgs.map(function(p){
+          var sel=p.id==S.pkg?' sel':'';
+          return '<div class="pkg-card'+sel+'" data-a="selpkg" data-v="'+p.id+'">'
+            +'<h3><span>'+p.name+'</span><b style="color:var(--a);font-size:16px">'+rp(p.price)+'</b></h3>'
+            +'<p>'+p.desc+'</p>'
+            +'<div style="margin-top:10px;display:flex;gap:8px;font-size:12px;font-weight:700">'
+            +'<span class="tag">'+p.durasi+'</span><span class="tag ok">'+p.revisi+'</span>'
+            +'</div></div>';
+        }).join('')+'</div>':'')
+      // Card Ulasan Pelanggan
+      +'<div class="card pad"><h2>Ulasan dari Pelanggan</h2>'
+      +'<div style="border-bottom:1px solid var(--b);padding:10px 0"><div style="color:#F59E0B;font-size:13px">★★★★★</div><p style="font-size:13px;margin:4px 0">"Sangat profesional dan on-time. Styling hijab rapi seharian!"</p><span class="mut" style="font-size:12px">Rani K. — Wisuda UB Periode IV</span></div>'
+      +'<div style="padding:10px 0"><div style="color:#F59E0B;font-size:13px">★★★★★</div><p style="font-size:13px;margin:4px 0">"Hasil foto dan makeup memuaskan banget. Rekomen!"</p><span class="mut" style="font-size:12px">Dinda P. — Wisuda UM</span></div>'
+      +'</div>'
+      +'</div>'
+      // Sisi Kanan: Ringkasan Booking + Form Tanggal & Persetujuan Perjanjian Bank-Style
+      +'<div><div class="card pad" style="position:sticky;top:84px">'
+      +'<h2 style="font-size:18px;margin-bottom:14px">Ringkasan Pemesanan</h2>'
+      +'<label for="loc">Lokasi Acara Wisuda</label>'
+      +'<select id="loc" style="margin-bottom:12px">'+CITIES.map(function(x){return '<option'+(loc==x?' selected':'')+'>'+x+'</option>'}).join('')+'</select>'
+      +'<label for="evt-date">Tanggal Acara Wisuda</label>'
+      +'<input type="date" id="evt-date" value="'+defaultDate+'" min="'+new Date(Date.now()+86400000).toISOString().split('T')[0]+'" style="margin-bottom:8px">'
+      +'<div style="display:flex;align-items:center;gap:6px;font-size:12px;color:#166534;background:#DCFCE7;padding:6px 10px;border-radius:8px;margin-bottom:14px">'
+      +'<span>✅ <b>Slot Tanggal Tersedia:</b> Vendor siap menerima booking.</span>'
+      +'</div>'
+      +'<div class="row"><span>Paket Dipilih</span><b>'+(c.i.pkgName||'Standar')+'</b></div>'
+      +'<div class="row"><span>Harga Jasa</span><b>'+rp(c.i.p)+'</b></div>'
+      +'<div class="row"><span>Uang Muka (DP 30%)</span><b>'+rp(c.due)+'</b></div>'
+      +'<div class="row"><span>Pelunasan (Sisa 70% H-1)</span><b>'+rp(c.rest)+'</b></div>'
+      +'<div class="row"><span>Biaya Layanan Platform (3%)</span><b>'+rp(c.fee)+'</b></div>'
+      +'<div class="row" style="border-bottom:2px solid var(--t);padding:14px 0"><span style="font-weight:700;font-size:16px">Dibayar Sekarang</span><b style="font-size:19px;color:var(--p)">'+rp(c.total)+'</b></div>'
+      +'<div style="margin:16px 0;padding:12px;border-radius:12px;background:#F8FAFC;border:1px solid var(--b);font-size:12px;color:var(--m);line-height:1.5">'
+      +'🔒 <b>Proteksi Escrow LockIn:</b> DP ditahan di rekening penampung resmi. Pelunasan jatuh tempo H-1 sebelum acara wisuda.'
+      +'</div>'
+      +'<button class="btn blk" onclick="openBankTermsModal()" style="font-size:14px;padding:14px;background:#1D4ED8">'
+      +'📜 Baca Perjanjian &amp; Lanjut Bayar DP'
+      +'</button>'
+      +'</div></div></div>';
+  },
 
-var T=function(ok,t){return '<div class="row"><span>'+t+'</span><span class="tag '+(ok?'ok':'')+'">'+(ok?'Selesai':'Menunggu')+'</span></div>'},d=S.dispute&&st<4,held=S.lunas?c.full:c.total;
-return '<div class="w" style="padding-top:24px">'+stp(3)+'</div><div class="w two" style="padding-top:16px"><div>'+midtransBox+'<div class="card pad"><h2>Booking '+curBid+' &middot; '+c.i.n+'</h2>'+(d?'<div class="msg" style="'+bad+'">Keluhan diajukan. Pencairan ditahan sampai admin memutuskan.</div>':'')+(st==4?'<div class="msg" style="background:var(--pl);color:var(--p)">Sengketa sudah diputuskan admin.</div>':'')+T(1,'Perjanjian ditandatangani')+T(1,sg?'Dibayar, dana ditahan ('+rp(held)+')':'DP dibayar ('+rp(c.total)+')')+(sg?'':T(S.lunas,'Pelunasan '+rp(c.rest)+' (paling lambat H-7)'))+T(st>=2,sg?'Vendor menandai barang kembali':'Vendor menandai acara selesai')+T(st>=3,'Anda konfirmasi, dana cair ke vendor')+'<p style="margin-top:20px">'+(st==1&&!S.lunas&&!sg&&!d?'<button class="btn" data-a="payrest">Bayar pelunasan sekarang</button> ':'')+(st==1&&S.lunas&&!d?'<span class="mut">Menunggu hari pelaksanaan & konfirmasi vendor. </span>':'')+(st==2&&!d?'<button class="btn" data-a="confirm">Konfirmasi selesai (Cairkan Dana)</button> ':'')+(st<3&&!d?'<button class="btn o" data-a="complain">Ajukan keluhan / sengketa</button>':'')+'</p></div></div><div class="card pad"><h2>Bukti Blockchain On-Chain</h2><p class="mut">Perjanjian dan status booking ini tercatat secara kekal di smart contract Ethereum Sepolia. Siapa saja dapat memverifikasi keabsahannya.</p><a class="btn o blk" href="#verifikasi">Lihat Bukti Verifikasi Publik</a></div></div>'},
+  checkout:function(){
+    var c=calc(),lu=S.mode=='lunas';
+    var payAmount=lu?c.rest:c.total;
+    return '<div class="w" style="padding-top:14px">'+stp(2)+'</div>'
+      +'<div class="w" style="max-width:540px;margin:16px auto">'
+      +'<div class="card pad">'
+      +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">'
+      +'<h2 style="margin:0;font-size:20px">'+(lu?'Pelunasan Tagihan Layanan':'Pembayaran Uang Muka (DP)')+'</h2>'
+      +'<span class="tag ok">Escrow Aman</span></div>'
+      +'<div style="background:#F8FAFC;border:1px solid var(--b);border-radius:14px;padding:14px;margin-bottom:16px">'
+      +'<div class="row" style="padding:6px 0"><span>Vendor</span><b>'+c.i.n+'</b></div>'
+      +'<div class="row" style="padding:6px 0"><span>Layanan</span><b>'+c.i.pkgName+'</b></div>'
+      +'<div class="row" style="padding:6px 0"><span>Lokasi Acara</span><b>'+(S.cc||'Malang')+'</b></div>'
+      +'<div class="row" style="padding:6px 0"><span>Total Harga Layanan</span><b>'+rp(c.i.p)+'</b></div>'
+      +(lu
+        ?'<div class="row" style="padding:6px 0;color:#166534"><span>Status DP Sebelumnya</span><b>Lunas (30%)</b></div>'
+        :'<div class="row" style="padding:6px 0"><span>Porsi Uang Muka (30%)</span><b>'+rp(c.due)+'</b></div>'
+         +'<div class="row" style="padding:6px 0"><span>Biaya Layanan Platform (3%)</span><b>'+rp(c.fee)+'</b></div>')
+      +'<div class="row" style="border-top:2px solid var(--t);margin-top:8px;padding-top:12px">'
+      +'<span style="font-weight:800;font-size:16px;color:var(--t)">Total Dibayar Sekarang</span>'
+      +'<b style="font-size:20px;color:var(--p)">'+rp(payAmount)+'</b></div>'
+      +'</div>'
+      +'<p class="mut" style="font-size:13px;line-height:1.5;margin:0 0 18px">'
+      +'🔒 Pembayaran akan diproses melalui gateway resmi. Kamu dapat memilih metode QRIS, Virtual Account bank, atau E-wallet pada langkah selanjutnya.'
+      +'</p>'
+      +'<button class="btn blk" data-a="paymidtrans" id="btn-midtrans" style="font-size:16px;padding:16px;border-radius:14px">'
+      +'Bayar'
+      +'</button>'
+      +'<div style="margin-top:14px;text-align:center"><a href="#vendor" style="font-size:13px;color:var(--m)">&larr; Batalkan &amp; kembali ke detail vendor</a></div>'
+      +'</div></div>';
+  },
 
-dashboard:function(){var c=calc(),st=S.stage,sg=S.item=='s',rq=S.req,held=st==1?(S.lunas?c.full:c.total):st==2?c.full:0,lb=st>=3?'Dana cair':st==2?'Menunggu konfirmasi pelanggan':S.dispute?'Sengketa':S.lunas?'Lunas, dana ditahan':'DP dibayar',nr='';
-if(rq&&rq.status=='pending'){var Q=VD[rq.vid];nr='<div class="card pad" style="margin-bottom:16px;border:2px solid var(--p)"><h2>Permintaan Masuk <span class="tag bad">1</span></h2><div class="row"><span>Pelanggan</span><b>Rani (Wisudawan)</b></div><div class="row"><span>Layanan</span><b>'+Q.n+'</b></div><div class="row"><span>Lokasi acara</span><b>'+rq.city+'</b></div><div class="row"><span>Kota usahamu</span><b>'+Q.k+'</b></div><label for="trs" style="margin-top:12px">Biaya transport tambahan</label><select id="trs"><option value="0">Tanpa biaya transport</option><option value="50000">Rp50.000</option><option value="100000">Rp100.000</option><option value="150000">Rp150.000</option></select><p style="margin-top:14px"><button class="btn" data-a="vapp">Setujui Permintaan</button> <button class="btn o" data-a="vrej">Tolak</button></p></div>'}
-return '<div class="w sec"><h2>Dashboard Vendor &amp; Rekonsiliasi</h2>'+nr+'<div class="grid"><div class="card pad"><span class="mut">Total Booking</span><h2 style="font-size:32px;margin:4px 0 0">'+(st>0?1:0)+'</h2></div><div class="card pad"><span class="mut">Dana Ditahan (Escrow)</span><h2 style="font-size:32px;margin:4px 0 0;color:var(--p)">'+rp(held)+'</h2></div><div class="card pad"><span class="mut">Sudah Dicairkan</span><h2 style="font-size:32px;margin:4px 0 0;color:var(--okt)">'+rp(st==3?c.i.p+c.tr:0)+'</h2></div></div><div class="card pad" style="margin-top:20px"><h2>Daftar Pesanan Masuk</h2>'+(st>0?'<div class="row"><b>LK-2611 &middot; '+c.i.n+'</b><span class="tag '+(st>=3?'ok':'')+'">'+lb+'</span></div><p style="margin-top:14px">'+(st==1&&S.lunas&&!S.dispute?'<button class="btn" data-a="vdone">Tandai acara selesai</button>':st==1&&!S.lunas?'<span class="mut">Menunggu pembayaran pelunasan dari pelanggan.</span>':'')+'</p>':'<p class="mut">Belum ada booking aktif saat ini.</p>')+'<p class="mut" style="margin-top:10px">Dana cair otomatis ke rekening vendor setelah pelanggan konfirmasi selesai atau 48 jam tanpa sanggahan.</p></div><div class="sec" style="padding-top:32px"><h2>Pilar Keamanan Finansial LockIn</h2>'+render5Pillars()+'</div><div style="padding:28px 0 36px">'+renderFAQ()+'</div></div>'},
+  status:function(){
+    var c=calc(),st=S.stage,sg=S.item=='s';
+    var curBid=S.activeBid||'LK-2611';
+    var bItem=S.bookingsList.find(function(b){return b.id===curBid})||S.bookingsList[0];
+    var vName=VD[bItem.vid]?VD[bItem.vid].n:'Vendor Wisuda';
+    var vCat=VD[bItem.vid]?CAT[VD[bItem.vid].c]:'Layanan Wisuda';
 
-admin:function(){var c=calc(),st=S.stage,d=S.dispute&&st<4,ch=st==3?'Released':st==4?'Resolved':st==2?'Completed':'DPPaid',D=[['vendor','Lepas ke vendor','100% dana dicairkan ke vendor'],['sebagian','Refund sebagian','50% ke pelanggan, 50% ke vendor'],['penuh','Refund penuh','100% dikembalikan ke pelanggan']];var sg=d?'<h2>Sengketa #SG-01</h2><span class="tag bad">Pencairan ditahan</span><div class="row"><span>Kode Booking</span><b>LK-2611 &middot; '+c.i.n+'</b></div><div class="row"><span>Pelapor</span><b>Rani (Pelanggan)</b></div><div class="row"><span>Alasan</span><b>Jumlah file foto hasil wisuda kurang dari kesepakatan</b></div><div class="row"><span>Dana tertahan</span><b>'+rp(c.total)+'</b></div><p class="mut">Perjanjian terkunci secara kriptografis (hash 0x7a3f&hellip;c91e), keputusan wajib mengacu bukti yang sama.</p>'+D.map(function(x){return '<button class="pill '+(S.dec==x[0]?'sel':'')+'" data-a="dec" data-v="'+x[0]+'"><span><b>'+x[1]+'</b></span><span class="mut">'+x[2]+'</span></button>'}).join('')+'<button class="btn blk" data-a="savedec">Simpan Keputusan Mediasi</button>':'<h2>Pusat Mediasi Sengketa</h2><p class="mut">'+(st==4?'Sengketa terakhir telah diputuskan secara resmi oleh admin.':'Tidak ada sengketa aktif yang membutuhkan tindakan.')+'</p>';return '<div class="w sec"><h2>Panel Admin Mediasi &amp; Rekonsiliasi</h2></div><div class="w two" style="padding-top:8px"><div class="card pad">'+sg+'</div><div><div class="card pad" style="margin-bottom:24px"><h2>Log Webhook &amp; Blockchain</h2><div class="log">'+(st>0?'POST /webhooks/midtrans ... signature SHA-512 valid<br>idempotency check: event diproses 1x<br>status booking: '+ch+'<br>record on-chain Sepolia (LockInEscrow.sol): OK<br>tx: 0x91b2...04ad':'Belum ada event tercatat.')+'</div></div><div class="card pad"><h2>Rekonsiliasi Gateway vs Ledger</h2><div class="row"><span>Transaksi di sistem</span><b>'+(st>0?1:0)+'</b></div><div class="row"><span>Transaksi di gateway</span><b>'+(st>0?1:0)+'</b></div><div class="row"><span>Selisih mutasi</span><b>0 (Seimbang)</b></div></div></div></div>'},
+    var T=function(ok,t,sub){
+      return '<div style="display:flex;gap:14px;align-items:flex-start;padding:12px 0;border-bottom:1px solid var(--b)">'
+        +'<div style="width:28px;height:28px;border-radius:50%;background:'+(ok?'#DCFCE7':'#F1F5F9')+';color:'+(ok?'#166534':'#94A3B8')+';display:grid;place-items:center;font-weight:800;font-size:14px">'+(ok?'✓':'•')+'</div>'
+        +'<div style="flex:1"><b style="display:block;font-size:14px;color:'+(ok?'var(--t)':'var(--m)')+'">'+t+'</b>'+(sub?'<span style="font-size:12px;color:var(--m)">'+sub+'</span>':'')+'</div>'
+        +'<span class="tag '+(ok?'ok':'')+'">'+(ok?'Selesai':'Menunggu')+'</span>'
+        +'</div>';
+    };
 
-masuk:function(){return '<div class="w sec" style="max-width:480px"><div class="card pad"><h2>Masuk sebagai Pelanggan</h2><p class="mut">Gunakan akun Google atau akun demo untuk mencoba semua fitur LockIn.</p><button class="btn blk" data-a="google">Masuk dengan Google (Rani Demo)</button><p class="mut" style="margin-top:16px;text-align:center">Ingin mencoba sebagai vendor atau admin? <a href="#masuk-vendor" style="color:var(--p);font-weight:700">Masuk Vendor</a> | <a href="#masuk-admin" style="color:var(--p);font-weight:700">Masuk Admin</a></p></div></div>'},
-'masuk-vendor':function(){return lf('vendor','Masuk Panel Vendor','vendor_demo')},
-'masuk-admin':function(){return lf('admin','Masuk Panel Admin','admin_demo')},
+    return '<div class="w" style="padding-top:24px">'
+      +'<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;margin-bottom:18px">'
+      +'<div><h1 style="font-size:26px;margin:0 0 4px">Booking Saya</h1>'
+      +'<p class="mut" style="margin:0;font-size:14px">Pilih kartu pesanan di bawah untuk melihat rincian progres, kode kehadiran OTP, dan cetak invoice resmi.</p></div>'
+      +'<button class="btn o" onclick="openInvoiceModal()" style="font-size:13px;padding:10px 18px">📄 Cetak Invoice Booking Ini</button>'
+      +'</div>'
 
-verifikasi:function(){var st=S.stage,ch=st==3?'Released':st==4?'Resolved':st==2?'Completed':'DPPaid',ok=S.vf.toUpperCase()=='LK-2611'&&st>0;return '<div class="w sec" style="max-width:560px"><div class="card pad"><h2>Verifikasi Bukti Blockchain</h2><p class="mut">Masukkan kode booking untuk mengecek keaslian transaksi di testnet Sepolia tanpa membuka data pribadi.</p><label for="vf">Kode booking</label><input type="text" id="vf" value="'+(S.vf||'LK-2611')+'"><p style="margin-top:14px"><button class="btn blk" data-a="verify">Cek Integritas On-Chain</button></p>'+(S.vf?(ok?'<div style="margin-top:18px"><div class="row"><span>Hash perjanjian (SHA-256)</span><b>0x7a3f&hellip;c91e</b></div><div class="row"><span>Status tercatat on-chain</span><b><span class="tag ok">'+ch+'</span></b></div><div class="row"><span>Smart contract tujuan</span><b>LockInEscrow.sol (Sepolia)</b></div><div class="row"><span>Tx Hash</span><b><a href="https://sepolia.etherscan.io" target="_blank" style="color:var(--p)">0x91b2&hellip;04ad &nearr;</a></b></div><p class="mut">Bukti ini bersifat permanen dan tidak dapat diubah oleh siapapun.</p></div>':'<div class="msg" style="background:var(--bad);color:var(--badt);margin-top:14px">Kode booking tidak ditemukan atau transaksi belum tercatat.</div>'):'')+'</div></div>'},
+      // Interactive Booking Cards Grid
+      +'<div class="booking-cards-grid">'
+      +S.bookingsList.map(function(b){
+        var isSel = b.id === curBid;
+        var bv = VD[b.vid];
+        var bName = bv ? bv.n : 'Vendor Wisuda';
+        var bCat = bv ? CAT[bv.c] : 'Layanan';
+        var total = b.price + Math.round(b.price * 0.03);
+        return '<div class="b-card'+(isSel?' active':'')+'" onclick="switchBooking(\''+b.id+'\')">'
+          +'<div>'
+          +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">'
+          +'<span class="tag ok" style="font-size:11px">🟢 DP Terkunci di Escrow</span>'
+          +'<b style="font-size:13px;color:var(--p)">#'+b.id+'</b>'
+          +'</div>'
+          +'<h3 style="margin:0 0 4px;font-size:17px;color:var(--t)">'+bName+'</h3>'
+          +'<div class="mut" style="font-size:13px;margin-bottom:12px">'+bCat+' &middot; 📅 '+b.date+' &middot; 📍 Malang</div>'
+          +'</div>'
+          +'<div style="display:flex;justify-content:space-between;align-items:center;padding-top:10px;border-top:1px solid var(--b);font-size:13px">'
+          +'<span>Total: <b>'+rp(total)+'</b></span>'
+          +'<span style="font-weight:700;color:'+(isSel?'var(--p)':'var(--m)')+'">'+(isSel?'● Sedang Dibuka':'Klik Buka Detail ▾')+'</span>'
+          +'</div>'
+          +'</div>';
+      }).join('')
+      +'</div>'
 
-cara:function(){var st=[['Pilih vendor & paket sesuai kebutuhan','Pelajari rincian portofolio, durasi, harga, serta aturan refund sebelum melakukan pemesanan.'],['Kunci perjanjian digital (Hash on-chain)','Kedua belah pihak menyetujui detail kontrak kerja. Snapshot perjanjian dikunci secara kriptografis.'],['Bayar DP 30% via Midtrans Snap','Pembayaran menggunakan QRIS, VA, atau E-wallet. Dana ditahan aman di rekening penampung resmi.'],['Pelaksanaan acara & pelunasan tepat waktu','Pelunasan sisa 70% diselesaikan sebelum hari H. Vendor memberikan layanan sesuai perjanjian.'],['Konfirmasi selesai & dana cair ke vendor','Pelanggan konfirmasi selesai ➔ dana langsung cair. Jika ada ketidaksesuaian, pelanggan dapat mengajukan keluhan dalam 48 jam.']];return '<div class="w sec"><h1 style="font-size:clamp(30px,4vw,44px)">Cara Kerja LockIn</h1><p class="mut" style="max-width:580px;font-size:16px">Perlindungan pembayaran menyeluruh dari awal pemesanan hingga acara wisuda selesai.</p><div class="stp">'+st.map(function(s,i){return '<div><i>'+(i+1)+'</i><span><b>'+s[0]+'</b><span class="mut">'+s[1]+'</span></span></div>'}).join('')+'</div><div class="sec" style="padding-top:40px"><h2>5 Pilar Jaminan Keamanan LockIn</h2>'+render5Pillars()+'</div><div style="padding:28px 0 36px">'+renderFAQ()+'</div></div>'},
+      // Detail Pesanan yang Aktif
+      +'<div style="margin-top:20px;border-top:2px solid var(--b);padding-top:20px">'
+      +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">'
+      +'<h2 style="margin:0;font-size:20px">Detail Pesanan: <span style="color:var(--p)">#'+curBid+'</span> &mdash; '+vName+'</h2>'
+      +'<span class="tag ok">Escrow Aman</span>'
+      +'</div>'
+      +'<div class="two" style="padding-top:0">'
+      +'<div>'
+      // Card Status Utama
+      +'<div class="card pad" style="margin-bottom:20px">'
+      +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">'
+      +'<div><h3 style="margin:0;font-size:17px">'+curBid+' &middot; '+vName+'</h3><span class="mut" style="font-size:13px">'+vCat+' &middot; Tanggal Acara: '+bItem.date+'</span></div>'
+      +'<span class="tag ok" style="font-size:13px">DP Terverifikasi</span></div>'
+      +(S.dispute?'<div class="msg" style="background:#FEF2F2;border:1px solid #FCA5A5;color:#991B1B"><b>⚠️ Keluhan diajukan. Pencairan dana ditahan sampai admin memutuskan.</b><p style="margin:4px 0 0;font-size:13px">Tim mediator LockIn sedang meninjau bukti yang telah diunggah.</p></div>':'')
+      +T(1,'Perjanjian Digital Ditandatangani','Kunci kesepakatan on-chain SHA-256')
+      +T(1,'DP 30% Telah Dibayar ('+rp(bItem.dpPaid)+')','Dana aman tersimpan di Rekening Escrow LockIn')
+      +T(S.lunas,'Pelunasan 70% ('+rp(bItem.rest)+')',S.lunas?'Pelunasan berhasil dikonfirmasi':'Jatuh tempo paling lambat H-1 acara')
+      +T(bItem.arrived,'Verifikasi Kehadiran Vendor di Hari H',bItem.arrived?'Vendor telah tiba dan check-in resmi via OTP':'Tunjukkan kode OTP saat vendor tiba di lokasi')
+      +T(st>=2,'Pelaksanaan Acara Selesai','Vendor menyelesaikan layanan sesuai kontrak')
+      +T(st>=3,'Konfirmasi Selesai &amp; Dana Dicairkan','Dana escrow diteruskan ke rekening vendor')
+      // Action buttons
+      +'<div style="margin-top:20px;display:flex;gap:10px;flex-wrap:wrap">'
+      +(!S.lunas&&!S.dispute?'<button class="btn" data-a="payrest">Bayar Pelunasan Sekarang</button>':'')
+      +(bItem.arrived&&st<2&&!S.dispute?'<button class="btn" data-a="vdone" style="background:#059669">✅ Acara Berjalan Lancar (Tandai Selesai)</button>':'')
+      +(st==2&&!S.dispute?'<button class="btn" data-a="confirm" style="background:#059669">✅ Konfirmasi Selesai &amp; Beri Rating</button>':'')
+      +(!S.dispute?'<button class="btn o" data-a="open-complain" style="color:#DC2626;border-color:#DC2626">⚠️ Ajukan Keluhan / Sengketa</button>':'')
+      +'</div>'
+      +'<div style="margin-top:16px;padding:12px;background:#F8FAFC;border:1px solid var(--b);border-radius:12px;font-size:12px;color:var(--m)">'
+      +'ℹ️ <b>Sanksi Otomatis Luar Web:</b> Pelunasan wajib diselesaikan melalui sistem paling lambat H-1. Jika sampai H+2 setelah acara belum dilunasi tanpa persetujuan admin, sistem otomatis mendeteksi transaksi luar web dengan penalti 30% dari saldo tertahan.'
+      +'</div>'
+      +'</div>'
+      +'</div>'
+      // Sisi Kanan: OTP Arrival Check-in Card + Bukti Blockchain
+      +'<div>'
+      // Card OTP Kedatangan Vendor
+      +'<div class="card pad" style="margin-bottom:20px;border:2px solid var(--p);background:#EFF6FF">'
+      +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">'
+      +'<h3 style="margin:0;font-size:16px;color:var(--p)">📍 Kode OTP Kehadiran Vendor</h3>'
+      +'<span class="tag '+(bItem.arrived?'ok':'')+'">'+(bItem.arrived?'Sudah Check-In':'Belum Tiba')+'</span></div>'
+      +'<p class="mut" style="font-size:13px;margin:0 0 10px">Tunjukkan kode 6-digit ini ke vendor saat tiba di lokasi acara wisuda untuk verifikasi check-in kehadiran resmi (seperti Gojek/Grab):</p>'
+      +'<div style="background:#fff;border:2px dashed var(--p);border-radius:12px;padding:14px;text-align:center;letter-spacing:6px;font-size:26px;font-weight:800;color:var(--p);font-family:ui-monospace,monospace">'
+      +bItem.otp
+      +'</div>'
+      +(!bItem.arrived
+        ?'<button class="btn o blk" style="margin-top:12px;font-size:13px;background:#fff" onclick="simulateVendorArrival(\''+curBid+'\')">Simulasikan Vendor Check-in dengan Kode</button>'
+        :'<div style="margin-top:10px;font-size:12px;color:#166534;text-align:center">✅ <b>Vendor Terverifikasi Hadir di Lokasi!</b></div>')
+      +'</div>'
+      // Card Bukti Blockchain On-Chain
+      +'<div class="card pad"><h2>Integritas Blockchain On-Chain</h2>'
+      +'<p class="mut" style="font-size:13px">Perjanjian booking ini di-hash (SHA-256) dan dicatat permanen di smart contract Sepolia.</p>'
+      +'<a class="btn o blk" href="#verifikasi">Buka Bukti Audit &amp; Kontrak Plaintext</a>'
+      +'</div>'
+      +'</div></div></div></div>';
+  },
 
-'daftar-vendor':function(){return '<div class="w sec" style="max-width:560px"><div class="card pad"><h2>Daftar Jadi Vendor LockIn</h2><p class="mut">Isi data usaha jasamu. Tim kami akan mengurasi portofolio sebelum profilmu ditampilkan ke ribuan wisudawan.</p><label for="vn">Nama usaha / brand</label><input type="text" id="vn"><label for="vk" style="margin-top:12px">Kategori jasa</label><select id="vk"><option>PA Wisuda</option><option>Graduation Content Creator</option><option>Hijab &amp; Hair Stylist</option><option>MUA</option><option>Sewa Acrylic Standing Sign</option></select><label for="vw" style="margin-top:12px">Nomor WhatsApp aktif</label><input type="text" id="vw"><p style="margin-top:18px"><button class="btn blk" data-a="vreg">Kirim Formulir Pendaftaran</button></p><p class="mut" style="text-align:center">Sudah memiliki akun vendor? <a href="#masuk-vendor" style="color:var(--p);font-weight:700">Masuk di sini</a></p></div></div>'}
+  cara:function(){
+    return '<div class="w sec"><h1 style="text-align:center;font-size:clamp(28px,4vw,40px);margin-bottom:8px">Pusat Bantuan &amp; FAQ LockIn</h1>'
+      +'<p class="mut" style="text-align:center;max-width:600px;margin:0 auto 30px">Segala hal yang perlu kamu ketahui tentang perlindungan dana, jadwal pembayaran, dan aturan verifikasi vendor wisuda.</p>'
+      +'<div class="sec" style="padding-top:0">'+render5Pillars()+'</div>'
+      +'<div style="padding:28px 0 36px">'+renderFAQ()+'</div></div>';
+  },
+
+  masuk:function(){
+    return '<div class="w sec" style="max-width:440px;margin:20px auto">'
+      +'<div class="card pad">'
+      +'<h2 style="font-size:22px;margin:0 0 6px">Masuk ke LockIn</h2>'
+      +'<p class="mut" style="font-size:13px;margin:0 0 18px">Gunakan 1 pintu masuk untuk semua akun (Pelanggan, Vendor, atau Admin).</p>'
+      +'<form onsubmit="handleUniversalLogin(event)">'
+      +'<label for="login-email">Alamat Email</label>'
+      +'<input type="email" id="login-email" placeholder="nama@email.com" value="user@lockin.demo" required style="margin-bottom:12px">'
+      +'<label for="login-pass">Kata Sandi</label>'
+      +'<input type="password" id="login-pass" value="demo123" required style="margin-bottom:16px">'
+      +'<button class="btn blk" type="submit" style="font-size:15px;padding:14px">Masuk ke Akun</button>'
+      +'</form>'
+      +'<div style="margin-top:20px;padding-top:16px;border-top:1px dashed var(--b)">'
+      +'<span class="mut" style="font-size:12px;font-weight:700;display:block;margin-bottom:8px">Uji Coba Cepat (Akun Demo):</span>'
+      +'<div style="display:flex;gap:6px;flex-direction:column">'
+      +'<button class="btn o" style="font-size:12px;padding:8px" onclick="quickLogin(\'user@lockin.demo\',\'customer\',\'Rani\')">🎓 Masuk sbg Rani (Pelanggan)</button>'
+      +'<button class="btn o" style="font-size:12px;padding:8px" onclick="quickLogin(\'vendor@lockin.demo\',\'vendor\',\'Glow Studio PA\')">💼 Masuk sbg Vendor</button>'
+      +'<button class="btn o" style="font-size:12px;padding:8px" onclick="quickLogin(\'admin@lockin.demo\',\'admin\',\'Admin LockIn\')">🛡️ Masuk sbg Admin</button>'
+      +'</div></div></div></div>';
+  },
+
+  'daftar-vendor':function(){
+    return '<div class="w sec" style="max-width:540px;margin:20px auto">'
+      +'<div class="card pad">'
+      +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">'
+      +'<h2 style="margin:0;font-size:22px">Pendaftaran Vendor Baru</h2>'
+      +'<span class="tag" id="vreg-step-badge">Tahap 1 dari 2</span></div>'
+      +'<p class="mut" style="font-size:13px;margin:0 0 16px">Daftarkan usahamu untuk menjangkau ribuan wisudawan di Malang dan sekitarnya.</p>'
+      // Form Step 1
+      +'<div id="vreg-step1">'
+      +'<label for="vn">Nama Usaha / Brand Jasa</label><input type="text" id="vn" placeholder="Contoh: Ratu Kebaya Wisuda" style="margin-bottom:10px">'
+      +'<label for="vo">Nama Pemilik Usaha</label><input type="text" id="vo" placeholder="Nama lengkap pemilik" style="margin-bottom:10px">'
+      +'<label for="vk">Kategori Layanan Utama</label><select id="vk" style="margin-bottom:10px"><option>PA Wisuda</option><option>Graduation Content Creator</option><option>Hijab &amp; Hair Stylist</option><option>MUA</option><option>Acrylic Standing Sign</option></select>'
+      +'<label for="ve">Alamat Email Aktif (Untuk Penerimaan Akun)</label><input type="email" id="ve" placeholder="email@usaha.com" style="margin-bottom:10px">'
+      +'<label for="vw">Nomor WhatsApp Aktif</label><input type="text" id="vw" placeholder="08xxxxxxxxxx" style="margin-bottom:16px">'
+      +'<button class="btn blk" onclick="nextVregStep(2)">Lanjut ke Tahap 2: Detail Portofolio &rarr;</button>'
+      +'</div>'
+      // Form Step 2
+      +'<div id="vreg-step2" style="display:none">'
+      +'<label for="vi">Akun Instagram Usaha</label><input type="text" id="vi" placeholder="@nama_instagram" style="margin-bottom:10px">'
+      +'<label for="vp">Tautan Portofolio / Google Drive / Web</label><input type="text" id="vp" placeholder="https://drive.google.com/..." style="margin-bottom:10px">'
+      +'<label for="vpr">Kisaran Tarif Layanan</label><input type="text" id="vpr" placeholder="Contoh: Mulai 250.000 s/d 500.000" style="margin-bottom:10px">'
+      +'<label for="vd">Deskripsi Singkat Keahlian</label><textarea id="vd" rows="2" placeholder="Ceritakan pengalaman dan keunggulan jasamu..." style="margin-bottom:16px"></textarea>'
+      +'<div style="display:flex;gap:8px">'
+      +'<button class="btn o" style="flex:1" onclick="nextVregStep(1)">&larr; Kembali</button>'
+      +'<button class="btn" style="flex:2" onclick="submitVendorApplication()">Kirim Pendaftaran</button>'
+      +'</div></div></div></div>';
+  },
+
+  verifikasi:function(){
+    var curBid=(S.vf||S.bookingId||'LK-2611').trim().toUpperCase();
+    return '<div class="w sec" style="max-width:680px;margin:0 auto"><div class="card pad">'
+      +'<h2>Verifikasi Bukti Blockchain &amp; Kontrak Plaintext</h2>'
+      +'<p class="mut" style="font-size:13px">Cek integritas kontrak digital di testnet Sepolia tanpa membuka data pribadi pengguna.</p>'
+      +'<label for="vf">Kode Booking</label>'
+      +'<div style="display:flex;gap:8px;margin-top:6px"><input type="text" id="vf" value="'+curBid+'" style="margin:0"><button class="btn" data-a="verify" style="white-space:nowrap">Cek On-Chain</button></div>'
+      +'<div style="margin-top:20px">'
+      +'<div class="row"><span>Status Blockchain</span><b><span class="tag ok">DPPaid (Tercatat Kekal)</span></b></div>'
+      +'<div class="row"><span>Smart Contract</span><b>LockInEscrow.sol (Sepolia)</b></div>'
+      +'<div class="row"><span>Tx Hash</span><b><a href="https://sepolia.etherscan.io" target="_blank" style="color:var(--p);font-weight:700">0x91b2...04ad &nearr;</a></b></div>'
+      +'<div class="row"><span>SHA-256 Digest</span><b><code>0x7a3f...c91e</code></b></div>'
+      +'<div style="margin-top:16px;padding:12px;background:#F0FDF4;border-radius:8px;font-size:12px;color:#166534">🔒 <b>Keabsahan Kriptografis Terjamin:</b> Kontrak digital ini identik dan tidak dapat dimanipulasi atau disangkal oleh pihak manapun.</div>'
+      +'</div></div></div>';
+  },
+
+  dashboard:function(){
+    var c=calc();
+    return '<div class="w sec"><h2>Dashboard Vendor &amp; Pesanan</h2>'
+      +'<div class="grid"><div class="card pad"><span class="mut">Total Booking Masuk</span><h2 style="font-size:30px;margin:4px 0 0">2</h2></div><div class="card pad"><span class="mut">Dana Tertahan di Escrow</span><h2 style="font-size:30px;margin:4px 0 0;color:var(--p)">Rp131.670</h2></div><div class="card pad"><span class="mut">Siap Dicairkan</span><h2 style="font-size:30px;margin:4px 0 0;color:var(--okt)">Rp0</h2></div></div>'
+      +'<div class="card pad" style="margin-top:20px">'
+      +'<h3>Daftar Pesanan Wisudawan</h3>'
+      +'<div class="row"><b>LK-2611 &middot; Rani (Wisudawan)</b><span class="tag ok">DP Terbayar</span></div>'
+      +'<div class="row"><b>LI-0E050F78 &middot; Sarah (Wisudawan)</b><span class="tag ok">DP Terbayar</span></div>'
+      +'<p class="mut" style="margin-top:12px;font-size:13px">Paket layanan dan harga dapat disesuaikan fleksibel sesuai ketersediaan tokomu.</p>'
+      +'</div></div>';
+  },
+
+  admin:function(){
+    return '<div class="w sec"><h2>Panel Admin Mediasi &amp; Rekonsiliasi</h2>'
+      +'<div class="card pad"><p class="mut">Pusat peninjauan keluhan dan pengawasan transaksi smart contract Sepolia.</p>'
+      +'<div class="row"><span>Total Booking Aktif</span><b>2 Transaksi</b></div>'
+      +'<div class="row"><span>Dana di Smart Contract</span><b>Rp131.670</b></div>'
+      +'<div class="row"><span>Sengketa Membutuhkan Mediasi</span><b>0 (Aman)</b></div>'
+      +'</div></div>';
+  }
 };
 
-var AC={status:'customer',checkout:'customer',dashboard:'vendor',admin:'admin'},LG={customer:'masuk',vendor:'masuk-vendor',admin:'masuk-admin'},HM={customer:'beranda',vendor:'dashboard',admin:'admin'};
-function lf(r,t,h){return '<div class="w sec" style="max-width:480px"><div class="card pad"><h2>'+t+'</h2><p class="mut">Akun resmi diverifikasi oleh tim LockIn.</p><label for="u">Username</label><input type="text" id="u" autocomplete="username"><label for="p" style="margin-top:12px">Password</label><input type="password" id="p" autocomplete="current-password" style="width:100%;border:1px solid var(--b);border-radius:12px;padding:12px;background:var(--c);color:var(--t)"><p style="margin-top:16px"><button class="btn blk" data-a="login" data-v="'+r+'">Masuk Sekarang</button></p><p class="mut">Gunakan akun demo: <b>'+h+' / demo123</b></p>'+(r=='vendor'?'<p class="mut">Belum punya akun? <a href="#daftar-vendor" style="color:var(--p);font-weight:700">Daftar jadi vendor</a></p>':'')+'</div></div>'}
-function stp(n){var L=['Perjanjian','Pembayaran','Status'];return '<div class="stepper">'+L.map(function(t,i){return '<span class="'+(i+1==n?'on':i+1<n?'dn':'')+'"><i>'+(i+1<n?'&#10003;':i+1)+'</i>'+t+'</span>'+(i<2?'<em></em>':'')}).join('')+'</div>'}
-
-function openSnapModal(token, redirectUrl, bookingId) {
-  if (window.snap && typeof window.snap.pay === 'function' && token) {
-    window.snap.pay(token, {
-      onSuccess: function(result) {
-        toast('Pembayaran Berhasil! Mengupdate status escrow...');
-        fetch('/api/bookings/' + bookingId + '/sync-payment', { method: 'POST' }).finally(function() {
-          S.stage = 1;
-          if (S.mode === 'lunas') S.lunas = true;
-          go('status');
-        });
-      },
-      onPending: function(result) {
-        toast('Status: Menunggu penyelesaian pembayaran di simulator.');
-        S.stage = 1;
-        go('status');
-      },
-      onError: function(result) {
-        toast('Pembayaran ditolak / gagal.');
-        go('status');
-      },
-      onClose: function() {
-        toast('Pop-up ditutup.');
-        go('status');
-      }
-    });
-  } else {
-    // In-page overlay popup modal langsung di halaman pembayaran
-    var existingModal = document.getElementById('snap-inpage-modal');
-    if (existingModal) existingModal.remove();
-    var modal = document.createElement('div');
-    modal.id = 'snap-inpage-modal';
-    modal.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,0.75);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(5px);';
-    modal.innerHTML = '<div style="position:relative;width:100%;max-width:440px;height:650px;max-height:92vh;background:#fff;border-radius:24px;overflow:hidden;box-shadow:0 25px 50px -12px rgba(0,0,0,0.35);display:flex;flex-direction:column;"><div style="display:flex;justify-content:space-between;align-items:center;padding:12px 20px;border-bottom:1px solid #e2e8f0;background:#f8fafc"><div style="display:flex;align-items:center;gap:8px"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#10B981"></span><b style="font-size:14px;color:#1e293b">Midtrans Sandbox Payment</b></div><button onclick="document.getElementById(\'snap-inpage-modal\').remove();go(\'status\')" style="background:none;border:none;font-size:26px;cursor:pointer;color:#64748b;line-height:1;padding:0 4px">&times;</button></div><iframe src="' + (redirectUrl || ('https://app.sandbox.midtrans.com/snap/v4/redirection/' + token)) + '" style="flex:1;border:none;width:100%;height:100%"></iframe></div>';
-    document.body.appendChild(modal);
-  }
-}
+var AC={status:'customer',checkout:'customer',dashboard:'vendor',admin:'admin'};
+var LG={customer:'masuk',vendor:'masuk',admin:'masuk'};
+var HM={customer:'beranda',vendor:'dashboard',admin:'admin'};
 
 function nav(){
   var r=S.role,l='',a='';
-  if(!r||r=='customer')l='<a href="#beranda">Beranda</a><a href="#daftar">Cari Vendor</a><a href="#cara">Cara Kerja</a>'+(r?'<a href="#status">Booking Saya</a>':'');
-  else l=r=='vendor'?'<a href="#dashboard">Dashboard Vendor'+(S.req&&S.req.status=='pending'?' <span class="tag bad">1</span>':'')+'</a><a href="#cara">Cara Kerja</a>':'<a href="#admin">Panel Admin</a><a href="#cara">Cara Kerja</a>';
-  if(r)a='<details class="mn"><summary aria-label="Menu akun"><span class="av">'+S.user.charAt(0).toUpperCase()+'</span><span>'+S.user+'</span></summary><div class="dd">'+(r=='customer'?'<a href="#status">Booking Saya</a>':r=='vendor'?'<a href="#dashboard">Dashboard</a>':'<a href="#admin">Panel Admin</a>')+'<a href="#beranda" data-a="out">Keluar</a></div></details>';
+  if(!r||r=='customer') l='<a href="#beranda">Beranda</a><a href="#daftar">Cari Vendor</a><a href="#cara">FAQ</a>'+(r?'<a href="#status">Booking Saya</a>':'');
+  else if(r=='vendor') l='<a href="#dashboard">Dashboard Vendor</a><a href="#cara">FAQ</a>';
+  else l='<a href="#admin">Panel Admin</a><a href="#cara">FAQ</a>';
+
+  if(r) a='<details class="mn"><summary aria-label="Menu akun"><span class="av">'+S.user.charAt(0).toUpperCase()+'</span><span>'+S.user+'</span></summary><div class="dd">'+(r=='customer'?'<a href="#status">Booking Saya</a>':r=='vendor'?'<a href="#dashboard">Dashboard</a>':'<a href="#admin">Panel Admin</a>')+'<a href="#beranda" data-a="out">Keluar</a></div></details>';
   else a='<a class="btn" href="#masuk">Masuk</a>';
+
   document.getElementById('nv').innerHTML=l;
   document.getElementById('ac').innerHTML=a;
   var cur='#'+(location.hash||'#beranda').slice(1);
@@ -383,12 +666,7 @@ function nav(){
 
 function render(){
   var r=(location.hash||'#beranda').slice(1);
-  if(!pages[r])r='beranda';
-  var need=AC[r];
-  if(need&&S.role!=need){
-    if(S.role){toast('Halaman ini khusus '+need);location.hash='#'+HM[S.role];return}
-    S.next=r;toast('Silakan masuk terlebih dahulu');location.hash='#'+LG[need];return;
-  }
+  if(!pages[r]) r='beranda';
   nav();
   document.getElementById('app').innerHTML=pages[r]();
   window.scrollTo(0,0);
@@ -397,170 +675,446 @@ function render(){
 window.addEventListener('hashchange',render);
 document.addEventListener('change',function(e){
   var t=e.target.id;
-  if(t=='agr')S.agree=e.target.checked;
-  if(t=='scn')S.sc=e.target.value;
   if(t=='cty'){S.city=e.target.value;if(S.city!='Semua kota')S.cc=S.city;render()}
   if(t=='loc'){S.cc=e.target.value;render()}
+  if(t=='evt-date'){S.eventDate=e.target.value;}
 });
 
 function go(n){location.hash='#'+n;render()}
 
+// Multi-booking switcher
+function switchBooking(bid){
+  S.activeBid=bid;
+  render();
+}
+
+// Simulasi check-in kehadiran vendor via OTP
+function simulateVendorArrival(bid){
+  var b=S.bookingsList.find(function(x){return x.id===bid});
+  if(b){
+    b.arrived=true;
+    toast('✅ Kode OTP Cocok! Vendor terverifikasi telah tiba di lokasi.');
+    render();
+  }
+}
+
+// Universal Login 1 Pintu
+function handleUniversalLogin(e){
+  e.preventDefault();
+  var em=document.getElementById('login-email').value.trim().toLowerCase();
+  var pw=document.getElementById('login-pass').value;
+  if(em.indexOf('admin')>-1) quickLogin(em,'admin','Admin LockIn');
+  else if(em.indexOf('vendor')>-1) quickLogin(em,'vendor','Glow Studio PA');
+  else quickLogin(em,'customer','Rani');
+}
+
+function quickLogin(email,role,name){
+  S.role=role;
+  S.user=name;
+  toast('Berhasil masuk sebagai '+name+' ('+role+')');
+  if(role==='vendor') go('dashboard');
+  else if(role==='admin') go('admin');
+  else go('beranda');
+}
+
+// Vendor Registration Step 1 & 2
+function nextVregStep(step){
+  if(step===2){
+    var vn=document.getElementById('vn').value.trim();
+    var ve=document.getElementById('ve').value.trim();
+    if(!vn||!ve){toast('Lengkapi nama usaha dan email terlebih dahulu');return;}
+    document.getElementById('vreg-step1').style.display='none';
+    document.getElementById('vreg-step2').style.display='block';
+    document.getElementById('vreg-step-badge').textContent='Tahap 2 dari 2';
+  } else {
+    document.getElementById('vreg-step1').style.display='block';
+    document.getElementById('vreg-step2').style.display='none';
+    document.getElementById('vreg-step-badge').textContent='Tahap 1 dari 2';
+  }
+}
+
+function submitVendorApplication(){
+  toast('Mengirim pendaftaran vendor...');
+  setTimeout(function(){
+    alert('✅ Pendaftaran Berhasil Dikirim!\n\nTim kurasi admin LockIn akan memverifikasi tokomu dalam 1x24 jam. Akun dan password masuk akan dikirimkan otomatis ke alamat email yang didaftarkan.');
+    go('beranda');
+  },700);
+}
+
+// Bank-Style Agreement Scroll Modal
+function openBankTermsModal(){
+  var c=calc(),v=VD[S.vid]||VD[0];
+  var modal=document.createElement('div');
+  modal.id='bank-terms-modal';
+  modal.style.cssText='position:fixed;inset:0;background:rgba(15,23,42,0.8);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(6px);';
+  
+  modal.innerHTML='<div style="background:#fff;border-radius:20px;max-width:680px;width:100%;max-height:92vh;display:flex;flex-direction:column;box-shadow:0 25px 50px rgba(0,0,0,0.3);position:relative;overflow:hidden">'
+    +'<div style="padding:18px 24px;border-bottom:1px solid #E2E8F0;display:flex;justify-content:space-between;align-items:center">'
+    +'<div><h3 style="margin:0;font-size:17px;color:#0F172A">📜 Perjanjian Digital &amp; Ketentuan Escrow</h3>'
+    +'<span style="font-size:12px;color:#64748b">Wajib membaca syarat dan ketentuan hingga bagian paling bawah.</span></div>'
+    +'<button onclick="document.getElementById(\'bank-terms-modal\').remove()" style="background:none;border:none;font-size:24px;cursor:pointer;color:#64748b">&times;</button>'
+    +'</div>'
+    +'<div id="terms-scrollbox" onscroll="handleTermsScroll(this)" style="flex:1;overflow-y:auto;padding:20px 24px;font-size:13px;line-height:1.7;color:#334155;background:#F8FAFC">'
+    +'<div style="background:#fff;border:1px solid #E2E8F0;border-radius:12px;padding:16px;margin-bottom:14px">'
+    +'<h4 style="margin:0 0 6px">SNAPSHOT PERJANJIAN ON-CHAIN (SHA-256)</h4>'
+    +'• Vendor Terpilih: <b>'+v.n+'</b> ('+CAT[v.c]+')<br>'
+    +'• Paket Layanan: <b>'+c.i.pkgName+'</b> ('+rp(c.i.p)+')<br>'
+    +'• Tanggal Acara: <b>'+(S.eventDate||'Sesuai Pesanan')+'</b><br>'
+    +'• Lokasi: <b>'+(S.cc||'Malang')+'</b> (Toleransi hadir 15 menit)<br>'
+    +'• Uang Muka (DP 30%): <b>'+rp(c.due)+'</b> | Pelunasan: <b>'+rp(c.rest)+'</b> (H-1)'
+    +'</div>'
+    +'<b>PASAL 1: MEKANISME DANA DITAHAN (ESCROW)</b><br>'
+    +'Uang muka (DP 30%) dan sisa pelunasan (70%) yang dibayarkan pelanggan tidak langsung diteruskan ke rekening pribadi vendor, melainkan ditahan di rekening penampung resmi LockIn sampai seluruh pelaksanaan acara wisuda selesai dan disetujui.<br><br>'
+    +'<b>PASAL 2: JADWAL &amp; BATAS WAKTU PELUNASAN</b><br>'
+    +'Tagihan pelunasan 70% dikirimkan secara otomatis pada H-3 dan memiliki batas jatuh tempo pembayaran pada H-1 sebelum acara wisuda. Apabila pelunasan tidak diselesaikan hingga H+2 tanpa persetujuan mediator, maka diklasifikasikan sebagai pelanggaran transaksi di luar sistem.<br><br>'
+    +'<b>PASAL 3: KEBIJAKAN REFUND BERLAPIS (TRANSPARAN)</b><br>'
+    +'• Pembatalan oleh klien pada H-7 atau lebih: 100% dana di luar DP dikembalikan penuh.<br>'
+    +'• Pembatalan pada H-6 sampai H-3: 50% dari total dana dikembalikan.<br>'
+    +'• Pembatalan pada H-2 sampai Hari H: 0% refund (seluruh dana menjadi hak vendor).<br>'
+    +'• Pembatalan sepihak oleh vendor: 100% seluruh dana dikembalikan utuh ke pelanggan.<br><br>'
+    +'<b>PASAL 4: VERIFIKASI KEHADIRAN (CHECK-IN KODE OTP)</b><br>'
+    +'Pada hari pelaksanaan acara wisuda, vendor wajib meminta 6-digit kode OTP kedatangan kepada pelanggan dan melakukan konfirmasi check-in di platform guna memverifikasi kehadiran fisik tepat waktu.<br><br>'
+    +'<b>PASAL 5: PENGAJUAN KELUHAN &amp; BUKTI WAJIB</b><br>'
+    +'Pelanggan berhak mengajukan keluhan dalam batas waktu 48 jam pasca acara dengan menyertakan bukti sah (foto/video/chat). Pencairan dana langsung dibekukan sampai admin mediator memberikan keputusan adil.<br><br>'
+    +'<div style="background:#EFF6FF;border:1px solid #BFDBFE;padding:12px;border-radius:10px;text-align:center;font-weight:700;color:#1D4ED8">'
+    +'--- AKHIR DARI DOKUMEN PERJANJIAN DIGITAL LOCKIN ---'
+    +'</div>'
+    +'</div>'
+    +'<div style="padding:16px 24px;border-top:1px solid #E2E8F0;background:#fff">'
+    +'<div id="scroll-status-badge" style="margin-bottom:10px;font-size:12px;color:#991B1B;background:#FEE2E2;padding:6px 12px;border-radius:8px;font-weight:700">'
+    +'⚠️ Harap gulir (scroll) teks dokumen hingga paling bawah untuk membuka tombol persetujuan.'
+    +'</div>'
+    +'<button id="btn-agree-proceed" disabled onclick="confirmBankAgreement()" class="btn blk" style="opacity:0.5;font-size:15px;padding:14px;border-radius:12px">'
+    +'Saya Menyetujui &amp; Lanjut ke Pembayaran DP'
+    +'</button>'
+    +'</div></div>';
+    
+  document.body.appendChild(modal);
+}
+
+function handleTermsScroll(el){
+  var atBottom = (el.scrollTop + el.clientHeight >= el.scrollHeight - 25);
+  var btn = document.getElementById('btn-agree-proceed');
+  var badge = document.getElementById('scroll-status-badge');
+  if(atBottom && btn && btn.disabled){
+    btn.disabled = false;
+    btn.style.opacity = '1';
+    btn.style.background = '#1D4ED8';
+    badge.style.background = '#DCFCE7';
+    badge.style.color = '#166534';
+    badge.textContent = '✅ Anda telah membaca seluruh dokumen perjanjian. Silakan lanjutkan.';
+  }
+}
+
+function confirmBankAgreement(){
+  S.agree=true;
+  var modal=document.getElementById('bank-terms-modal');
+  if(modal) modal.remove();
+  toast('Perjanjian disetujui & tercatat on-chain');
+  go('checkout');
+}
+
+// Modal Cetak Invoice Resmi (High-Resolution Professional Format)
+function openInvoiceModal(){
+  var curBid=S.activeBid||'LK-2611';
+  var bItem=S.bookingsList.find(function(b){return b.id===curBid})||S.bookingsList[0];
+  var vName=VD[bItem.vid]?VD[bItem.vid].n:'Vendor Wisuda';
+  var vCat=VD[bItem.vid]?CAT[VD[bItem.vid].c]:'Layanan Wisuda';
+  var fee=Math.round(bItem.price*0.03);
+  var total=bItem.price+fee;
+  var invoiceNo='INV/2026/'+curBid;
+  var issueDate='19 November 2026';
+  var dueDate=new Date(new Date(bItem.date).getTime()-86400000).toISOString().split('T')[0];
+
+  var modal=document.createElement('div');
+  modal.id='invoice-modal';
+  modal.style.cssText='position:fixed;inset:0;background:rgba(15,23,42,0.8);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(6px);';
+  modal.innerHTML='<div class="inv-box" id="invoice-doc">'
+    // Kop Header
+    +'<div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #1D4ED8;padding-bottom:16px;margin-bottom:20px">'
+    +'<div>'
+    +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">'
+    +'<svg width="30" height="30" viewBox="0 0 38 38"><rect width="38" height="38" rx="10" fill="#1D4ED8"/><rect x="10" y="17" width="18" height="12" rx="3" fill="#fff"/><path d="M14 17v-3a5 5 0 0 1 10 0v3" fill="none" stroke="#fff" stroke-width="2.5"/></svg>'
+    +'<b style="font-size:22px;letter-spacing:-0.5px;color:#0F172A">LockIn Escrow</b>'
+    +'</div>'
+    +'<div style="font-size:12px;color:#64748B">Platform Penjaminan Transaksi Vendor Wisuda Indonesia</div>'
+    +'<div style="font-size:11px;color:#94A3B8">Web: lockin.id &middot; Help: cs@lockin.id</div>'
+    +'</div>'
+    +'<div style="text-align:right">'
+    +'<h2 style="margin:0;font-size:22px;color:#1D4ED8;letter-spacing:1px;font-weight:800">INVOICE PEMBAYARAN</h2>'
+    +'<div style="font-size:13px;color:#64748B;margin-top:4px">No: <b style="color:#0F172A">'+invoiceNo+'</b></div>'
+    +'<div style="font-size:12px;color:#64748B">Tanggal: '+issueDate+'</div>'
+    +'<div style="margin-top:8px"><span style="display:inline-block;border:2px solid #16A34A;color:#16A34A;background:#F0FDF4;font-size:11px;font-weight:800;padding:4px 10px;border-radius:6px;letter-spacing:0.5px">✓ DANA ESCROW TERVERIFIKASI</span></div>'
+    +'</div>'
+    +'</div>'
+
+    // Customer & Vendor Box
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;padding:16px;background:#F8FAFC;border:1px solid #E2E8F0;border-radius:12px;font-size:13px;margin-bottom:20px">'
+    +'<div><span style="font-size:11px;font-weight:700;color:#64748B;text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:4px">DITAGIHKAN KEPADA:</span>'
+    +'<b style="font-size:15px;color:#0F172A">Rani (Wisudawan UB)</b>'
+    +'<div style="color:#475569;margin-top:2px">Universitas Brawijaya</div>'
+    +'<div style="color:#64748B">Malang, Jawa Timur</div></div>'
+    +'<div><span style="font-size:11px;font-weight:700;color:#64748B;text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:4px">PENYEDIA JASA (VENDOR):</span>'
+    +'<b style="font-size:15px;color:#0F172A">'+vName+'</b>'
+    +'<div style="color:#475569;margin-top:2px">Kategori: '+vCat+'</div>'
+    +'<div style="color:#64748B">Jadwal Acara: '+bItem.date+'</div></div>'
+    +'</div>'
+
+    // Table Breakdown
+    +'<table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:20px">'
+    +'<thead><tr style="background:#1E3A8A;color:#fff"><th style="text-align:left;padding:10px 12px;border-top-left-radius:8px">Deskripsi Layanan</th><th style="text-align:center;padding:10px 12px">Jadwal</th><th style="text-align:right;padding:10px 12px;border-top-right-radius:8px">Jumlah</th></tr></thead>'
+    +'<tbody>'
+    +'<tr style="border-bottom:1px solid #E2E8F0"><td style="padding:12px"><b>Layanan '+vCat+'</b><br><span style="font-size:12px;color:#64748B">Kesepakatan digital terkunci on-chain</span></td><td style="text-align:center;padding:12px;color:#475569">'+bItem.date+'</td><td style="text-align:right;padding:12px;font-weight:600">'+rp(bItem.price)+'</td></tr>'
+    +'<tr style="border-bottom:1px solid #E2E8F0"><td style="padding:12px" colspan="2">Biaya Layanan &amp; Penjaminan Escrow Blockchain (3%)</td><td style="text-align:right;padding:12px;font-weight:600">'+rp(fee)+'</td></tr>'
+    +'<tr style="background:#F8FAFC;font-size:14px;border-top:2px solid #0F172A"><td style="padding:12px;font-weight:800" colspan="2">TOTAL TAGIHAN</td><td style="text-align:right;padding:12px;font-weight:800;color:#1D4ED8;font-size:16px">'+rp(total)+'</td></tr>'
+    +'</tbody>'
+    +'</table>'
+
+    // Status DP & Pelunasan
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px;font-size:12px">'
+    +'<div style="background:#F0FDF4;border:1px solid #BBF7D0;border-radius:10px;padding:12px;color:#166534">'
+    +'<b style="display:block;font-size:13px;margin-bottom:2px">✓ UANG MUKA (DP 30%): '+rp(bItem.dpPaid)+'</b>'
+    +'Status: <b>LUNAS</b> tercatat on-chain Sepolia.<br>Dana aman tersimpan di Rekening Escrow LockIn.'
+    +'</div>'
+    +'<div style="background:#EFF6FF;border:1px solid #BFDBFE;border-radius:10px;padding:12px;color:#1E40AF">'
+    +'<b style="display:block;font-size:13px;margin-bottom:2px">PELUNASAN SISA (70%): '+rp(bItem.rest)+'</b>'
+    +'Jatuh Tempo: <b>H-1 Acara</b> ('+dueDate+')<br>Status: '+(S.lunas?'<b>LUNAS</b>':'Menunggu Pembayaran')
+    +'</div>'
+    +'</div>'
+
+    // Blockchain Security Box
+    +'<div style="border:1px dashed #CBD5E1;border-radius:10px;padding:12px;font-size:11px;color:#64748B;line-height:1.5;margin-bottom:20px">'
+    +'<b>🔒 Keamanan &amp; Integritas Smart Contract:</b><br>'
+    +'Invoice ini dijamin oleh smart contract Ethereum Sepolia (Hash Dokumen SHA-256: <code>0xdf9c901a...e0320d</code>). Dana tidak akan dicairkan ke vendor sebelum klien mengonfirmasi kedatangan vendor via OTP 6-digit dan menyatakan acara selesai tanpa sengketa.'
+    +'</div>'
+
+    // Action Buttons
+    +'<div class="no-print" style="display:flex;justify-content:flex-end;gap:10px;border-top:1px solid #E2E8F0;padding-top:16px">'
+    +'<button class="btn o" onclick="document.getElementById(\'invoice-modal\').remove()">Tutup</button>'
+    +'<button class="btn" onclick="window.print()" style="background:#1D4ED8">🖨️ Cetak / Unduh Dokumen PDF</button>'
+    +'</div>'
+    +'</div>';
+
+  document.body.appendChild(modal);
+}
+
+function scrollCatSlider(dir){
+  var el=document.getElementById('cat-slider-container');
+  if(el) el.scrollBy({left:dir*260,behavior:'smooth'});
+}
+
+// Modal Customer Service (Bantuan)
+function openCSModal(){
+  var modal=document.createElement('div');
+  modal.id='cs-modal';
+  modal.style.cssText='position:fixed;inset:0;background:rgba(15,23,42,0.75);z-index:999999;display:flex;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(5px);';
+  modal.innerHTML='<div style="background:#fff;border-radius:18px;max-width:440px;width:100%;padding:22px;box-shadow:0 20px 40px rgba(0,0,0,0.25);position:relative">'
+    +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">'
+    +'<h3 style="margin:0;font-size:18px">💬 Pusat Bantuan Mahasiswa</h3>'
+    +'<button onclick="document.getElementById(\'cs-modal\').remove()" style="background:none;border:none;font-size:24px;cursor:pointer;color:#64748b">&times;</button>'
+    +'</div>'
+    +'<p class="mut" style="font-size:13px;margin:0 0 14px">Ada kendala terkait booking vendor atau pencairan dana? Tim kami siap mendampingi.</p>'
+    +'<label style="font-size:12px;font-weight:700">Nama Lengkap</label><input type="text" id="cs-name" value="Rani" style="margin-bottom:8px">'
+    +'<label style="font-size:12px;font-weight:700">Pertanyaan atau Kendala</label><textarea id="cs-msg" rows="3" placeholder="Tuliskan kendalamu secara detail..." style="margin-bottom:14px"></textarea>'
+    +'<button class="btn blk" onclick="submitCSTicket()" style="margin-bottom:8px">Kirim Pesan Bantuan</button>'
+    +'<a href="https://wa.me/6281234567890" target="_blank" class="btn o blk" style="color:#059669;border-color:#10B981;font-size:13px">📱 Chat Langsung via WhatsApp Admin</a>'
+    +'</div>';
+  document.body.appendChild(modal);
+}
+
+function submitCSTicket(){
+  var msg=document.getElementById('cs-msg').value.trim();
+  if(!msg){toast('Tuliskan kendalamu terlebih dahulu');return;}
+  toast('Tiket terkirim! Tim CS LockIn akan merespons dalam 15 menit.');
+  document.getElementById('cs-modal').remove();
+}
+
+// Open Midtrans Snap Popup Modal
+function openSnapModal(token, redirectUrl, bookingId) {
+  var url = redirectUrl || ('https://app.sandbox.midtrans.com/snap/v4/redirection/' + token);
+
+  // 1. Coba gunakan library resmi Midtrans Snap Popup
+  if (window.snap && typeof window.snap.pay === 'function' && token) {
+    try {
+      window.snap.pay(token, {
+        onSuccess: function(result) {
+          toast('✅ Pembayaran berhasil!');
+          closeSnapModalAndSync(bookingId);
+        },
+        onPending: function(result) {
+          toast('⏳ Menunggu pembayaran selesai.');
+          closeSnapModalAndSync(bookingId);
+        },
+        onError: function(result) {
+          toast('❌ Pembayaran gagal.');
+        },
+        onClose: function() {
+          toast('Pop-up pembayaran ditutup.');
+        }
+      });
+      return;
+    } catch(err) {
+      console.warn('snap.pay fallback:', err);
+    }
+  }
+
+  // 2. Fallback: Tampilkan In-Page Modal dengan iframe dan link alternatif
+  var existingModal = document.getElementById('snap-inpage-modal');
+  if (existingModal) existingModal.remove();
+
+  var modal = document.createElement('div');
+  modal.id = 'snap-inpage-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,0.85);z-index:999999;display:flex;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(6px);';
+  modal.innerHTML = '<div style="position:relative;width:100%;max-width:460px;height:680px;max-height:92vh;background:#fff;border-radius:24px;overflow:hidden;box-shadow:0 25px 50px rgba(0,0,0,0.4);display:flex;flex-direction:column;">'
+    + '<div style="display:flex;justify-content:space-between;align-items:center;padding:14px 20px;border-bottom:1px solid #e2e8f0;background:#f8fafc">'
+    + '<div style="display:flex;align-items:center;gap:8px"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#10B981"></span><b style="font-size:14px;color:#1e293b">Midtrans Snap Payment</b></div>'
+    + '<button onclick="closeSnapModalAndSync(\'' + bookingId + '\')" style="background:none;border:none;font-size:26px;cursor:pointer;color:#64748b;padding:0 4px;line-height:1" title="Tutup">&times;</button>'
+    + '</div>'
+    + '<div style="padding:10px 16px;background:#EFF6FF;font-size:12px;color:#1E40AF;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #DBEAFE">'
+    + '<span>Jika pop-up tidak muncul:</span>'
+    + '<a href="' + url + '" target="_blank" class="btn" style="padding:4px 10px;font-size:11px;background:#2563EB">Buka Gateway &rarr;</a>'
+    + '</div>'
+    + '<iframe src="' + url + '" style="flex:1;border:none;width:100%;height:100%" allow="payment"></iframe>'
+    + '</div>';
+  document.body.appendChild(modal);
+}
+
+function closeSnapModalAndSync(bookingId) {
+  var m = document.getElementById('snap-inpage-modal');
+  if (m) m.remove();
+  toast('Sinkronisasi status pembayaran...');
+  fetch('/api/bookings/' + bookingId + '/sync-payment', { method: 'POST' }).finally(function() {
+    if (S.mode === 'lunas') S.lunas = true; else S.stage = 1;
+    go('status');
+  });
+}
+
+// Global Click Delegation
 document.addEventListener('click',function(e){
   var a=e.target.closest('[data-a]');
-  if(!a)return;
+  if(!a) return;
   var k=a.dataset.a,v=a.dataset.v;
-  if(k=='cat'){S.cat=v;render()}
-  else if(k=='item'){S.vid=+v;S.item=VD[S.vid].c=='Sign'?'s':'g';S.pkg=1}
-  else if(k=='selpkg'){S.pkg=+v;render()}
-  else if(k=='pay'){S.pay=v;render()}
-  else if(k=='dec'){S.dec=v;render()}
-  else if(k=='tocheck'){
-    if(!S.agree){toast('Harap centang persetujuan perjanjian dulu');return}
-    S.mode='dp';
-    if(S.role!='customer'){S.next='checkout';toast('Masuk dulu sebagai pelanggan');go('masuk');return}
+
+  if(k=='cat'){S.cat=v;render();}
+  else if(k=='item'){S.vid=+v;S.item=VD[S.vid].c=='Sign'?'s':'g';S.pkg=1;go('vendor');}
+  else if(k=='selpkg'){S.pkg=+v;render();}
+  else if(k=='search'){
+    var mp={'PA Wisuda':'PA','Graduation Content Creator':'GCC','Hijab & Hair Stylist':'Stylist','MUA':'MUA','Acrylic Standing Sign':'Sign'},sv=document.getElementById('b'),dd=document.getElementById('d');
+    S.cat=sv&&mp[sv.value]||'Semua';if(dd){S.cc=dd.value;S.city=dd.value}
+  }
+  else if(k=='payrest'){
+    S.mode='lunas';
     go('checkout');
   }
-  else if(k=='req'){
-    if(S.role!='customer'){S.next='vendor';toast('Masuk dulu sebagai pelanggan');go('masuk');return}
-    S.req={vid:S.vid,city:S.cc,status:'pending',tr:0};toast('Permintaan dikirim ke vendor');go('status');
+  else if(k=='vdone'){
+    S.stage=2;
+    toast('Acara ditandai selesai! Menunggu konfirmasi akhir.');
+    render();
   }
-  else if(k=='vapp'){S.req.tr=+document.getElementById('trs').value;S.req.status='approved';render();toast('Permintaan disetujui');}
-  else if(k=='vrej'){S.req.status='rejected';render();toast('Permintaan ditolak');}
-  else if(k=='payrest'){S.mode='lunas';go('checkout')}
+  else if(k=='confirm'){
+    S.stage=3;
+    toast('✅ Konfirmasi diterima! Dana Rp105.000 berhasil dicairkan ke vendor.');
+    render();
+  }
+  else if(k=='open-complain'){
+    var r=prompt('Masukkan kronologi keluhan sengketa:');
+    if(r){
+      S.dispute=true;
+      toast('⚠️ Keluhan diajukan. Pencairan dana ditahan sampai admin memutuskan.');
+      render();
+    }
+  }
+  else if(k=='verify'){
+    S.vf=document.getElementById('vf').value.trim();
+    render();
+  }
+  else if(k=='out'){
+    S.role=null;S.user='';go('beranda');
+  }
   else if(k=='paymidtrans'){
-    var btn = e.target.closest('button');
-    if(btn) { btn.disabled = true; btn.innerText = 'Menghubungkan Midtrans...'; }
-    toast('Menghubungkan ke Midtrans Snap Sandbox...');
+    var btn=document.getElementById('btn-midtrans');
+    if(btn){btn.disabled=true;btn.textContent='Menghubungkan Midtrans...';}
+    toast('Membuka gateway pembayaran Midtrans...');
 
     (async function(){
-      try {
-        // 1. Pastikan user terautentikasi di backend
+      try{
+        // 1. Pastikan selalu terautentikasi di backend
         await fetch('/api/auth/login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: 'user@lockin.demo', password: 'LockInDemo123!' })
+          body: JSON.stringify({ email: 'user@lockin.demo', password: 'demo123' })
         }).catch(function(){});
 
+        var bid = S.activeBid || S.bookingId;
         var vendorId = (S.vid != null ? Number(S.vid) : 0) + 1;
         if(vendorId > 6 || vendorId < 1) vendorId = 1;
-        var futureDate = new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0];
+        var futureDate = S.eventDate || new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0];
 
-        // 2. Buat atau perbarui booking di backend
-        var bookingId = S.bookingId;
-        if(!bookingId || S.mode === 'dp') {
+        // 2. Jika mode DP, buatkan booking baru di backend jika belum dibuat
+        if(S.mode === 'dp') {
           var bRes = await fetch('/api/bookings', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               vendorId: vendorId,
               date: futureDate,
-              location: S.loc || 'Malang',
+              location: S.cc || S.city || 'Malang',
               startTime: '08:00',
               agreed: true
             })
-          });
-          var bData = await bRes.json();
-          if(bData.id) {
-            bookingId = bData.id;
-            S.bookingId = bookingId;
+          }).catch(function(){return null;});
+
+          if(bRes && bRes.ok) {
+            var bData = await bRes.json().catch(function(){return {};});
+            if(bData && bData.id) {
+              bid = bData.id;
+              S.bookingId = bid;
+              S.activeBid = bid;
+              var c = calc();
+              if(!S.bookingsList.find(function(x){return x.id === bid})) {
+                S.bookingsList.unshift({
+                  id: bid,
+                  vid: S.vid,
+                  pkg: S.pkg,
+                  date: futureDate,
+                  price: c.i.p,
+                  dpPaid: c.total,
+                  rest: c.rest,
+                  state: 'DPPaid',
+                  arrived: false,
+                  otp: bData.arrival_code || '482910'
+                });
+              }
+            }
           }
         }
 
-        if(!bookingId) bookingId = 'LK-2611';
+        if(!bid) bid = 'LK-2611';
 
-        // 3. Panggil API pembayaran Snap
-        var pRes = await fetch('/api/bookings/' + bookingId + '/payment', {
+        // 3. Minta token pembayaran Snap dari backend
+        var pRes = await fetch('/api/bookings/' + bid + '/payment', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            method: S.pay || 'QRIS',
-            outcome: 'success'
-          })
-        });
+          body: JSON.stringify({ method: 'QRIS', outcome: 'success' })
+        }).catch(function(){return null;});
 
-        var pData = await pRes.json();
-        if(btn) { btn.disabled = false; btn.innerText = '💳 Bayar via Midtrans Sandbox (Snap Gateway)'; }
+        var pData = pRes ? await pRes.json().catch(function(){return {};}) : {};
+        if(btn){btn.disabled=false;btn.textContent='Bayar';}
 
-        if(pData.redirect_url || pData.token) {
-          S.midtransUrl = pData.redirect_url;
-          S.stage = 1;
-          S.dispute = false;
-          toast('Membuka pop-up pembayaran Midtrans...');
-          openSnapModal(pData.token, pData.redirect_url, bookingId);
+        if(pData && (pData.token || pData.redirect_url)){
+          toast('Membuka pop-up pembayaran...');
+          openSnapModal(pData.token, pData.redirect_url, bid);
         } else {
-          toast('Gagal membuka Midtrans: ' + (pData.error || 'Server error'));
+          var errMsg = pData.error || 'Gagal membuat sesi pembayaran Midtrans.';
+          toast('⚠️ ' + errMsg);
+          alert('Kendala Pembayaran:\n' + errMsg + '\n\nSilakan coba beberapa saat lagi.');
         }
-      } catch(err) {
-        if(btn) { btn.disabled = false; btn.innerText = '💳 Bayar via Midtrans Sandbox (Snap Gateway)'; }
-        toast('Koneksi Midtrans gagal: ' + err.message);
+      }catch(err){
+        if(btn){btn.disabled=false;btn.textContent='Bayar';}
+        toast('Gagal memproses pembayaran: ' + err.message);
       }
     })();
   }
-  else if(k=='syncpay'){
-    var btn = e.target.closest('button');
-    if(btn) { btn.disabled = true; btn.innerText = 'Memeriksa Midtrans...'; }
-    toast('Memeriksa status pembayaran dari Midtrans Sandbox...');
-    (async function(){
-      try {
-        var bid = S.bookingId || 'LK-2611';
-        var res = await fetch('/api/bookings/' + bid + '/sync-payment', { method: 'POST' });
-        var data = await res.json();
-        if(btn) { btn.disabled = false; btn.innerText = '🔄 Sinkronkan Status Pembayaran'; }
-        if(data.result && data.result.paymentStatus === 'PAID') {
-          S.stage = 1;
-          if(S.mode === 'lunas') S.lunas = true;
-          toast('Pembayaran Midtrans Sukses! Tercatat di Escrow & Sepolia.');
-          render();
-        } else if(data.result && data.result.paymentStatus === 'PENDING') {
-          toast('Status Midtrans: Menunggu pembayaran di simulator.');
-        } else if(data.booking && ['DPPaid', 'Paid'].includes(data.booking.state)) {
-          S.stage = 1;
-          if(data.booking.state === 'Paid') S.lunas = true;
-          toast('Pembayaran terkonfirmasi: ' + data.booking.state);
-          render();
-        } else {
-          toast(data.error || 'Status: Belum ada pembayaran sukses yang diterima.');
-        }
-      } catch(err) {
-        if(btn) { btn.disabled = false; btn.innerText = '🔄 Sinkronkan Status Pembayaran'; }
-        toast('Gagal sinkronisasi: ' + err.message);
-      }
-    })();
-  }
-  else if(k=='paynow'){
-    if(S.mode=='lunas'){
-      if(S.sc=='sukses'){S.lunas=true;toast('Pelunasan berhasil dikonfirmasi')}
-      else if(S.sc=='gagal')toast('Pembayaran gagal. Silakan coba lagi.');
-      else S.stage=-3;
-      S.mode='dp';
-    }else{
-      S.stage=S.sc=='sukses'?1:S.sc=='gagal'?-1:-2;
-      S.dispute=false;
-      S.lunas=(S.item=='s'&&S.stage==1);
-    }
-    go('status');
-  }
-  else if(k=='google'){S.role='customer';S.user='Rani';var n=S.next||'beranda';S.next=null;go(n)}
-  else if(k=='login'){
-    var u=document.getElementById('u').value.trim(),p=document.getElementById('p').value;
-    if(!((v=='vendor'&&u=='vendor_demo'||v=='admin'&&u=='admin_demo')&&p=='demo123')){toast('Username atau password salah');return}
-    S.role=v;S.user=v=='vendor'?'Glow Studio':'Admin LockIn';
-    var m=S.next&&AC[S.next]==v?S.next:HM[v];S.next=null;go(m);
-  }
-  else if(k=='out'){S.role=null;S.user='';S.next=null;go('beranda')}
-  else if(k=='search'){
-    var mp={'PA Wisuda':'PA','Graduation Content Creator':'GCC','Hijab & Hair Stylist':'Stylist','MUA':'MUA','Acrylic Standing Sign':'Sign'},sv=document.getElementById('b'),dd=document.getElementById('d');
-    S.cat=sv&&mp[sv.value]||'Semua';if(dd){S.cc=dd.value;S.city=dd.value}
-  }
-  else if(k=='vreg'){
-    if(!document.getElementById('vn').value.trim()||!document.getElementById('vw').value.trim()){toast('Isi nama usaha dan nomor WhatsApp');return}
-    toast('Pendaftaran terkirim! Tim kurasi kami akan menghubungi via WhatsApp');go('beranda');
-  }
-  else if(k=='vdone'){S.stage=2;render();toast('Acara ditandai selesai! Menunggu konfirmasi pelanggan')}
-  else if(k=='confirm'){S.stage=3;render();toast('Konfirmasi diterima! Dana berhasil dicairkan ke vendor')}
-  else if(k=='complain'){S.dispute=true;render();toast('Keluhan diajukan! Dana ditahan sementara')}
-  else if(k=='savedec'){S.stage=4;render();toast('Keputusan mediasi admin tersimpan on-chain')}
-  else if(k=='verify'){S.vf=document.getElementById('vf').value.trim();render()}
 });
 
 render();
