@@ -47,6 +47,7 @@ function verifyLocalPassword(email, password) {
 }
 const localSessions = new Map();
 const localBookings = new Map();
+const ADMIN_ACTIVE_BOOKING_STATES = ['Pending', 'WaitingVendorApproval', 'DPPaid', 'Paid', 'Disputed'];
 const localPayments = new Map();
 const localDisputes = new Map();
 const localEvidence = new Map();
@@ -584,6 +585,58 @@ async function api(req, res, url) {
 
   // ── Auth required beyond this point ──
   if (!user) fail(401, 'Silakan masuk terlebih dahulu.');
+
+  if (path === '/api/admin/summary' && method === 'GET') {
+    if (user.role !== 'admin') fail(403, 'Hanya admin yang dapat melihat ringkasan ini.');
+    let totalBookings, activeBookings, openDisputes;
+    if (supabase) {
+      let results;
+      try {
+        results = await Promise.all([
+          supabase.from('bookings').select('id', { count: 'exact', head: true }),
+          supabase.from('bookings').select('id', { count: 'exact', head: true }).in('state', ADMIN_ACTIVE_BOOKING_STATES),
+          supabase.from('bookings').select('id', { count: 'exact', head: true }).eq('state', 'Disputed')
+        ]);
+      } catch (error) {
+        console.error('[Admin summary] Gagal membaca statistik booking:', error.message);
+        fail(503, 'Ringkasan admin gagal dimuat dari database. Coba lagi.');
+      }
+      const queryError = results.find(result => result.error || !Number.isInteger(result.count));
+      if (queryError) {
+        console.error('[Admin summary] Query statistik booking gagal:', queryError.error?.message || 'Count tidak tersedia.');
+        fail(503, 'Ringkasan admin gagal dimuat dari database. Coba lagi.');
+      }
+      [totalBookings, activeBookings, openDisputes] = results.map(result => result.count);
+    } else {
+      const bookings = Array.from(localBookings.values());
+      totalBookings = bookings.length;
+      activeBookings = bookings.filter(booking => ADMIN_ACTIVE_BOOKING_STATES.includes(booking.state)).length;
+      openDisputes = bookings.filter(booking => booking.state === 'Disputed').length;
+    }
+    return send(res, 200, {
+      totalBookings,
+      activeBookings,
+      activeBookingStates: ADMIN_ACTIVE_BOOKING_STATES,
+      openDisputes,
+      smartContractFunds: { available: false, label: 'Belum tersedia' }
+    });
+  }
+
+  if (path === '/api/admin/vendor-applications' && method === 'GET') {
+    if (user.role !== 'admin') fail(403, 'Hanya admin yang dapat melihat pengajuan vendor jasa.');
+    let applications;
+    if (supabase) {
+      const { data, error } = await supabase.from('vendor_applications').select('*').order('created_at', { ascending: false });
+      if (error) {
+        console.error('[Admin vendor applications] Gagal memuat pengajuan:', error.code, error.message);
+        fail(503, 'Daftar pengajuan vendor gagal dimuat dari database. Coba lagi.');
+      }
+      applications = data || [];
+    } else {
+      applications = [...localVendorApplications].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    }
+    return send(res, 200, applications);
+  }
 
   // ── Bookings list ──
   if (path === '/api/bookings' && method === 'GET') {

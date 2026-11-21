@@ -43,6 +43,36 @@ select,input[type=text],input[type=date],input[type=email],input[type=password],
 select:focus,input:focus,textarea:focus{border-color:var(--p);box-shadow:0 0 0 3px rgba(29,78,216,.15);outline:none}
 .sec{padding:44px 0 0}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:20px}
+.admin-dashboard-content{display:grid;gap:20px}
+.admin-kpi-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px}
+.admin-kpi-card{min-width:0;min-height:154px;border-radius:18px;display:flex;flex-direction:column;justify-content:space-between;gap:18px}
+.admin-kpi-top{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.admin-kpi-icon{width:42px;height:42px;flex:none;border-radius:13px;display:grid;place-items:center;background:var(--pl);color:var(--p)}
+.admin-kpi-icon svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.admin-kpi-label{font-size:13px;font-weight:600;color:var(--m)}
+.admin-kpi-value{font-size:clamp(22px,2.4vw,30px);line-height:1.15;letter-spacing:-.5px;margin:0;color:var(--t);overflow-wrap:anywhere}
+.admin-kpi-note{font-size:11px;line-height:1.45;color:var(--m);margin:0}
+.admin-applications-section{min-width:0}
+.admin-applications-header{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:14px}
+.admin-applications-tools{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.admin-applications-tools select{min-width:190px}
+.admin-application-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,270px),1fr));gap:14px}
+.admin-application-card{min-width:0;border-radius:16px}
+.admin-application-card h4{margin:0 0 12px;color:var(--t);font-size:16px;overflow-wrap:anywhere}
+.admin-application-meta{display:grid;gap:8px;margin-bottom:14px}
+.admin-application-meta div{display:flex;justify-content:space-between;gap:12px;font-size:12px}
+.admin-application-meta span{color:var(--m)}
+.admin-application-meta b{color:var(--t);text-align:right;overflow-wrap:anywhere}
+.admin-modal-backdrop{position:fixed;inset:0;z-index:100000;background:rgba(11,18,32,.72);display:flex;align-items:center;justify-content:center;padding:18px}
+.admin-application-modal{width:min(100%,680px);max-height:min(88vh,820px);overflow:auto;background:var(--c);color:var(--t);border:1px solid var(--b);border-radius:20px;box-shadow:0 24px 70px rgba(0,0,0,.35)}
+.admin-application-detail-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.admin-application-detail{min-width:0;padding:12px;border:1px solid var(--b);border-radius:12px;background:var(--bg)}
+.admin-application-detail label{margin:0 0 4px}
+.admin-application-detail div{font-size:13px;color:var(--t);overflow-wrap:anywhere;white-space:pre-wrap}
+.admin-application-detail a{color:var(--p);text-decoration:underline;overflow-wrap:anywhere}
+@media(max-width:560px){.admin-application-detail-grid{grid-template-columns:minmax(0,1fr)}.admin-applications-tools{width:100%}.admin-applications-tools select{flex:1;min-width:0}}
+@media(max-width:900px){.admin-kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:560px){.admin-kpi-grid{grid-template-columns:minmax(0,1fr)}.admin-kpi-card{min-height:128px}}
 .grid-5{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px}
 .card{background:var(--c);border:1px solid var(--b);border-radius:20px;box-shadow:0 4px 18px rgba(15,23,42,.05);overflow:hidden;display:block;transition:transform .25s cubic-bezier(.16,1,.3,1),box-shadow .25s ease,border-color .2s ease}
 .card:hover{transform:translateY(-4px);box-shadow:0 14px 32px rgba(15,23,42,.1);border-color:rgba(29,78,216,.25)}
@@ -156,6 +186,8 @@ var S={
   vendorArrived:false,
   arrivalOtp:'482910',
   bookingsList:[],backendError:'',vendorError:'',finalCheckoutBooking:null,finalCheckoutLoading:false,finalCheckoutError:'',
+  adminSummary:null,adminSummaryLoading:false,adminSummaryError:'',
+  adminApplications:[],adminApplicationsLoading:false,adminApplicationsError:'',adminApplicationsFilter:'all',adminApplicationDetail:'',
   vendorBookings:[],vendorDashboardLoading:false,vendorDashboardError:'',activeVendorBid:'',
   vendorDetail:null,vendorDetailLoading:false,vendorDetailError:'',
   vendorVerifyLoading:false,vendorVerifyError:'',vendorVerifySuccess:'',vendorOtpInput:''
@@ -807,12 +839,43 @@ var pages={
   },
 
   admin:function(){
-    return '<div class="w sec"><h2>Panel Admin Mediasi &amp; Rekonsiliasi</h2>'
-      +'<div class="card pad"><p class="mut">Pusat peninjauan keluhan dan pengawasan transaksi smart contract Sepolia.</p>'
-      +'<div class="row"><span>Total Booking Aktif</span><b>2 Transaksi</b></div>'
-      +'<div class="row"><span>Dana di Smart Contract</span><b>Rp131.670</b></div>'
-      +'<div class="row"><span>Sengketa Membutuhkan Mediasi</span><b>0 (Aman)</b></div>'
-      +'</div></div>';
+    var summary=S.adminSummary,error=S.adminSummaryError,loading=S.adminSummaryLoading;
+    var total=loading?'Memuat...':error?'—':summary?summary.totalBookings:'Memuat...';
+    var active=loading?'Memuat...':error?'—':summary?summary.activeBookings:'Memuat...';
+    var disputes=loading?'Memuat...':error?'—':summary?summary.openDisputes:'Memuat...';
+    var funds=summary&&summary.smartContractFunds?summary.smartContractFunds.label:'Belum tersedia';
+    var loadingOrError=loading?'<div class="msg" style="background:var(--pl);color:var(--p)" role="status">Memuat ringkasan admin...</div>':error?'<div class="msg" style="background:var(--bad);color:var(--badt)" role="alert">Ringkasan gagal dimuat: '+escapeUi(error)+'</div>':'';
+    var emptyState=!loading&&!error&&summary&&summary.totalBookings===0?'<div class="msg" style="background:var(--pl);color:var(--m)" role="status">Belum ada booking di marketplace.</div>':'';
+    var apps=Array.isArray(S.adminApplications)?S.adminApplications:[];
+    var statuses=Array.from(new Set(apps.map(function(app){return app.status}).filter(function(status){return typeof status==='string'&&status}))).sort();
+    var filteredApps=S.adminApplicationsFilter==='all'?apps:apps.filter(function(app){return app.status===S.adminApplicationsFilter});
+    var appCards=filteredApps.map(function(app){
+      var status=escapeUi(vendorApplicationStatusLabel(app.status));
+      return '<article class="card pad admin-application-card"><h4>'+escapeUi(app.name||'—')+'</h4>'
+        +'<div class="admin-application-meta"><div><span>Kategori</span><b>'+escapeUi(app.category||'—')+'</b></div>'
+        +'<div><span>Pemilik</span><b>'+escapeUi(app.owner_name||'—')+'</b></div>'
+        +'<div><span>Tanggal</span><b>'+vendorApplicationDate(app.created_at)+'</b></div></div>'
+        +'<div style="display:flex;align-items:center;justify-content:space-between;gap:10px"><span class="tag">'+status+'</span><button type="button" class="btn o" data-a="view-admin-application" data-v="'+escapeUi(app.id)+'" style="padding:8px 12px;font-size:12px">Lihat Detail</button></div></article>';
+    }).join('');
+    var appState=S.adminApplicationsLoading?'<div class="msg" style="background:var(--pl);color:var(--p)" role="status">Memuat pengajuan vendor jasa...</div>'
+      :S.adminApplicationsError?'<div class="msg" style="background:var(--bad);color:var(--badt)" role="alert">Pengajuan gagal dimuat: '+escapeUi(S.adminApplicationsError)+'<div style="margin-top:10px"><button type="button" class="btn o" data-a="refresh-admin-applications">Coba lagi</button></div></div>'
+      :!apps.length?'<div class="msg" style="background:var(--pl);color:var(--m)" role="status">Belum ada pengajuan vendor jasa.</div>'
+      :!filteredApps.length?'<div class="msg" style="background:var(--pl);color:var(--m)" role="status">Tidak ada pengajuan dengan status tersebut.</div>'
+      :'<div class="admin-application-grid">'+appCards+'</div>';
+    var statusOptions='<option value="all">Semua status</option>'+statuses.map(function(status){return '<option value="'+escapeUi(status)+'" '+(S.adminApplicationsFilter===status?'selected':'')+'>'+escapeUi(vendorApplicationStatusLabel(status))+'</option>'}).join('');
+    return '<div class="w sec admin-dashboard"><header class="admin-dashboard-header" style="display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:20px">'
+      +'<div><h2 style="margin:0 0 4px">Dashboard Admin</h2><p class="mut" style="margin:0">Pantau operasional marketplace LockIn</p></div>'
+      +'<button class="btn o" data-a="refresh-admin-summary" '+(loading?'disabled':'')+' style="padding:10px 16px;min-width:124px">Muat ulang</button></header>'
+      +loadingOrError
+      +'<div class="admin-dashboard-content"><section class="admin-summary-section" aria-label="Ringkasan marketplace">'
+      +'<div class="admin-kpi-grid">'
+      +'<article class="card pad admin-kpi-card"><div class="admin-kpi-top"><span class="admin-kpi-label">Total Booking</span><span class="admin-kpi-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4.5h6M9 10h6M9 14h6M9 18h3"/></svg></span></div><h3 class="admin-kpi-value">'+total+'</h3></article>'
+      +'<article class="card pad admin-kpi-card"><div class="admin-kpi-top"><span class="admin-kpi-label">Booking Aktif</span><span class="admin-kpi-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 18V9m5 9V5m5 13v-6m5 6V8"/><path d="M3 21h18"/></svg></span></div><h3 class="admin-kpi-value">'+active+'</h3><p class="admin-kpi-note">Pending, WaitingVendorApproval, DPPaid, Paid, atau Disputed</p></article>'
+      +'<article class="card pad admin-kpi-card"><div class="admin-kpi-top"><span class="admin-kpi-label">Sengketa Terbuka</span><span class="admin-kpi-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11.5a7.5 7.5 0 0 1-7.5 7.5H7l-4 2v-6.5A7.5 7.5 0 1 1 20 11.5Z"/><path d="M12.5 8v4m0 3h.01"/></svg></span></div><h3 class="admin-kpi-value">'+disputes+'</h3><p class="admin-kpi-note">Booking dengan status Disputed</p></article>'
+      +'<article class="card pad admin-kpi-card"><div class="admin-kpi-top"><span class="admin-kpi-label">Dana di Smart Contract</span><span class="admin-kpi-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 20h18M5 20V9m14 11V9M3 9h18L12 4 3 9Zm4 3h2m3 0h2m3 0h1"/><path d="M8 16h1m3 0h2m3 0h1"/></svg></span></div><h3 class="admin-kpi-value">'+escapeUi(funds)+'</h3><p class="admin-kpi-note">Menunggu sumber saldo on-chain terverifikasi</p></article>'
+      +'</div></section>'+emptyState
+      +'<section class="card pad admin-applications-section" aria-label="Pengajuan Vendor Jasa"><div class="admin-applications-header"><div><h3 style="margin:0 0 4px">Pengajuan Vendor Jasa</h3><p class="mut" style="margin:0;font-size:13px">Daftar pengajuan untuk ditinjau.</p></div><div class="admin-applications-tools"><select id="admin-application-status-filter" aria-label="Filter status pengajuan">'+statusOptions+'</select><button type="button" class="btn o" data-a="refresh-admin-applications" '+(S.adminApplicationsLoading?'disabled':'')+' style="padding:10px 14px">Muat ulang</button></div></div>'+appState+'</section>'
+      +'</div>'+renderAdminApplicationModal(S.adminApplicationDetail)+'</div>';
   }
 };
 
@@ -821,6 +884,45 @@ var LG={customer:'masuk',vendor:'masuk',admin:'masuk'};
 var HM={customer:'beranda',vendor:'dashboard',admin:'admin'};
 
 function escapeUi(v){return String(v==null?'':v).replace(/[&<>\"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[c]})}
+function safeVendorApplicationUrl(value){
+  if(typeof value!=='string'||!value.trim())return '';
+  try{var url=new URL(value.trim());return ['http:','https:'].includes(url.protocol)&&url.hostname?url.href:''}catch(e){return ''}
+}
+function vendorApplicationDate(value){
+  if(!value)return '—';
+  var date=new Date(value);
+  return Number.isNaN(date.getTime())?escapeUi(value):escapeUi(date.toLocaleString('id-ID',{dateStyle:'medium',timeStyle:'short'}));
+}
+function vendorApplicationStatusLabel(value){
+  return value==='pending_approval'?'Menunggu Persetujuan':String(value||'—').replace(/_/g,' ');
+}
+function vendorApplicationUrlValue(value,linkLabel){
+  var text=String(value||'').trim();
+  if(!text)return '—';
+  var url=safeVendorApplicationUrl(text);
+  return url?'<a href="'+escapeUi(url)+'" target="_blank" rel="noopener noreferrer">'+escapeUi(linkLabel||text)+'</a>':escapeUi(text);
+}
+function renderAdminApplicationModal(applicationId){
+  if(!applicationId)return '';
+  var app=(S.adminApplications||[]).find(function(item){return String(item.id)===String(applicationId)});
+  if(!app)return '';
+  var detail=function(label,value){return '<div class="admin-application-detail"><label>'+label+'</label><div>'+value+'</div></div>'};
+  return '<div class="admin-modal-backdrop" id="admin-application-modal-backdrop"><section class="admin-application-modal" role="dialog" aria-modal="true" aria-labelledby="admin-application-modal-title">'
+    +'<header style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:18px 20px;border-bottom:1px solid var(--b)"><div><h3 id="admin-application-modal-title" style="margin:0;color:var(--t)">Detail Pengajuan Vendor Jasa</h3><p class="mut" style="font-size:12px;margin:3px 0 0">Informasi read-only</p></div><button type="button" class="btn o" data-a="close-admin-application" aria-label="Tutup detail" style="padding:7px 11px">Tutup</button></header>'
+    +'<div class="admin-application-detail-grid" style="padding:18px 20px">'
+    +detail('ID Pengajuan',escapeUi(app.id||'—'))
+    +detail('Nama Usaha',escapeUi(app.name||'—'))
+    +detail('Nama Pemilik',escapeUi(app.owner_name||'—'))
+    +detail('Email',escapeUi(app.email||'—'))
+    +detail('WhatsApp',escapeUi(app.whatsapp||'—'))
+    +detail('Instagram',vendorApplicationUrlValue(app.instagram))
+    +detail('Portofolio',vendorApplicationUrlValue(app.portfolio_url))
+    +detail('Kisaran Tarif',escapeUi(app.price_range||'—'))
+    +detail('Deskripsi',escapeUi(app.description||'—'))
+    +detail('Tanggal Pengajuan',vendorApplicationDate(app.created_at))
+    +detail('Status',escapeUi(vendorApplicationStatusLabel(app.status)))
+    +'</div></section></div>';
+}
 function nav(){
   var r=S.role,l='',a='';
   if(!r||r=='customer') l='<a href="#beranda">Beranda</a><a href="#daftar">Cari Vendor</a><a href="#cara">FAQ</a>'+(r?'<a href="#status">Booking Saya</a>':'');
@@ -851,6 +953,7 @@ function render(){
 window.addEventListener('hashchange',function(){
   if((location.hash||'').slice(1)==='status'&&S.role==='customer') refreshBookings().then(render).catch(function(err){S.backendError=err.message;render();toast(err.message)});
   else if((location.hash||'').slice(1)==='dashboard'&&S.role==='vendor') refreshVendorDashboard();
+  else if((location.hash||'').slice(1)==='admin'&&S.role==='admin') refreshAdminDashboard();
   else render();
 });
 document.addEventListener('change',function(e){
@@ -858,6 +961,7 @@ document.addEventListener('change',function(e){
   if(t=='cty'){S.city=e.target.value;if(S.city!='Semua kota')S.cc=S.city;render()}
   if(t=='loc'){S.cc=e.target.value;render()}
   if(t=='evt-date'){S.eventDate=e.target.value;}
+  if(t==='admin-application-status-filter'&&S.role==='admin'){S.adminApplicationsFilter=e.target.value;render()}
 });
 
 function go(n){location.hash='#'+n;render()}
@@ -867,6 +971,38 @@ async function apiRequest(path,method,body){
   var data=await res.json().catch(function(){return {}});
   if(!res.ok) throw new Error(data.error||'Permintaan gagal ('+res.status+').');
   return data;
+}
+
+async function refreshAdminSummary(skipInitialRender){
+  if(S.role!=='admin')return;
+  S.adminSummaryLoading=true;S.adminSummaryError='';
+  if(!skipInitialRender&&(location.hash||'').slice(1)==='admin')render();
+  try{
+    var summary=await apiRequest('/api/admin/summary');
+    if(!Number.isInteger(summary.totalBookings)||!Number.isInteger(summary.activeBookings)||!Number.isInteger(summary.openDisputes))throw new Error('Format ringkasan admin tidak valid.');
+    S.adminSummary=summary;
+  }catch(err){S.adminSummary=null;S.adminSummaryError=err.message||'Gagal memuat ringkasan admin.';}
+  finally{S.adminSummaryLoading=false;if((location.hash||'').slice(1)==='admin')render();}
+}
+
+function refreshAdminDashboard(){
+  if(S.role!=='admin')return;
+  S.adminSummaryLoading=true;S.adminApplicationsLoading=true;
+  S.adminSummaryError='';S.adminApplicationsError='';
+  if((location.hash||'').slice(1)==='admin')render();
+  return Promise.all([refreshAdminSummary(true),refreshAdminApplications(true)]);
+}
+
+async function refreshAdminApplications(skipInitialRender){
+  if(S.role!=='admin')return;
+  S.adminApplicationsLoading=true;S.adminApplicationsError='';
+  if(!skipInitialRender&&(location.hash||'').slice(1)==='admin')render();
+  try{
+    var rows=await apiRequest('/api/admin/vendor-applications');
+    if(!Array.isArray(rows))throw new Error('Format daftar pengajuan vendor tidak valid.');
+    S.adminApplications=rows;
+  }catch(err){S.adminApplications=[];S.adminApplicationsError=err.message||'Gagal memuat pengajuan vendor jasa.';S.adminApplicationDetail='';}
+  finally{S.adminApplicationsLoading=false;if((location.hash||'').slice(1)==='admin')render();}
 }
 
 function normalizeBooking(b){
@@ -1084,6 +1220,7 @@ async function initializeLockIn(){
     }else{S.role=null;S.user='';S.bookingsList=[];}
   }catch(err){S.role=null;S.user='';S.bookingsList=[];S.backendError=err.message;}
   render();
+  if(S.role==='admin'&&(location.hash||'').slice(1)==='admin')refreshAdminDashboard();
 }
 
 // Multi-booking switcher
@@ -1435,6 +1572,7 @@ function closeSnapModalAndSync(bookingId) {
 
 // Global Click Delegation
 document.addEventListener('click',function(e){
+  if(e.target.id==='admin-application-modal-backdrop'&&S.role==='admin'){S.adminApplicationDetail='';render();return}
   var a=e.target.closest('[data-a]');
   if(!a) return;
   var k=a.dataset.a,v=a.dataset.v;
@@ -1442,6 +1580,26 @@ document.addEventListener('click',function(e){
   if(k==='refresh-vendor-dashboard'){
     if(S.role==='vendor') refreshVendorDashboard();
     else toast('Dashboard hanya tersedia untuk akun vendor.');
+    return;
+  }
+
+  if(k==='refresh-admin-summary'){
+    refreshAdminSummary();
+    return;
+  }
+
+  if(k==='refresh-admin-applications'){
+    refreshAdminApplications();
+    return;
+  }
+
+  if(k==='view-admin-application'){
+    if(S.role==='admin'&&(S.adminApplications||[]).some(function(app){return String(app.id)===String(v)})){S.adminApplicationDetail=v;render()}
+    return;
+  }
+
+  if(k==='close-admin-application'){
+    S.adminApplicationDetail='';render();
     return;
   }
 
