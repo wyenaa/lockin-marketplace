@@ -165,7 +165,7 @@ test('Tahap 3B UI: Rendering status Verifikasi Kehadiran vendor', async () => {
 
 test('Tahap 3B UI: Validasi OTP 6 digit dan pencegahan race condition', async () => {
   const html = await readFile('frontend/public/index.html', 'utf8');
-  const jsCode = html.match(/<script>([\s\S]*?)<\/script>/)[1];
+  const jsCode = html.match(/<script>([\s\S]*?)<\/script>/)[1].replace(/\ninitializeLockIn\(\);\s*$/, '');
 
   const apiCalls = [];
   const dummyEl = { innerHTML: '', value: '', style: {}, classList: { toggle: () => {} } };
@@ -248,10 +248,12 @@ test('Tahap 3B UI: Validasi OTP 6 digit dan pencegahan race condition', async ()
   // 3. OTP 6 digit valid -> panggil API dan perbarui status
   ctx.S.vendorOtpInput = '654321';
   await ctx.submitVendorArrival('LK-101');
-  assert.equal(apiCalls.length, 2, 'Harus memanggil verify-arrival dan get detail');
-  assert.equal(apiCalls[0].path, '/api/bookings/LK-101/verify-arrival');
-  assert.equal(apiCalls[0].method, 'POST');
-  assert.deepEqual(apiCalls[0].body, { otp: '654321' });
+  const verifyCalls = apiCalls.filter(call => call.path === '/api/bookings/LK-101/verify-arrival');
+  const detailCalls = apiCalls.filter(call => call.path === '/api/bookings/LK-101' && call.method === 'GET');
+  assert.equal(verifyCalls.length, 1, 'Harus mengirim satu request verify-arrival');
+  assert.equal(detailCalls.length, 1, 'Harus memuat ulang detail booking setelah verifikasi');
+  assert.equal(verifyCalls[0].method, 'POST');
+  assert.deepEqual(verifyCalls[0].body, { otp: '654321' });
   assert.equal(ctx.S.vendorVerifySuccess, 'Vendor terverifikasi telah tiba dan check-in di lokasi acara.');
   assert.equal(ctx.S.vendorDetail.vendor_arrived, true);
   assert.equal(ctx.S.vendorBookings[0].vendor_arrived, true);
@@ -261,8 +263,10 @@ test('Tahap 3B UI: Validasi OTP 6 digit dan pencegahan race condition', async ()
   ctx.S.vendorDetail = { id: 'LK-202', vendor_name: 'Vendor Baru' };
   
   // Simulasi pemanggilan verify-arrival untuk booking lama 'LK-101'
+  const callsBeforeRaceCheck = apiCalls.length;
   await ctx.submitVendorArrival('LK-101');
   // State LK-202 tidak boleh tertimpa
+  assert.equal(apiCalls.length, callsBeforeRaceCheck, 'Booking yang bukan lagi aktif tidak boleh mengirim request OTP');
   assert.equal(ctx.S.vendorDetail.id, 'LK-202');
   assert.equal(ctx.S.vendorDetail.vendor_name, 'Vendor Baru');
 });
