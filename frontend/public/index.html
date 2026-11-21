@@ -156,7 +156,8 @@ var S={
   vendorArrived:false,
   arrivalOtp:'482910',
   bookingsList:[],backendError:'',vendorError:'',finalCheckoutBooking:null,finalCheckoutLoading:false,finalCheckoutError:'',
-  vendorBookings:[],vendorDashboardLoading:false,vendorDashboardError:'',activeVendorBid:''
+  vendorBookings:[],vendorDashboardLoading:false,vendorDashboardError:'',activeVendorBid:'',
+  vendorDetail:null,vendorDetailLoading:false,vendorDetailError:''
 };
 
 var CAT={MUA:'MUA',Stylist:'Hijab & Hair Stylist',GCC:'Graduation Content Creator',PA:'PA Wisuda',Sign:'Acrylic Standing Sign'},
@@ -663,11 +664,83 @@ var pages={
               +'</div>';
           }).join('')
           +'</div>';
+    var detailHtml = '';
+    if(!rows.length){
+      detailHtml = '';
+    } else if(!S.activeVendorBid){
+      detailHtml = '<div style="margin-top:20px;text-align:center;padding:24px;border:2px dashed var(--b);border-radius:16px;color:var(--m);font-size:14px">👆 <b>Pilih salah satu kartu pesanan di atas</b> untuk melihat rincian lengkap booking, status pembayaran, dan perjanjian digital.</div>';
+    } else if(S.vendorDetailLoading){
+      detailHtml = '<div class="card pad" style="margin-top:20px"><div style="display:flex;align-items:center;gap:12px"><span style="font-size:20px">⏳</span><div><h3 style="margin:0;font-size:16px">Memuat Detail Pesanan...</h3><p class="mut" style="margin:4px 0 0;font-size:13px">Mengambil data booking #'+escapeUi(S.activeVendorBid)+' dari server.</p></div></div></div>';
+    } else if(S.vendorDetailError){
+      detailHtml = '<div class="card pad" style="margin-top:20px;border-color:#FCA5A5;background:#FEF2F2"><h3 style="margin:0 0 6px;color:#991B1B">Gagal Memuat Detail Pesanan</h3><p style="margin:0 0 12px;color:#991B1B;font-size:13px">'+escapeUi(S.vendorDetailError)+'</p><button class="btn o" data-a="select-vendor-booking" data-v="'+escapeUi(S.activeVendorBid)+'">Coba Muat Ulang Detail</button></div>';
+    } else if(S.vendorDetail && S.vendorDetail.id === S.activeVendorBid){
+      var d = S.vendorDetail;
+      var listRow = rows.find(function(x){return x.id===d.id}) || {};
+      var agreementObj = {};
+      try{ agreementObj = typeof d.agreement==='string'?JSON.parse(d.agreement):(d.agreement||{}); }catch(e){}
+      var cName = d.customer_name || listRow.customer_name || 'Pelanggan';
+      var vName = d.vendor_name || listRow.vendor_name || 'Vendor Wisuda';
+      var pkgName = d.package_name || agreementObj.packageName || listRow.package_name || 'Paket Layanan';
+      var dateStr = d.event_date || agreementObj.date || listRow.event_date || 'Belum ditentukan';
+      var timeStr = d.start_time || agreementObj.startTime || listRow.start_time || 'Belum ditentukan';
+      var locStr = d.location || agreementObj.location || listRow.location || 'Malang';
+      var priceVal = Number(d.price) || 0;
+      var breakdown = d.paymentBreakdown || {};
+      var dpVal = Number(breakdown.dpAmount) || (agreementObj.paymentSchedule && Number(agreementObj.paymentSchedule.upfrontAmount)) || Math.round(priceVal * 0.3);
+      var finalVal = Number(breakdown.finalAmount) || Math.max(0, priceVal - dpVal);
+      var isDpPaid = (Number(d.paid) || 0) >= dpVal || ['DPPaid','Paid','Completed','Resolved'].includes(d.state);
+      var isFinalPaid = (Number(d.paid) || 0) >= priceVal || ['Paid','Completed','Resolved'].includes(d.state);
+      var payStatusLabel = {
+        PAID: 'Lunas',
+        DP_PAID: 'DP Dibayar',
+        UNPAID: 'Belum Dibayar',
+        CANCELLED: 'Dibatalkan',
+        REFUNDED: 'Direfund'
+      }[d.paymentStatus] || (isFinalPaid ? 'Lunas' : isDpPaid ? 'DP Dibayar' : 'Menunggu Pembayaran');
+      var execStatusLabel = {
+        NOT_STARTED: 'Belum Dimulai',
+        IN_PROGRESS: 'Sedang Berlangsung',
+        COMPLETED: 'Selesai'
+      }[d.executionStatus || d.execution_state] || (d.state === 'Completed' ? 'Selesai' : d.vendor_arrived ? 'Sedang Berlangsung' : 'Belum Dimulai');
+      var stateLabel = {Pending:'Menunggu pembayaran',WaitingVendorApproval:'Menunggu persetujuan',DPPaid:'DP dibayar',Paid:'Lunas',Completed:'Selesai',Cancelled:'Dibatalkan',Expired:'Kedaluwarsa',Disputed:'Dalam sengketa',Resolved:'Sengketa selesai',Refunded:'Direfund'}[d.state]||d.state||'Status tidak tersedia';
+
+      detailHtml = '<div style="margin-top:24px;border-top:2px solid var(--b);padding-top:20px">'
+        +'<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;margin-bottom:16px">'
+        +'<div><h2 style="margin:0;font-size:20px">Detail Pesanan: <span style="color:var(--p)">#'+escapeUi(d.id)+'</span></h2>'
+        +'<span class="mut" style="font-size:13px">Pelanggan: <b>'+escapeUi(cName)+'</b> &middot; Vendor: <b>'+escapeUi(vName)+'</b></span></div>'
+        +'<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">'
+        +'<span class="tag ok" style="font-size:12px">'+escapeUi(stateLabel)+'</span>'
+        +'<button class="btn o" data-a="view-vendor-agreement" data-v="'+escapeUi(d.id)+'" style="font-size:13px;padding:8px 14px">📜 Lihat Perjanjian Digital</button>'
+        +'</div></div>'
+        +'<div class="two" style="padding-top:0">'
+        +'<div class="card pad">'
+        +'<h3 style="font-size:16px;margin:0 0 12px;color:var(--t)">📋 Informasi Layanan &amp; Pelaksanaan</h3>'
+        +'<div class="row"><span>Nama Pelanggan</span><b>'+escapeUi(cName)+'</b></div>'
+        +'<div class="row"><span>Penyedia Jasa (Vendor)</span><b>'+escapeUi(vName)+'</b></div>'
+        +'<div class="row"><span>ID Booking</span><b>#'+escapeUi(d.id)+'</b></div>'
+        +'<div class="row"><span>Paket Layanan</span><b>'+escapeUi(pkgName)+'</b></div>'
+        +'<div class="row"><span>Tanggal Acara</span><b>'+escapeUi(dateStr)+'</b></div>'
+        +'<div class="row"><span>Jam Acara</span><b>'+escapeUi(timeStr)+'</b></div>'
+        +'<div class="row"><span>Lokasi</span><b>'+escapeUi(locStr)+'</b></div>'
+        +'<div class="row"><span>Progres Pesanan</span><b><span class="tag '+(execStatusLabel==='Selesai'?'ok':'')+'">'+escapeUi(execStatusLabel)+'</span></b></div>'
+        +'</div>'
+        +'<div class="card pad">'
+        +'<h3 style="font-size:16px;margin:0 0 12px;color:var(--t)">💰 Rincian Biaya &amp; Pembayaran</h3>'
+        +'<div class="row"><span>Total Harga Jasa</span><b style="font-size:16px;color:var(--t)">'+rp(priceVal)+'</b></div>'
+        +'<div class="row"><span>Uang Muka (DP 30%)</span><b>'+rp(dpVal)+' '+(isDpPaid?'<span class="tag ok" style="font-size:10px">Lunas</span>':'<span class="tag" style="font-size:10px">Menunggu</span>')+'</b></div>'
+        +'<div class="row"><span>Sisa Pelunasan (70%)</span><b>'+rp(finalVal)+' '+(isFinalPaid?'<span class="tag ok" style="font-size:10px">Lunas</span>':'<span class="tag" style="font-size:10px">Menunggu</span>')+'</b></div>'
+        +'<div class="row"><span>Status Pembayaran</span><b><span class="tag '+(isFinalPaid?'ok':'')+'">'+escapeUi(payStatusLabel)+'</span></b></div>'
+        +'<div class="row"><span>Dana Masuk (Tercatat)</span><b style="color:var(--p)">'+rp(Number(d.paid)||0)+'</b></div>'
+        +'<div style="margin-top:16px;padding:12px;background:#F8FAFC;border:1px solid var(--b);border-radius:12px;font-size:12px;color:var(--m)">'
+        +'🔒 <b>Proteksi Escrow LockIn:</b> Dana ditahan di rekening penampung resmi sampai pelaksanaan acara wisuda selesai.'
+        +'</div>'
+        +'</div></div></div>';
+    }
     return '<div class="w sec"><div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap"><h2>Dashboard Vendor &amp; Pesanan</h2><button class="btn o" data-a="refresh-vendor-dashboard">Muat ulang</button></div>'
       +'<div class="grid"><div class="card pad"><span class="mut">Total Booking Masuk</span><h2 style="font-size:30px;margin:4px 0 0">'+(S.vendorDashboardLoading?'…':S.vendorDashboardError?'—':rows.length)+'</h2></div>'
       +'<div class="card pad"><span class="mut">Pembayaran Berhasil (terverifikasi)</span><h2 style="font-size:24px;margin:4px 0 0;color:var(--p)">'+(S.vendorDashboardLoading?'Memuat…':S.vendorDashboardError||verifiedTotal===null?'Belum tersedia':rp(verifiedTotal))+'</h2></div>'
       +'<div class="card pad"><span class="mut">Status Pencairan</span><h2 style="font-size:24px;margin:4px 0 0;color:var(--m)">Belum tersedia</h2></div></div>'
-      +'<div class="card pad" style="margin-top:20px"><h3>Daftar Pesanan</h3>'+contents+'</div></div>';
+      +'<div class="card pad" style="margin-top:20px"><h3>Daftar Pesanan</h3>'+contents+detailHtml+'</div></div>';
   },
 
   admin:function(){
@@ -768,6 +841,7 @@ async function refreshBookings(selectedId){
 async function refreshVendorDashboard(){
   if(S.role!=='vendor') return;
   S.vendorDashboardLoading=true;S.vendorDashboardError='';S.vendorBookings=[];
+  S.activeVendorBid='';S.vendorDetail=null;S.vendorDetailLoading=false;S.vendorDetailError='';
   if((location.hash||'').slice(1)==='dashboard') render();
   try{
     var rows=await apiRequest('/api/bookings');
@@ -778,6 +852,94 @@ async function refreshVendorDashboard(){
     S.vendorDashboardLoading=false;
     if((location.hash||'').slice(1)==='dashboard'&&S.role==='vendor') render();
   }
+}
+
+async function selectVendorBooking(bid){
+  if(!bid) return;
+  S.activeVendorBid=bid;
+  S.vendorDetail=null;
+  S.vendorDetailLoading=true;
+  S.vendorDetailError='';
+  render();
+  try{
+    var detail=await apiRequest('/api/bookings/'+encodeURIComponent(bid));
+    if(S.activeVendorBid===bid){
+      S.vendorDetail=detail;
+    }
+  }catch(err){
+    if(S.activeVendorBid===bid){
+      S.vendorDetailError=err.message||'Gagal memuat rincian booking.';
+    }
+  }finally{
+    if(S.activeVendorBid===bid){
+      S.vendorDetailLoading=false;
+      render();
+    }
+  }
+}
+
+function openVendorAgreementModal(bid){
+  var d=S.vendorDetail;
+  if(!d||d.id!==bid){
+    toast('Data booking belum siap.');
+    return;
+  }
+  var listRow=(S.vendorBookings||[]).find(function(x){return x.id===d.id})||{};
+  var agreementObj={};
+  if(d.agreement){
+    try{
+      agreementObj=typeof d.agreement==='string'?JSON.parse(d.agreement):d.agreement;
+    }catch(e){agreementObj={}}
+  }
+  var vName=d.vendor_name||listRow.vendor_name||'Vendor Wisuda';
+  var cName=d.customer_name||listRow.customer_name||'Pelanggan';
+  var pkgName=d.package_name||agreementObj.packageName||listRow.package_name||'Paket Layanan';
+  var dateStr=d.event_date||agreementObj.date||listRow.event_date||'Belum ditentukan';
+  var timeStr=d.start_time||agreementObj.startTime||listRow.start_time||'Belum ditentukan';
+  var locStr=d.location||agreementObj.location||listRow.location||'Malang';
+  var priceVal=Number(d.price)||agreementObj.price||0;
+  var sched=agreementObj.paymentSchedule||{};
+  var refundPol=agreementObj.refundPolicy||{};
+  var tiers=Array.isArray(refundPol.tiers)?refundPol.tiers:[];
+
+  var modal=document.createElement('div');
+  modal.id='vendor-agreement-modal';
+  modal.style.cssText='position:fixed;inset:0;background:rgba(15,23,42,0.8);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(6px);';
+  modal.innerHTML='<div style="background:#fff;border-radius:20px;max-width:680px;width:100%;max-height:90vh;display:flex;flex-direction:column;box-shadow:0 25px 50px rgba(0,0,0,0.3);position:relative;overflow:hidden">'
+    +'<div style="padding:18px 24px;border-bottom:1px solid #E2E8F0;display:flex;justify-content:space-between;align-items:center">'
+    +'<div><h3 style="margin:0;font-size:17px;color:#0F172A">📜 Perjanjian Digital Resmi (Read-Only)</h3>'
+    +'<span style="font-size:12px;color:#64748B">Booking #'+escapeUi(d.id)+' &middot; Kesepakatan Terkunci Backend</span></div>'
+    +'<button onclick="document.getElementById(\'vendor-agreement-modal\').remove()" style="background:none;border:none;font-size:24px;cursor:pointer;color:#64748B">&times;</button>'
+    +'</div>'
+    +'<div style="flex:1;overflow-y:auto;padding:20px 24px;font-size:13px;line-height:1.7;color:#334155;background:#F8FAFC">'
+    +'<div style="background:#fff;border:1px solid #E2E8F0;border-radius:12px;padding:16px;margin-bottom:14px">'
+    +'<h4 style="margin:0 0 8px;color:#1E3A8A">RINGKASAN KESEPAKATAN LAYANAN</h4>'
+    +'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px">'
+    +'<div>Pelanggan: <b>'+escapeUi(cName)+'</b></div>'
+    +'<div>Penyedia Jasa: <b>'+escapeUi(vName)+'</b></div>'
+    +'<div>Paket: <b>'+escapeUi(pkgName)+'</b></div>'
+    +'<div>Total Nilai Kontrak: <b>'+rp(priceVal)+'</b></div>'
+    +'<div>Tanggal Acara: <b>'+escapeUi(dateStr)+'</b></div>'
+    +'<div>Jam Mulai: <b>'+escapeUi(timeStr)+'</b></div>'
+    +'<div>Lokasi: <b>'+escapeUi(locStr)+'</b></div>'
+    +'<div>Uang Muka (DP): <b>'+(sched.upfrontAmount?rp(sched.upfrontAmount):(rp(Math.round(priceVal*0.3))+' (30%)'))+'</b></div>'
+    +'<div>Pelunasan: <b>'+(sched.finalAmount?rp(sched.finalAmount):(rp(Math.round(priceVal*0.7))+' (70%)'))+'</b></div>'
+    +'</div>'
+    +'</div>'
+    +'<div style="background:#fff;border:1px solid #E2E8F0;border-radius:12px;padding:16px;margin-bottom:14px">'
+    +'<h4 style="margin:0 0 8px;color:#1E3A8A">KETENTUAN PEMBAYARAN &amp; ESCROW</h4>'
+    +'<p style="margin:0 0 6px">Uang muka (DP) dan pelunasan ditahan di rekening penampung resmi LockIn sampai seluruh pelaksanaan layanan selesai dan disetujui.</p>'
+    +'<div style="font-size:12px;color:#64748B">Jatuh tempo pelunasan: '+(sched.dueDaysBefore?'H-'+sched.dueDaysBefore+' sebelum acara':'H-1 sebelum acara')+'</div>'
+    +'</div>'
+    +(tiers.length?'<div style="background:#fff;border:1px solid #E2E8F0;border-radius:12px;padding:16px;margin-bottom:14px"><h4 style="margin:0 0 8px;color:#1E3A8A">KEBIJAKAN REFUND</h4>'+tiers.map(function(t){return '<div style="margin-bottom:4px">&bull; <b>'+escapeUi(t.label)+':</b> '+escapeUi(t.description)+'</div>'}).join('')+'</div>':'')
+    +(agreementObj.scope?'<div style="background:#fff;border:1px solid #E2E8F0;border-radius:12px;padding:16px;margin-bottom:14px"><h4 style="margin:0 0 8px;color:#1E3A8A">LINGKUP PEKERJAAN</h4><p style="margin:0">'+escapeUi(agreementObj.scope)+'</p></div>':'')
+    +'<details style="margin-top:8px"><summary style="cursor:pointer;font-weight:700;color:var(--p);font-size:12px">Lihat JSON Perjanjian Asli</summary>'
+    +'<pre style="background:#0F172A;color:#86EFAC;padding:12px;border-radius:8px;font-size:11px;overflow:auto;max-height:180px;margin-top:8px">'+escapeUi(typeof d.agreement==='string'?d.agreement:JSON.stringify(d.agreement,null,2))+'</pre></details>'
+    +'</div>'
+    +'<div style="padding:14px 24px;border-top:1px solid #E2E8F0;background:#fff;display:flex;justify-content:flex-end">'
+    +'<button class="btn o" onclick="document.getElementById(\'vendor-agreement-modal\').remove()">Tutup</button>'
+    +'</div></div>';
+  document.body.appendChild(modal);
 }
 
 async function loadVendorCatalog(){
@@ -1125,8 +1287,12 @@ document.addEventListener('click',function(e){
   }
 
   if(k==='select-vendor-booking'){
-    S.activeVendorBid=(S.activeVendorBid===v?'':v);
-    render();
+    selectVendorBooking(v);
+    return;
+  }
+
+  if(k==='view-vendor-agreement'){
+    openVendorAgreementModal(v);
     return;
   }
 
