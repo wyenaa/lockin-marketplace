@@ -29,7 +29,12 @@ CREATE TABLE IF NOT EXISTS public.vendors (
   owner_id    UUID REFERENCES public.users(id),
   name        TEXT NOT NULL,
   category    TEXT NOT NULL,
+  city        TEXT NOT NULL DEFAULT 'Malang',
+  instagram   TEXT,
+  whatsapp    TEXT,
   price       INTEGER NOT NULL DEFAULT 0,
+  price_max   INTEGER NOT NULL DEFAULT 0,
+  price_type  TEXT NOT NULL DEFAULT 'listed',
   deposit     INTEGER NOT NULL DEFAULT 0,
   rating      REAL DEFAULT 0,
   completed   INTEGER DEFAULT 0,
@@ -38,6 +43,11 @@ CREATE TABLE IF NOT EXISTS public.vendors (
   description TEXT,
   created_at  TIMESTAMPTZ DEFAULT NOW()
 );
+ALTER TABLE public.vendors ADD COLUMN IF NOT EXISTS city TEXT NOT NULL DEFAULT 'Malang';
+ALTER TABLE public.vendors ADD COLUMN IF NOT EXISTS instagram TEXT;
+ALTER TABLE public.vendors ADD COLUMN IF NOT EXISTS whatsapp TEXT;
+ALTER TABLE public.vendors ADD COLUMN IF NOT EXISTS price_max INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE public.vendors ADD COLUMN IF NOT EXISTS price_type TEXT NOT NULL DEFAULT 'listed';
 
 -- ── Bookings ───────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS public.bookings (
@@ -48,6 +58,8 @@ CREATE TABLE IF NOT EXISTS public.bookings (
   location            TEXT,
   start_time          TEXT,
   price               INTEGER NOT NULL,
+  package_id          TEXT,
+  package_name        TEXT,
   deposit             INTEGER DEFAULT 0,
   paid                INTEGER DEFAULT 0,
   state               TEXT NOT NULL DEFAULT 'Pending',
@@ -79,6 +91,8 @@ ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS arrival_code TEXT;
 ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS vendor_arrived BOOLEAN DEFAULT FALSE;
 ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS off_platform_warning TEXT;
 ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS execution_state TEXT NOT NULL DEFAULT 'NOT_STARTED';
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS package_id TEXT;
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS package_name TEXT;
 CREATE INDEX IF NOT EXISTS bookings_user_id_idx    ON public.bookings(user_id);
 CREATE INDEX IF NOT EXISTS bookings_vendor_id_idx  ON public.bookings(vendor_id);
 CREATE INDEX IF NOT EXISTS bookings_state_idx      ON public.bookings(state);

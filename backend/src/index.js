@@ -8,7 +8,7 @@ import { dirname, resolve, extname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { supabase, isSupabaseConfigured, createUserAuthClient } from './db/supabase.js';
-import { DEMO_VENDORS } from './db/seed.js';
+import { DEMO_VENDORS, DEMO_VENDOR_OWNER_ID } from './db/seed.js';
 import { createSnapPayment, verifySignature, interpretNotification, fetchMidtransStatus, isMidtransConfigured } from './services/midtrans.js';
 import { syncBlockchainJobs, isBlockchainConfigured } from './services/blockchain.js';
 import { handleMidtransWebhook, recordNotification } from './webhooks/midtrans.js';
@@ -156,6 +156,38 @@ function executionStatus(b) {
 }
 function withBookingStatuses(b) {
   return { ...b, paymentStatus: paymentStatus(b), executionStatus: executionStatus(b) };
+}
+async function getSuccessfulPaymentBreakdown(bookingId) {
+  let rows;
+  if (supabase) {
+    const { data, error } = await supabase.from('payments').select('payment_type,amount').eq('booking_id', bookingId).eq('outcome', 'success');
+    if (error) {
+      console.error('[Supabase booking payments]', { code: error.code, message: error.message });
+      fail(503, 'Rincian pembayaran booking gagal dimuat dari database.');
+    }
+    rows = data || [];
+  } else {
+    rows = Array.from(localPayments.values()).filter(p => p.booking_id === bookingId && p.outcome === 'success');
+  }
+  return rows.reduce((totals, row) => {
+    const amount = Number(row.amount) || 0;
+    if (row.payment_type === 'DP') totals.dpAmount += amount;
+    if (row.payment_type === 'FINAL') totals.finalAmount += amount;
+    return totals;
+  }, { dpAmount: 0, finalAmount: 0 });
+}
+function vendorPackages(v) {
+  const base = Math.max(0, Number(v.price) || 0);
+  const basic = { id: '1', name: 'Paket Hemat / Basic', desc: 'Layanan esensial standar untuk wisudawan mandiri.', price: base, durasi: '1 Sesi (~2 jam)', revisi: '1x revisi' };
+  if (v.category === 'Standing Sign') return [basic];
+  return [
+    basic,
+    { id: '2', name: 'Paket Lengkap / Standard (Favorit)', desc: 'Layanan komplit: styling inti + bonus touchup saat prosesi.', price: Math.round(base * 1.25 / 1000) * 1000, durasi: '3-4 Jam', revisi: '2x revisi' },
+    { id: '3', name: 'Paket Premium / Exclusive', desc: 'Standby seharian penuh + prioritas hasil cepat + bundling aksesoris.', price: Math.round(base * 1.5 / 1000) * 1000, durasi: 'Full Day', revisi: 'Revisi bebas' }
+  ];
+}
+function withVendorPackages(v) {
+  return { ...v, packages: vendorPackages(v) };
 }
 const localToday = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' });
 const digest = text => '0x' + createHash('sha256').update(text).digest('hex');
@@ -402,7 +434,7 @@ async function api(req, res, url) {
   if (path === '/api/vendors' && method === 'GET') {
     let result = [];
     if (supabase) {
-      let q = supabase.from('vendors').select('id,name,category,price,deposit,rating,completed,verified,color,description').order('created_at', { ascending: true });
+      let q = supabase.from('vendors').select('id,name,category,city,instagram,whatsapp,price,price_max,price_type,deposit,rating,completed,verified,color,description,owner_id').order('created_at', { ascending: true });
       const category = url.searchParams.get('category');
       if (category && category !== 'Semua') q = q.eq('category', category);
       const { data: rows, error } = await q;
@@ -410,12 +442,12 @@ async function api(req, res, url) {
         console.error('[Supabase vendors]', { code: error.code, message: error.message, hint: error.hint });
         fail(503, 'Gagal memuat vendor dari database. Coba lagi.');
       }
-      result = rows || [];
+      result = (rows || []).map(withVendorPackages);
     }
 
     // Fallback otomatis ke vendor demo lokal jika tabel Supabase belum diisi
     if (!supabase) {
-      result = [...DEMO_VENDORS];
+      result = DEMO_VENDORS.map(v => withVendorPackages({ ...v, owner_id: v.owner_id || DEMO_VENDOR_OWNER_ID }));
       const category = url.searchParams.get('category');
       if (category && category !== 'Semua') result = result.filter(v => v.category === category);
     }
@@ -447,12 +479,10 @@ async function api(req, res, url) {
     const id = path.split('/').pop();
     let v = null;
     if (supabase) {
-      try {
-        const { data } = await supabase.from('vendors').select('*').eq('id', id).single();
-        if (data) v = data;
-      } catch {}
-    }
-    if (!v) {
+      const { data, error } = await supabase.from('vendors').select('*').eq('id', id).maybeSingle();
+      if (error) fail(503, 'Detail vendor gagal dimuat dari database.');
+      v = data;
+    } else {
       v = DEMO_VENDORS.find(item => String(item.id) === String(id));
     }
     if (!v) fail(404, 'Vendor tidak ditemukan.');
@@ -462,7 +492,7 @@ async function api(req, res, url) {
         reserved.push(b.event_date);
       }
     }
-    return send(res, 200, { ...v, reserved });
+    return send(res, 200, { ...withVendorPackages(v), reserved });
   }
 
   // ── Leads (public) ──
@@ -556,6 +586,8 @@ async function api(req, res, url) {
     } else v = DEMO_VENDORS.find(item => String(item.id) === String(d.vendorId));
     if (!v) fail(404, 'Vendor tidak ditemukan.');
     if (!d.agreed) fail(400, 'Setujui perjanjian terlebih dahulu.');
+    const selectedPackage = vendorPackages(v).find(item => item.id === String(d.packageId));
+    if (!selectedPackage) fail(400, 'Paket vendor tidak valid. Pilih paket yang tersedia lalu coba lagi.');
     const date = validateText(d.date, 'Tanggal', 10);
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || date < localToday()) fail(400, 'Pilih tanggal acara yang valid dan belum lewat.');
     const location = validateText(d.location, 'Lokasi', 200);
@@ -578,9 +610,9 @@ async function api(req, res, url) {
     const late = isLateBooking(date);
     const schedule = getPaymentSchedule(date);
     const upfrontAmount = late
-      ? Math.round(v.price * (schedule.upfrontPercent / 100))
-      : (v.deposit ? v.price + v.deposit : Math.round(v.price * (schedule.upfrontPercent / 100)));
-    const finalAmount = Math.max(0, v.price - upfrontAmount);
+      ? Math.round(selectedPackage.price * (schedule.upfrontPercent / 100))
+      : (v.deposit ? selectedPackage.price + v.deposit : Math.round(selectedPackage.price * (schedule.upfrontPercent / 100)));
+    const finalAmount = Math.max(0, selectedPackage.price - upfrontAmount);
 
     const agreement = JSON.stringify({
       vendorId: v.id,
@@ -589,8 +621,10 @@ async function api(req, res, url) {
       date,
       location,
       startTime: start,
-      price: v.price,
+      price: selectedPackage.price,
       deposit: v.deposit,
+      packageId: selectedPackage.id,
+      packageName: selectedPackage.name,
       isLateBooking: late,
       paymentSchedule: {
         upfrontPercent: schedule.upfrontPercent,
@@ -628,12 +662,14 @@ async function api(req, res, url) {
       vendor_id: v.id,
       vendor_name: v.name,
       category: v.category,
-      owner_id: v.owner_id || 'd9d01426-73a7-43e6-86fe-d296b200d0b1',
+      owner_id: v.owner_id || DEMO_VENDOR_OWNER_ID,
       event_date: date,
       location,
       start_time: start,
-      price: v.price,
+      price: selectedPackage.price,
       deposit: v.deposit,
+      package_id: selectedPackage.id,
+      package_name: selectedPackage.name,
       paid: 0,
       late_booking: late,
       execution_state: 'NOT_STARTED',
@@ -657,6 +693,8 @@ async function api(req, res, url) {
         start_time: bookingData.start_time,
         price: bookingData.price,
         deposit: bookingData.deposit,
+        package_id: bookingData.package_id,
+        package_name: bookingData.package_name,
         paid: bookingData.paid,
         state: bookingData.state,
         execution_state: bookingData.execution_state,
@@ -670,7 +708,15 @@ async function api(req, res, url) {
         expires: bookingData.expires,
         created_at: bookingData.created_at
       });
-      if (bookingError) fail(503, 'Booking gagal disimpan ke database. Periksa data vendor dan coba lagi.');
+      if (bookingError) {
+        console.error('[Supabase booking INSERT]', {
+          code: bookingError.code,
+          message: bookingError.message,
+          details: bookingError.details,
+          hint: bookingError.hint
+        });
+        fail(503, 'Booking gagal disimpan ke database. Periksa data vendor dan coba lagi.');
+      }
       const { error: auditError } = await supabase.from('audit').insert({ booking_id: id, state: 'AgreementLocked', created_at: bookingData.created_at });
       if (auditError) {
         const { error: rollbackError } = await supabase.from('bookings').delete().eq('id', id);
@@ -701,6 +747,7 @@ async function api(req, res, url) {
       const dispute = localDisputes.get(b.id) || null;
       return send(res, 200, {
         ...withBookingStatuses(b),
+        paymentBreakdown: await getSuccessfulPaymentBreakdown(b.id),
         dispute,
         dpBlockchain: null,
         finalBlockchain: null,
@@ -791,6 +838,12 @@ async function api(req, res, url) {
       const amount = (b.state === 'Pending' || b.state === 'WaitingVendorApproval')
         ? (b.deposit ? b.price + b.deposit : Math.round(b.price * (upfrontPercent / 100)))
         : b.price - b.paid;
+      if (paymentType === 'FINAL') {
+        const outstanding = Number(b.price) - Number(b.paid || 0);
+        if (!Number.isSafeInteger(outstanding) || outstanding <= 0 || amount !== outstanding) {
+          fail(409, 'Sisa tagihan booking tidak valid. Pembayaran pelunasan diblokir.');
+        }
+      }
 
       const existing = supabase
         ? await supabase.from('payments').select('*').eq('booking_id', b.id).eq('payment_type', paymentType).order('created_at', { ascending: false })
@@ -799,7 +852,7 @@ async function api(req, res, url) {
       if (existing.data?.some(p => p.outcome === 'success')) fail(409, 'Pembayaran ini sudah berhasil tercatat.');
       const pendingExisting = existing.data?.find(p => p.outcome === 'pending');
       if (pendingExisting) {
-        if (pendingExisting.redirect_url) return send(res, 200, { redirect_url: pendingExisting.redirect_url, token: null, reused: true, id: b.id });
+        if (pendingExisting.redirect_url) return send(res, 200, { redirect_url: pendingExisting.redirect_url, token: null, amount: pendingExisting.amount, reused: true, id: b.id });
         fail(409, 'Pembayaran sedang diproses. Tunggu sebentar lalu muat ulang halaman.');
       }
 
@@ -831,7 +884,7 @@ async function api(req, res, url) {
         }
         payData.redirect_url = redirectUrl;
         localPayments.set(payData.id, payData);
-        return send(res, 200, { redirect_url: redirectUrl, token, reused: false, id: b.id });
+        return send(res, 200, { redirect_url: redirectUrl, token, amount, reused: false, id: b.id });
       }
 
       // Mode simulasi (tanpa Midtrans)
@@ -877,7 +930,7 @@ async function api(req, res, url) {
 
       localPayments.set(payId, payData);
       if (changed) localAudit.push({ booking_id: b.id, state: nextState, created_at: updatedAt });
-      return send(res, 200, { ...b, outcome: d.outcome });
+      return send(res, 200, { ...b, outcome: d.outcome, paymentAmount: amount });
     }
 
     if (action === 'complete') {

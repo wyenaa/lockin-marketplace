@@ -149,31 +149,26 @@ footer .w{display:flex;justify-content:space-between;align-items:center;flex-wra
 
 <script>
 var S={
-  city:'Malang',cc:'Malang',eventDate:'',mode:'dp',lunas:false,req:null,vid:0,pkg:1,
+  city:'Malang',cc:'Malang',eventDate:'',mode:'dp',lunas:false,req:null,vid:'',pkg:1,
   role:null,user:'',next:null,vf:'',pay:'Midtrans',sc:'sukses',item:'g',stage:1,
   cat:'Semua',dec:'vendor',agree:false,bookingId:'',
   activeBid:'',
   vendorArrived:false,
   arrivalOtp:'482910',
-  bookingsList:[],backendError:''
+  bookingsList:[],backendError:'',vendorError:'',finalCheckoutBooking:null,finalCheckoutLoading:false,finalCheckoutError:''
 };
 
 var CAT={MUA:'MUA',Stylist:'Hijab & Hair Stylist',GCC:'Graduation Content Creator',PA:'PA Wisuda',Sign:'Acrylic Standing Sign'},
 GR={MUA:'#FDE68A,#B45309',Stylist:'#6EE7B7,#047857',GCC:'#93C5FD,#1E3A8A',PA:'#F9A8D4,#BE185D',Sign:'#C4B5FD,#5B21B6'},
 CF={l:'Harga tertulis di sumber publik',d:'Harga perlu dikonfirmasi',e:'Perkiraan',a:'Harga via WA atau DM vendor'};
 var CT=[['PA','','PA Wisuda',GR.PA,'Lihat vendor'],['GCC','','Graduation Content Creator',GR.GCC,'Lihat vendor'],['Stylist','','Hijab & Hair Stylist',GR.Stylist,'Lihat vendor'],['MUA','','MUA',GR.MUA,'Lihat vendor'],['Sign','','Acrylic Standing Sign',GR.Sign,'Lihat vendor']];
-var CITIES=['Malang','Surabaya','Yogyakarta','Semarang','Solo','Bandung','Bogor'],DEF={MUA:300000,Stylist:150000,GCC:350000,PA:300000,Sign:75000};
+var CITIES=['Malang','Surabaya','Yogyakarta','Semarang','Solo','Bandung','Bogor'];
 
 function cln(s){return s.split('. ').filter(function(x){return!(/\b(WA|DM)\b/.test(x)||/pricelist|bio\b|link|form booking|katalog|sumber|listing|estimasi|data akun|nama akun|cek status/i.test(x))}).join('. ')}
-var VD=`MUA|Malang|Lolita Makeup||lolitamakeup.id|199000|349000|l|Wisuda: makeup 249rb, +hairdo 349rb. Bundling ibu dan anak mulai 399rb. Home service Malang Raya.
-MUA|Malang|Makeup Rinsil||bridestory.com/makeup-rinsil|250000|250000|d|Soft makeup wisuda elegan, hijabdo simple termasuk. Free home service Malang Kota.
-MUA|Malang|Magda MUA||magdamua.com|500000|500000|l|Makeup photoshoot dan graduation premium. Tahan lama seharian.
-Stylist|Malang|Hijab Do Malang|hijabdo.malang||150000|150000|a|Certified personal stylist wisuda. Hijab rapi, styling modern, tepat waktu.
-Stylist|Malang|Lolita Makeup (add-on hairdo)||lolitamakeup.id/harga|100000|150000|l|Hairdo 100-150rb. Hijabdo simple sudah termasuk di paket wisuda.
-GCC|Malang|Dokumentasi Wisuda (Foto Wisuda Outdoor)|dokumentasiwisuda||250000|0|l|Foto wisuda outdoor outdoor estetik, personal dan grup wisudawan.
-GCC|Malang|Moment Graduation|moment.graduation||350000|0|a|Foto-video pre, day, post graduation. Malang dan Surabaya.
-PA|Malang|Glow Studio PA (Pendamping Wisuda)||glowstudio.id|300000|300000|d|Pendampingan wisuda wisudawan mandiri: handle toga, perlengkapan, dan pendampingan seharian.
-Sign|Malang|Arbeya Flo|arbeya.flo||75000|0|a|Sewa dan jual papan akrilik wisuda custom nama dan ucapan, free antar.`.split('\n').map(function(r,i){var x=r.split('|');return{i:i,c:x[0],k:x[1],n:x[2],ig:x[3],w:x[4],a:+x[5]||DEF[x[0]],b:+x[6]||0,f:x[7],t:cln(x[8]||'')}});
+var VD=[];
+function vendorCode(category){return category==='MUA'?'MUA':category==='Hijab & Hair Stylist'?'Stylist':category==='GCC'?'GCC':category==='PA Wisuda'?'PA':category==='Standing Sign'?'Sign':''}
+function getVendor(id){return VD.find(function(v){return String(v.id)===String(id)})||null}
+function mapVendor(v){var code=vendorCode(v.category),priceType={listed:'l',estimate:'d',contact:'a'}[v.price_type]||'l';return{id:v.id,i:v.id,c:code,k:v.city||'Malang',n:v.name,ig:v.instagram||'',w:v.whatsapp||'',a:Number(v.price)||0,b:Number(v.price_max)||0,f:priceType,t:cln(v.description||''),deposit:Number(v.deposit)||0,category:v.category,packages:Array.isArray(v.packages)?v.packages:[]}}
 
 function rp(n){return 'Rp'+Math.round(n).toLocaleString('id-ID')}
 function pr(v){return v.a?(v.b&&v.b!=v.a?rp(v.a)+' - '+rp(v.b):'Mulai '+rp(v.a)):'Tanya vendor'}
@@ -235,21 +230,16 @@ function gal(v,n){
 }
 
 function getPackages(v){
-  var p=v.a;
-  return [
-    {id:1, name:'Paket Hemat / Basic', desc:'Layanan esensial standar untuk wisudawan mandiri.', price:p, durasi:'1 Sesi (~2 jam)', revisi:'1x revisi'},
-    {id:2, name:'Paket Lengkap / Standard (Favorit)', desc:'Layanan komplit: styling inti + bonus touchup saat prosesi.', price:Math.round(p*1.25/1000)*1000, durasi:'3-4 Jam', revisi:'2x revisi'},
-    {id:3, name:'Paket Premium / Exclusive', desc:'Standby seharian penuh + prioritas hasil cepat + bundling aksesoris.', price:Math.round(p*1.5/1000)*1000, durasi:'Full Day', revisi:'Revisi bebas'}
-  ];
+  return v.packages||[];
 }
 
 function calc(){
-  var v=VD[S.vid]||VD[0];
+  var v=getVendor(S.vid)||VD[0]||{id:'',i:'',c:'MUA',k:'Malang',n:'Vendor',a:0,b:0,deposit:0,packages:[]};
   var sg=v.c=='Sign';
   var pkgs=getPackages(v);
-  var curPkg=pkgs.find(function(x){return x.id==S.pkg})||pkgs[0];
-  var price=sg?v.a:curPkg.price;
-  var dep=sg?100000:0;
+  var curPkg=pkgs.find(function(x){return String(x.id)===String(S.pkg)})||pkgs[0]||{id:'1',name:'Paket Hemat / Basic',price:v.a};
+  var price=curPkg.price;
+  var dep=v.deposit||0;
   var due=dep?(price+dep):Math.round(price*0.3);
   var fee=Math.round(price*0.03);
   var tr=(S.req&&S.req.status=='approved'&&S.req.vid==v.i)?S.req.tr:0;
@@ -353,7 +343,7 @@ var pages={
   },
 
   vendor:function(){
-    var v=VD[S.vid]||VD[0],sg=v.c=='Sign',c=calc(),loc=S.cc;
+    var v=getVendor(S.vid)||VD[0],sg=v.c=='Sign',c=calc(),loc=S.cc;
     var defaultDate=S.eventDate||new Date(Date.now()+14*86400000).toISOString().split('T')[0];
     S.eventDate=defaultDate;
     var pkgs=getPackages(v);
@@ -415,23 +405,45 @@ var pages={
   },
 
   checkout:function(){
-    var c=calc(),lu=S.mode=='lunas';
-    var payAmount=lu?c.rest:c.total;
+    var lu=S.mode==='lunas';
+    if(lu){
+      var booking=S.finalCheckoutBooking;
+      if(S.finalCheckoutLoading) return '<div class="w" style="padding-top:24px"><div class="card pad"><h2>Memuat tagihan pelunasan...</h2><p class="mut">Memeriksa booking aktif ke server.</p></div></div>';
+      if(S.finalCheckoutError||!booking||booking.id!==S.activeBid||booking.state!=='DPPaid') return '<div class="w" style="padding-top:24px"><div class="card pad"><h2>Pelunasan tidak tersedia</h2><p class="mut">'+(S.finalCheckoutError||'Booking aktif tidak ditemukan atau belum berstatus DP dibayar.')+'</p><a class="btn" href="#status">Kembali ke Booking Saya</a></div></div>';
+      var agreement={};try{agreement=typeof booking.agreement==='string'?JSON.parse(booking.agreement):booking.agreement||{}}catch{}
+      var vendorName=booking.vendor_name||booking.vendors&&booking.vendors.name;
+      var packageName=booking.package_name||agreement.packageName||'Paket layanan booking';
+      var servicePrice=Number(booking.price),paidAmount=Number(booking.paid)||0,remainingAmount=servicePrice-paidAmount;
+      if(!vendorName||!Number.isFinite(servicePrice)||!Number.isFinite(remainingAmount)||remainingAmount<=0) return '<div class="w" style="padding-top:24px"><div class="card pad"><h2>Pelunasan tidak tersedia</h2><p class="mut">Data vendor atau sisa tagihan booking tidak valid.</p><a class="btn" href="#status">Kembali ke Booking Saya</a></div></div>';
+      return '<div class="w" style="padding-top:14px">'+stp(2)+'</div>'
+        +'<div class="w" style="max-width:540px;margin:16px auto"><div class="card pad">'
+        +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px"><h2 style="margin:0;font-size:20px">Pelunasan Tagihan Layanan</h2><span class="tag ok">Escrow Aman</span></div>'
+        +'<div style="background:#F8FAFC;border:1px solid var(--b);border-radius:14px;padding:14px;margin-bottom:16px">'
+        +'<div class="row" style="padding:6px 0"><span>Booking</span><b>#'+booking.id+'</b></div>'
+        +'<div class="row" style="padding:6px 0"><span>Vendor</span><b>'+vendorName+'</b></div>'
+        +'<div class="row" style="padding:6px 0"><span>Paket</span><b>'+packageName+'</b></div>'
+        +'<div class="row" style="padding:6px 0"><span>Total Harga Layanan</span><b>'+rp(servicePrice)+'</b></div>'
+        +'<div class="row" style="padding:6px 0;color:#166534"><span>DP Dibayar</span><b>'+rp(paidAmount)+'</b></div>'
+        +'<div class="row" style="border-top:2px solid var(--t);margin-top:8px;padding-top:12px"><span style="font-weight:800;font-size:16px;color:var(--t)">Sisa Tagihan</span><b style="font-size:20px;color:var(--p)">'+rp(remainingAmount)+'</b></div>'
+        +'</div><button class="btn blk" data-a="paymidtrans" id="btn-midtrans" style="font-size:16px;padding:16px;border-radius:14px">Bayar Pelunasan</button>'
+        +'<div style="margin-top:14px;text-align:center"><a href="#status" style="font-size:13px;color:var(--m)">&larr; Kembali ke Booking Saya</a></div>'
+        +'</div></div>';
+    }
+    var c=calc();
+    var payAmount=c.total;
     return '<div class="w" style="padding-top:14px">'+stp(2)+'</div>'
       +'<div class="w" style="max-width:540px;margin:16px auto">'
       +'<div class="card pad">'
       +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">'
-      +'<h2 style="margin:0;font-size:20px">'+(lu?'Pelunasan Tagihan Layanan':'Pembayaran Uang Muka (DP)')+'</h2>'
+      +'<h2 style="margin:0;font-size:20px">Pembayaran Uang Muka (DP)</h2>'
       +'<span class="tag ok">Escrow Aman</span></div>'
       +'<div style="background:#F8FAFC;border:1px solid var(--b);border-radius:14px;padding:14px;margin-bottom:16px">'
       +'<div class="row" style="padding:6px 0"><span>Vendor</span><b>'+c.i.n+'</b></div>'
       +'<div class="row" style="padding:6px 0"><span>Layanan</span><b>'+c.i.pkgName+'</b></div>'
       +'<div class="row" style="padding:6px 0"><span>Lokasi Acara</span><b>'+(S.cc||'Malang')+'</b></div>'
       +'<div class="row" style="padding:6px 0"><span>Total Harga Layanan</span><b>'+rp(c.i.p)+'</b></div>'
-      +(lu
-        ?'<div class="row" style="padding:6px 0;color:#166534"><span>Status DP Sebelumnya</span><b>Lunas (30%)</b></div>'
-        :'<div class="row" style="padding:6px 0"><span>Porsi Uang Muka (30%)</span><b>'+rp(c.due)+'</b></div>'
-         +'<div class="row" style="padding:6px 0"><span>Biaya Layanan Platform (3%)</span><b>'+rp(c.fee)+'</b></div>')
+      +'<div class="row" style="padding:6px 0"><span>Porsi Uang Muka (30%)</span><b>'+rp(c.due)+'</b></div>'
+      +'<div class="row" style="padding:6px 0"><span>Biaya Layanan Platform (3%)</span><b>'+rp(c.fee)+'</b></div>'
       +'<div class="row" style="border-top:2px solid var(--t);margin-top:8px;padding-top:12px">'
       +'<span style="font-weight:800;font-size:16px;color:var(--t)">Total Dibayar Sekarang</span>'
       +'<b style="font-size:20px;color:var(--p)">'+rp(payAmount)+'</b></div>'
@@ -452,9 +464,8 @@ var pages={
     if(!bItem) return '<div class="w" style="padding-top:24px"><div class="card pad"><h1>Booking Saya</h1><p class="mut">'+(S.backendError||'Belum ada booking. Booking baru akan muncul di sini.')+'</p><a class="btn" href="#daftar">Cari Vendor</a></div></div>';
     var c=calc(),st=bItem.executionStatus==='COMPLETED'||bItem.state==='Completed'?3:bItem.executionStatus==='IN_PROGRESS'||bItem.arrived?2:1;
     var isCancelled=bItem.state==='Cancelled',isDisputed=!!(bItem.dispute||bItem.disputed);
-    var isPaid=bItem.paymentStatus==='PAID'||['Paid','Completed','Resolved'].indexOf(bItem.state)>=0;
-    var vName=bItem.vendor_name||(VD[bItem.vid]?VD[bItem.vid].n:'Vendor Wisuda');
-    var vCat=bItem.category||(VD[bItem.vid]?CAT[VD[bItem.vid].c]:'Layanan Wisuda');
+    var bVendor=getVendor(bItem.vendor_id),vName=bItem.vendor_name||(bVendor?bVendor.n:'Vendor Wisuda');
+    var vCat=bItem.category||(bVendor?CAT[bVendor.c]:'Layanan Wisuda');
     var statusLabel={Pending:'Menunggu pembayaran',WaitingVendorApproval:'Menunggu persetujuan vendor',DPPaid:'DP dibayar',Paid:'Lunas',Completed:'Selesai',Cancelled:'Dibatalkan',Expired:'Kedaluwarsa',Disputed:'Dalam sengketa',Resolved:'Sengketa selesai'}[bItem.state]||bItem.state;
 
     var T=function(ok,t,sub){
@@ -476,8 +487,8 @@ var pages={
       +'<div class="booking-cards-grid">'
       +S.bookingsList.map(function(b){
         var isSel = b.id === curBid;
-        var bName = b.vendor_name||(VD[b.vid] ? VD[b.vid].n : 'Vendor Wisuda');
-        var bCat = b.category||(VD[b.vid] ? CAT[VD[b.vid].c] : 'Layanan');
+        var cardVendor=getVendor(b.vendor_id),bName = b.vendor_name||(cardVendor ? cardVendor.n : 'Vendor Wisuda');
+        var bCat = b.category||(cardVendor ? CAT[cardVendor.c] : 'Layanan');
         var total = b.price + Math.round(b.price * 0.03);
         return '<div class="b-card'+(isSel?' active':'')+'" onclick="switchBooking(\''+b.id+'\')">'
           +'<div>'
@@ -513,7 +524,7 @@ var pages={
       +(isCancelled?'<div class="msg" style="margin:12px 0;background:#FFF7ED;border:1px solid #FDBA74"><b>Booking dibatalkan</b><br>Aturan: '+(bItem.cancellation_refund_description||'Refund sesuai kebijakan booking.')+'<br>Dikembalikan: <b>'+rp(bItem.cancellation_refund||0)+'</b><br>Tidak dikembalikan: <b>'+rp(bItem.cancellation_not_refunded||0)+'</b></div>':'')
       +(!isCancelled?T(1,'Perjanjian Digital Disetujui','Kesepakatan tersimpan pada booking'):'')
       +(!isCancelled?T(bItem.dpPaid>0,'DP Dibayar ('+rp(bItem.dpPaid)+')',bItem.dpPaid>0?'Status pembayaran dari backend':'Menunggu pembayaran DP'):'')
-      +(!isCancelled?T(isPaid,'Pelunasan ('+rp(bItem.rest)+')',isPaid?'Pelunasan terverifikasi oleh backend':'Jatuh tempo sesuai perjanjian'):'')
+      +(!isCancelled?T(bItem.finalPaid>0,'Pelunasan ('+rp(bItem.rest)+')',bItem.finalPaid>0?'Pelunasan terverifikasi oleh backend':bItem.dpPaid>0?'Menunggu pembayaran pelunasan':'Menunggu pembayaran DP'):'')
       +(!isCancelled?T(bItem.arrived,'Verifikasi Kehadiran Vendor di Hari H',bItem.arrived?'Vendor telah tiba dan check-in resmi via OTP':'Tunjukkan kode OTP saat vendor tiba di lokasi'):'')
       +(!isCancelled?T(st>=2,st>=3?'Pelaksanaan Acara Selesai':'Pelaksanaan Acara Berlangsung',st>=3?'Vendor menyelesaikan layanan sesuai kontrak':'Kehadiran vendor tercatat; menunggu konfirmasi penyelesaian'):'')
       +(!isCancelled?T(st>=3,'Konfirmasi Selesai &amp; Dana Dicairkan','Dana escrow diteruskan ke rekening vendor'):'')
@@ -695,7 +706,22 @@ async function apiRequest(path,method,body){
 }
 
 function normalizeBooking(b){
-  return Object.assign({},b,{date:b.event_date,dpPaid:Number(b.paid)||0,rest:Math.max(0,(Number(b.price)||0)-(Number(b.paid)||0)),arrived:!!b.vendor_arrived,otp:b.arrival_code||'',disputed:!!b.dispute});
+  var breakdown=b.paymentBreakdown||{},dpPaid=Number(breakdown.dpAmount)||0,finalPaid=Number(breakdown.finalAmount)||0;
+  var finalDue=finalPaid>0?finalPaid:(dpPaid>0?Math.max(0,(Number(b.price)||0)-dpPaid):0);
+  return Object.assign({},b,{date:b.event_date,dpPaid:dpPaid,finalPaid:finalPaid,rest:finalDue,arrived:!!b.vendor_arrived,otp:b.arrival_code||'',disputed:!!b.dispute});
+}
+
+async function openFinalCheckout(bookingId){
+  S.mode='lunas';S.finalCheckoutBooking=null;S.finalCheckoutError='';S.finalCheckoutLoading=true;
+  go('checkout');
+  try{
+    if(!bookingId) throw new Error('ID booking aktif tidak tersedia.');
+    var booking=await apiRequest('/api/bookings/'+encodeURIComponent(bookingId));
+    if(booking.id!==bookingId) throw new Error('Server mengembalikan booking yang berbeda.');
+    if(booking.state!=='DPPaid') throw new Error('Booking tidak berstatus DP dibayar. Pelunasan tidak dapat dilanjutkan.');
+    S.finalCheckoutBooking=booking;
+  }catch(err){S.finalCheckoutError=err.message}
+  finally{S.finalCheckoutLoading=false;if(S.activeBid===bookingId)render();}
 }
 
 async function refreshBookings(selectedId){
@@ -711,7 +737,19 @@ async function refreshBookings(selectedId){
   return S.bookingsList;
 }
 
+async function loadVendorCatalog(){
+  try{
+    var rows=await apiRequest('/api/vendors');
+    VD=rows.map(mapVendor).filter(function(v){return !!v.c});
+    S.vendorError='';
+    if(!getVendor(S.vid)&&VD.length) S.vid=VD[0].id;
+  }catch(err){
+    VD=[];S.vendorError='Katalog vendor gagal dimuat: '+err.message;
+  }
+}
+
 async function initializeLockIn(){
+  await loadVendorCatalog();
   try{
     var result=await apiRequest('/api/auth/me');
     if(result.user){
@@ -785,7 +823,7 @@ function submitVendorApplication(){
 
 // Bank-Style Agreement Scroll Modal
 function openBankTermsModal(){
-  var c=calc(),v=VD[S.vid]||VD[0];
+  var c=calc(),v=getVendor(S.vid)||VD[0];
   var modal=document.createElement('div');
   modal.id='bank-terms-modal';
   modal.style.cssText='position:fixed;inset:0;background:rgba(15,23,42,0.8);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(6px);';
@@ -860,8 +898,8 @@ function confirmBankAgreement(){
 function openInvoiceModal(){
   var curBid=S.activeBid||'LK-2611';
   var bItem=S.bookingsList.find(function(b){return b.id===curBid})||S.bookingsList[0];
-  var vName=bItem.vendor_name||(VD[bItem.vid]?VD[bItem.vid].n:'Vendor Wisuda');
-  var vCat=bItem.category||(VD[bItem.vid]?CAT[VD[bItem.vid].c]:'Layanan Wisuda');
+  var bVendor=getVendor(bItem.vendor_id),vName=bItem.vendor_name||(bVendor?bVendor.n:'Vendor Wisuda');
+  var vCat=bItem.category||(bVendor?CAT[bVendor.c]:'Layanan Wisuda');
   var fee=Math.round(bItem.price*0.03);
   var total=bItem.price+fee;
   var invoiceNo='INV/2026/'+curBid;
@@ -1075,15 +1113,14 @@ document.addEventListener('click',function(e){
   }
 
   if(k=='cat'){S.cat=v;render();}
-  else if(k=='item'){S.vid=+v;S.item=VD[S.vid].c=='Sign'?'s':'g';S.pkg=1;S.activeBid='';S.bookingId='';go('vendor');}
+  else if(k=='item'){S.vid=v;var picked=getVendor(S.vid);if(!picked){toast('Vendor tidak ditemukan. Muat ulang katalog.');return}S.item=picked.c=='Sign'?'s':'g';S.pkg=1;S.activeBid='';S.bookingId='';go('vendor');}
   else if(k=='selpkg'){S.pkg=+v;render();}
   else if(k=='search'){
     var mp={'PA Wisuda':'PA','Graduation Content Creator':'GCC','Hijab & Hair Stylist':'Stylist','MUA':'MUA','Acrylic Standing Sign':'Sign'},sv=document.getElementById('b'),dd=document.getElementById('d');
     S.cat=sv&&mp[sv.value]||'Semua';if(dd){S.cc=dd.value;S.city=dd.value}
   }
   else if(k=='payrest'){
-    S.mode='lunas';
-    go('checkout');
+    openFinalCheckout(S.activeBid);
   }
   else if(k=='paydp'){
     S.mode='dp';
@@ -1127,28 +1164,28 @@ document.addEventListener('click',function(e){
     (async function(){
       try{
         var bid=S.activeBid;
-        var active=S.bookingsList.find(function(b){return b.id===bid;});
-        if(S.mode==='dp'&&(!active||!['Pending','WaitingVendorApproval'].includes(active.state))){
-          var vendorId=(S.vid!=null?Number(S.vid):0)+1;
-          if(vendorId>6||vendorId<1) vendorId=1;
-          var vendorRows=await apiRequest('/api/vendors');
-          if(vendorRows.length&&typeof vendorRows[0].id==='string'){
-            var front=VD[S.vid],categoryMap={MUA:'MUA',Stylist:'Hijab & Hair Stylist',GCC:'GCC',PA:'PA Wisuda',Sign:'Standing Sign'};
-            var category=categoryMap[front&&front.c];
-            var options=vendorRows.filter(function(x){return x.category===category;});
-            if(!options.length) throw new Error('Vendor kategori ini belum tersedia di database.');
-            options.sort(function(x,y){return Math.abs((x.price||0)-(calc().i.p||0))-Math.abs((y.price||0)-(calc().i.p||0));});
-            vendorId=options[0].id;
-          }
+        var isFinal=S.mode==='lunas',active=null;
+        if(isFinal){
+          if(!bid||!S.finalCheckoutBooking||S.finalCheckoutBooking.id!==bid) throw new Error('Detail booking pelunasan belum dimuat. Buka kembali pelunasan dari Booking Saya.');
+          active=await apiRequest('/api/bookings/'+encodeURIComponent(bid));
+          if(active.id!==bid) throw new Error('Server mengembalikan booking yang berbeda.');
+          if(active.state!=='DPPaid') throw new Error('Booking tidak lagi berstatus DP dibayar. Pembayaran diblokir.');
+          S.finalCheckoutBooking=active;
+        }else{
+          active=S.bookingsList.find(function(b){return b.id===bid;});
+        }
+        if(!isFinal&&(!active||!['Pending','WaitingVendorApproval'].includes(active.state))){
+          var front=getVendor(S.vid);
+          if(!front) throw new Error('Vendor tidak tersedia. Muat ulang katalog dan pilih vendor lagi.');
           var futureDate=S.eventDate||new Date(Date.now()+14*86400000).toISOString().split('T')[0];
-          var created=await apiRequest('/api/bookings','POST',{vendorId:vendorId,date:futureDate,location:S.cc||S.city||'Malang',startTime:'08:00',agreed:true});
+          var created=await apiRequest('/api/bookings','POST',{vendorId:front.id,packageId:String(S.pkg),date:futureDate,location:S.cc||S.city||'Malang',startTime:'08:00',agreed:true});
           bid=created.id;S.activeBid=bid;S.bookingId=bid;
           await refreshBookings(bid);
         }
         if(!bid) throw new Error('Pilih booking untuk melakukan pembayaran.');
-        active=S.bookingsList.find(function(b){return b.id===bid;});
+        if(!isFinal) active=S.bookingsList.find(function(b){return b.id===bid;});
+        if(!active) throw new Error('Booking tidak berhasil dimuat. Pembayaran diblokir.');
         var expectedState=active&&active.state;
-        var isFinal=S.mode==='lunas';
         var payment=await apiRequest('/api/bookings/'+encodeURIComponent(bid)+'/payment','POST',{method:'QRIS',outcome:'success',expectedState:expectedState,paymentType:isFinal?'FINAL':'DP',confirmedFinal:isFinal});
         if(btn){btn.disabled=false;btn.textContent='Bayar';}
         await refreshBookings(bid);

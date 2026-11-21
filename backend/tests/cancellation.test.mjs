@@ -68,10 +68,11 @@ test('customer cancellation persists refund and blocks repeated or unauthorized 
   });
   assert.equal(login.status, 200);
   const cookie = login.cookie;
-  const create = async (vendorId, daysAhead) => {
+  const vendorIds = [1, 2, 3, 4, 5, 6].map(n => `e0000000-0000-4000-8000-${String(n).padStart(12, '0')}`);
+  const create = async (vendorIndex, daysAhead) => {
     const result = await request('/api/bookings', {
       cookie, method: 'POST', body: {
-        vendorId, date: eventDate(daysAhead), location: 'Malang', startTime: '08:00', agreed: true
+        vendorId: vendorIds[vendorIndex - 1], packageId: '1', date: eventDate(daysAhead), location: 'Malang', startTime: '08:00', agreed: true
       }
     });
     assert.equal(result.status, 201);
