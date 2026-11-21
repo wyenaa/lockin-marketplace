@@ -1,0 +1,562 @@
+diff --git a/backend/src/db/supabase.js b/backend/src/db/supabase.js
+--- a/backend/src/db/supabase.js
++++ b/backend/src/db/supabase.js
+@@ -9,13 +9,16 @@
+ 
+ const supabaseUrl = process.env.SUPABASE_URL;
+ const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
++const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
+ 
+ if (!supabaseUrl || !supabaseKey) {
+   console.warn('[Supabase] SUPABASE_URL atau SUPABASE_SERVICE_ROLE_KEY belum diisi di .env — database tidak aktif.');
+ }
+ 
+ export const supabase = supabaseUrl && supabaseKey
+-  ? createClient(supabaseUrl, supabaseKey)
++  ? createClient(supabaseUrl, supabaseKey, {
++      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false }
++    })
+   : null;
+ 
+ /** Helper: jalankan query dan lempar error jika gagal */
+@@ -28,3 +31,15 @@
+ 
+ /** Cek apakah Supabase terkonfigurasi */
+ export const isSupabaseConfigured = () => !!supabase;
++
++// Login/pendaftaran menggunakan client anon terpisah. Jangan gunakan client
++// service_role untuk signInWithPassword: sesi pengguna bisa menggantikan
++// authorization header untuk seluruh query database berikutnya.
++export function createUserAuthClient() {
++  if (!supabaseUrl || !supabaseAnonKey) {
++    throw new Error('SUPABASE_ANON_KEY belum dikonfigurasi untuk login.');
++  }
++  return createClient(supabaseUrl, supabaseAnonKey, {
++    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false }
++  });
++}
+diff --git a/backend/src/index.js b/backend/src/index.js
+--- a/backend/src/index.js
++++ b/backend/src/index.js
+@@ -2,12 +2,12 @@
+ // Node.js HTTP server + REST API + static file server
+ import 'dotenv/config';
+ import http from 'node:http';
+-import { randomBytes, createHash } from 'node:crypto';
++import { randomBytes, createHash, scryptSync, timingSafeEqual } from 'node:crypto';
+ import { readFileSync, existsSync } from 'node:fs';
+ import { dirname, resolve, extname } from 'node:path';
+ import { fileURLToPath } from 'node:url';
+ 
+-import { supabase, isSupabaseConfigured } from './db/supabase.js';
++import { supabase, isSupabaseConfigured, createUserAuthClient } from './db/supabase.js';
+ import { DEMO_VENDORS } from './db/seed.js';
+ import { createSnapPayment, verifySignature, interpretNotification, fetchMidtransStatus, isMidtransConfigured } from './services/midtrans.js';
+ import { syncBlockchainJobs, isBlockchainConfigured } from './services/blockchain.js';
+@@ -31,6 +31,19 @@
+   'vendor@lockin.demo': { id: 'd9d01426-73a7-43e6-86fe-d296b200d0b1', name: 'Vendor Demo', email: 'vendor@lockin.demo', role: 'vendor' },
+   'admin@lockin.demo':  { id: 'a3769509-249b-4cb9-8aff-12d1dd5b65d9', name: 'Admin Demo', email: 'admin@lockin.demo', role: 'admin' }
+ };
++const localPasswords = new Map(); // Hanya untuk akun lokal yang didaftarkan di mode demo.
++function storeLocalPassword(email, password) {
++  const salt = randomBytes(16).toString('hex');
++  localPasswords.set(email, { salt, hash: scryptSync(password, salt, 64) });
++}
++function verifyLocalPassword(email, password) {
++  if (demoAccounts[email] && ['user@lockin.demo', 'vendor@lockin.demo', 'admin@lockin.demo'].includes(email))
++    return password === 'LockInDemo123!';
++  const saved = localPasswords.get(email);
++  if (!saved) return false;
++  const result = scryptSync(password, saved.salt, saved.hash.length);
++  return timingSafeEqual(saved.hash, result);
++}
+ const localSessions = new Map();
+ const localBookings = new Map();
+ const localPayments = new Map();
+@@ -134,27 +147,31 @@
+   res.end(JSON.stringify(data));
+ };
+ 
+-// ─── Session helper (Supabase Auth + fallback demo sessions) ─────────────────
++// ─── Session helper: server-side session + database-backed role ─────────────
++function sessionToken(req) {
++  return /(?:^|;\s*)lockin_session=([a-f0-9]{64})(?:;|$)/.exec(req.headers.cookie || '')?.[1];
++}
++
++function sessionCookie(req, token, maxAge = 86400) {
++  return `lockin_session=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${maxAge}${req.socket.encrypted ? '; Secure' : ''}`;
++}
++
+ async function userOf(req) {
+-  const token = /lockin_session=([a-f0-9]+)/.exec(req.headers.cookie || '')?.[1];
++  const token = sessionToken(req);
+   if (!token) return null;
+-
+-  // Cek local session dulu
+-  const local = localSessions.get(token);
+-  if (local && local.expires > Date.now()) return local.user;
+-
+-  if (!supabase) return null;
+-  try {
+-    const { data } = await supabase
+-      .from('sessions')
+-      .select('*, users(id, name, email, role)')
+-      .eq('token', token)
+-      .gt('expires', Date.now())
+-      .single();
+-    return data?.users || null;
+-  } catch {
++  if (!supabase) {
++    const local = localSessions.get(token);
++    return local && local.expires > Date.now() ? local.user : null;
++  }
++  // Jangan pernah percaya sesi atau role yang disimpan frontend.
++  const { data, error } = await supabase.from('sessions')
++    .select('expires, users(id, name, email, role)')
++    .eq('token', token).gt('expires', Date.now()).maybeSingle();
++  if (error) {
++    console.error('[Auth] Gagal membaca sesi:', error.code, error.message);
+     return null;
+   }
++  return data?.users || null;
+ }
+ 
+ async function body(req) {
+@@ -239,18 +256,18 @@
+     return send(res, 200, { ok: true, mode: 'sandbox', database: isSupabaseConfigured() ? 'Supabase' : 'Lokal Demo', blockchain: isBlockchainConfigured(), midtrans: isMidtransConfigured() });
+ 
+   // ── Auth ──
+-  if (path === '/api/auth/me')
++  if (path === '/api/auth/me' && method === 'GET')
+     return send(res, 200, { user: user || null });
+ 
+   if (path === '/api/auth/logout' && method === 'POST') {
+-    const token = /lockin_session=([a-f0-9]+)/.exec(req.headers.cookie || '')?.[1];
++    const token = sessionToken(req);
+     if (token) {
+-      localSessions.delete(token);
+       if (supabase) {
+-        try { await supabase.from('sessions').delete().eq('token', token); } catch {}
+-      }
+-    }
+-    return send(res, 200, { ok: true }, { 'Set-Cookie': 'lockin_session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0' });
++        const { error } = await supabase.from('sessions').delete().eq('token', token);
++        if (error) fail(503, 'Gagal mengakhiri sesi. Coba lagi.');
++      } else localSessions.delete(token);
++    }
++    return send(res, 200, { ok: true }, { 'Set-Cookie': sessionCookie(req, '', 0) });
+   }
+ 
+   if (['/api/auth/login', '/api/auth/register'].includes(path) && method === 'POST') {
+@@ -259,41 +276,66 @@
+     const password = validateText(d.password, 'Password', 128);
+     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) fail(400, 'Format email tidak valid.');
+ 
+-    // 1. Cek Akun Demo bawaan langsung (Zero friction untuk pengujian lokal)
+-    if (demoAccounts[email] && (password === 'LockInDemo123!' || password === 'demo123')) {
+-      const token = randomBytes(32).toString('hex');
+-      localSessions.set(token, { user: demoAccounts[email], expires: Date.now() + 86400000 });
+-      return send(res, 200, { user: demoAccounts[email] }, { 'Set-Cookie': `lockin_session=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=86400` });
+-    }
+-
+     if (path.endsWith('register')) {
++      const name = validateText(d.name, 'Nama', 80);
+       if (password.length < 10) fail(400, 'Password minimal 10 karakter.');
+       if (supabase) {
+-        const { error } = await supabase.auth.signUp({ email, password, options: { data: { name: validateText(d.name, 'Nama', 80), role: 'customer' } } });
++        let authClient;
++        try { authClient = createUserAuthClient(); }
++        catch { fail(503, 'Konfigurasi autentikasi Supabase belum lengkap.'); }
++        const { data: registered, error } = await authClient.auth.signUp({
++          email, password, options: { data: { name } }
++        });
+         if (error) fail(error.status || 400, error.message);
+-      }
+-      const newAcc = { id: randomBytes(16).toString('hex'), name: validateText(d.name, 'Nama', 80), email, role: 'customer' };
++        if (!registered?.user?.id) fail(503, 'Pendaftaran belum berhasil. Coba lagi.');
++        // Semua pendaftaran mandiri hanya bisa menjadi customer.
++        const { error: profileError } = await supabase.from('users').insert({
++          id: registered.user.id, name, email, role: 'customer'
++        });
++        if (profileError) {
++          console.error('[Auth] Gagal menyimpan profil pelanggan:', profileError.code, profileError.message);
++          fail(503, 'Akun Auth dibuat tetapi profil belum tersimpan. Hubungi admin.');
++        }
++        return send(res, 201, {
++          ok: true, requiresEmailConfirmation: !registered.session,
++          message: registered.session ? 'Akun dibuat. Silakan login.' : 'Akun dibuat. Periksa email untuk verifikasi, kemudian login.'
++        });
++      }
++      // Mode lokal hanya aktif ketika Supabase tidak dikonfigurasi.
++      if (demoAccounts[email]) fail(409, 'Email sudah terdaftar.');
++      const newAcc = { id: randomBytes(16).toString('hex'), name, email, role: 'customer' };
+       demoAccounts[email] = newAcc;
+-      const token = randomBytes(32).toString('hex');
+-      localSessions.set(token, { user: newAcc, expires: Date.now() + 86400000 });
+-      return send(res, 200, { user: newAcc }, { 'Set-Cookie': `lockin_session=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=86400` });
+-    }
+-
+-    // 2. Cek lewat Supabase Auth jika ada
++      storeLocalPassword(email, password);
++      return send(res, 201, { ok: true, message: 'Akun dibuat. Silakan login.' });
++    }
++
++    let profile;
+     if (supabase) {
+-      const { data: authData, error } = await supabase.auth.signInWithPassword({ email, password });
+-      if (!error && authData?.user) {
+-        const token = randomBytes(32).toString('hex');
+-        try {
+-          await supabase.from('sessions').insert({ token, user_id: authData.user.id, expires: Date.now() + 86400000 });
+-        } catch {}
+-        const profile = { id: authData.user.id, name: authData.user.user_metadata?.name || email.split('@')[0], email, role: authData.user.user_metadata?.role || 'customer' };
+-        localSessions.set(token, { user: profile, expires: Date.now() + 86400000 });
+-        return send(res, 200, { user: profile }, { 'Set-Cookie': `lockin_session=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=86400` });
+-      }
+-    }
+-
+-    fail(401, 'Email atau password salah.');
++      let authClient;
++      try { authClient = createUserAuthClient(); }
++      catch { fail(503, 'Konfigurasi autentikasi Supabase belum lengkap.'); }
++      const { data: authData, error: loginError } = await authClient.auth.signInWithPassword({ email, password });
++      if (loginError || !authData?.user) fail(401, 'Email atau password salah, atau email belum diverifikasi.');
++      const { data: storedProfile, error: profileError } = await supabase.from('users')
++        .select('id, name, email, role').eq('id', authData.user.id).maybeSingle();
++      if (profileError) fail(503, 'Profil pengguna tidak dapat dibaca dari database.');
++      if (!storedProfile) fail(403, 'Profil akun belum terdaftar di public.users. Minta admin menyinkronkan akun.');
++      profile = storedProfile; // Role HANYA bersumber dari tabel terkelola server.
++    } else {
++      profile = demoAccounts[email];
++      if (!profile || !verifyLocalPassword(email, password)) fail(401, 'Email atau password salah.');
++    }
++
++    const token = randomBytes(32).toString('hex');
++    const expires = Date.now() + 86400000;
++    if (supabase) {
++      const { error } = await supabase.from('sessions').insert({ token, user_id: profile.id, expires });
++      if (error) {
++        console.error('[Auth] Gagal menyimpan sesi:', error.code, error.message);
++        fail(503, 'Login terverifikasi tetapi sesi gagal dibuat. Hubungi admin.');
++      }
++    } else localSessions.set(token, { user: profile, expires });
++    return send(res, 200, { user: profile }, { 'Set-Cookie': sessionCookie(req, token) });
+   }
+ 
+   // ── Central Business Policy (public) ──
+@@ -445,6 +487,8 @@
+     return send(res, 200, localReviews);
+   }
+   if (path === '/api/reviews' && method === 'POST') {
++    if (!user) fail(401, 'Silakan login untuk memberi ulasan.');
++    if (user.role !== 'customer') fail(403, 'Hanya pelanggan yang dapat mengirim ulasan.');
+     const d = await body(req);
+     const rev = {
+       id: 'rev-' + randomBytes(4).toString('hex'),
+@@ -624,7 +668,7 @@
+     const action = match[2];
+ 
+     const isOwner = b.user_id === user.id;
+-    const isVendor = user.role === 'vendor' && (b.owner_id === user.id || user.id === 'd9d01426-73a7-43e6-86fe-d296b200d0b1');
++    const isVendor = user.role === 'vendor' && b.owner_id === user.id;
+     const isAdmin = user.role === 'admin';
+ 
+     if (method === 'GET' && !action) {
+@@ -794,6 +838,7 @@
+         return send(res, 200, { ...b, message: 'Bukti kerja berhasil diunggah. Menunggu konfirmasi pelanggan atau auto-release 48 jam.' });
+       }
+ 
++      if (!isOwner && !isAdmin) fail(403, 'Hanya pelanggan pemilik booking yang boleh mengonfirmasi penyelesaian.');
+       b.state = 'Completed';
+       b.updated_at = now();
+       localAudit.push({ booking_id: b.id, state: 'Completed', created_at: now() });
+@@ -836,6 +881,7 @@
+     }
+ 
+     if (action === 'dispute') {
++      if (user.role !== 'customer' || !isOwner) fail(403, 'Hanya pelanggan pemilik booking yang dapat mengajukan keluhan.');
+       if (!['DPPaid', 'Paid'].includes(b.state)) fail(409, 'Keluhan hanya untuk booking yang sudah dibayar.');
+       const reason = validateText(d.reason, 'Alasan', 1000);
+       const evidence = validateText(d.evidence, 'Bukti keluhan', 4000);
+@@ -862,6 +908,7 @@
+     }
+ 
+     if (action === 'verify-arrival') {
++      if (!isVendor) fail(403, 'Hanya vendor pemilik booking yang dapat mengonfirmasi kedatangan.');
+       const code = String(d.otp || d.code || '').trim();
+       const expected = String(b.arrival_code || '482910').trim();
+       if (!code || code !== expected) {
+diff --git a/frontend/public/index.html b/frontend/public/index.html
+--- a/frontend/public/index.html
++++ b/frontend/public/index.html
+@@ -150,7 +150,7 @@
+ <script>
+ var S={
+   city:'Malang',cc:'Malang',eventDate:'',mode:'dp',lunas:false,req:null,vid:0,pkg:1,
+-  role:'customer',user:'Rani',next:null,vf:'',pay:'Midtrans',sc:'sukses',item:'g',stage:1,
++  role:null,user:'',next:null,vf:'',pay:'Midtrans',sc:'sukses',item:'g',stage:1,
+   cat:'Semua',dec:'vendor',agree:false,bookingId:'',
+   activeBid:'',
+   vendorArrived:false,
+@@ -568,18 +568,12 @@
+       +'<p class="mut" style="font-size:13px;margin:0 0 18px">Gunakan 1 pintu masuk untuk semua akun (Pelanggan, Vendor, atau Admin).</p>'
+       +'<form onsubmit="handleUniversalLogin(event)">'
+       +'<label for="login-email">Alamat Email</label>'
+-      +'<input type="email" id="login-email" placeholder="nama@email.com" value="user@lockin.demo" required style="margin-bottom:12px">'
++      +'<input type="email" id="login-email" placeholder="nama@email.com" autocomplete="username" required style="margin-bottom:12px">'
+       +'<label for="login-pass">Kata Sandi</label>'
+-      +'<input type="password" id="login-pass" value="demo123" required style="margin-bottom:16px">'
++      +'<input type="password" id="login-pass" autocomplete="current-password" required style="margin-bottom:16px">'
+       +'<button class="btn blk" type="submit" style="font-size:15px;padding:14px">Masuk ke Akun</button>'
+       +'</form>'
+-      +'<div style="margin-top:20px;padding-top:16px;border-top:1px dashed var(--b)">'
+-      +'<span class="mut" style="font-size:12px;font-weight:700;display:block;margin-bottom:8px">Uji Coba Cepat (Akun Demo):</span>'
+-      +'<div style="display:flex;gap:6px;flex-direction:column">'
+-      +'<button class="btn o" style="font-size:12px;padding:8px" onclick="quickLogin(\'user@lockin.demo\',\'customer\',\'Rani\')">🎓 Masuk sbg Rani (Pelanggan)</button>'
+-      +'<button class="btn o" style="font-size:12px;padding:8px" onclick="quickLogin(\'vendor@lockin.demo\',\'vendor\',\'Glow Studio PA\')">💼 Masuk sbg Vendor</button>'
+-      +'<button class="btn o" style="font-size:12px;padding:8px" onclick="quickLogin(\'admin@lockin.demo\',\'admin\',\'Admin LockIn\')">🛡️ Masuk sbg Admin</button>'
+-      +'</div></div></div></div>';
++      +'</div></div>';
+   },
+ 
+   'daftar-vendor':function(){
+@@ -652,13 +646,14 @@
+ var LG={customer:'masuk',vendor:'masuk',admin:'masuk'};
+ var HM={customer:'beranda',vendor:'dashboard',admin:'admin'};
+ 
++function escapeUi(v){return String(v==null?'':v).replace(/[&<>\"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[c]})}
+ function nav(){
+   var r=S.role,l='',a='';
+   if(!r||r=='customer') l='<a href="#beranda">Beranda</a><a href="#daftar">Cari Vendor</a><a href="#cara">FAQ</a>'+(r?'<a href="#status">Booking Saya</a>':'');
+   else if(r=='vendor') l='<a href="#dashboard">Dashboard Vendor</a><a href="#cara">FAQ</a>';
+   else l='<a href="#admin">Panel Admin</a><a href="#cara">FAQ</a>';
+ 
+-  if(r) a='<details class="mn"><summary aria-label="Menu akun"><span class="av">'+S.user.charAt(0).toUpperCase()+'</span><span>'+S.user+'</span></summary><div class="dd">'+(r=='customer'?'<a href="#status">Booking Saya</a>':r=='vendor'?'<a href="#dashboard">Dashboard</a>':'<a href="#admin">Panel Admin</a>')+'<a href="#beranda" data-a="out">Keluar</a></div></details>';
++  if(r) a='<details class="mn"><summary aria-label="Menu akun"><span class="av">'+escapeUi(S.user.charAt(0).toUpperCase())+'</span><span>'+S.user+'</span></summary><div class="dd">'+(r=='customer'?'<a href="#status">Booking Saya</a>':r=='vendor'?'<a href="#dashboard">Dashboard</a>':'<a href="#admin">Panel Admin</a>')+'<a href="#beranda" data-a="out">Keluar</a></div></details>';
+   else a='<a class="btn" href="#masuk">Masuk</a>';
+ 
+   document.getElementById('nv').innerHTML=l;
+@@ -670,6 +665,10 @@
+ function render(){
+   var r=(location.hash||'#beranda').slice(1);
+   if(!pages[r]) r='beranda';
++  if(AC[r] && S.role !== AC[r]) {
++    r=S.role?(HM[S.role]||'beranda'):'masuk';
++    history.replaceState(null,'','#'+r);
++  }
+   nav();
+   document.getElementById('app').innerHTML=pages[r]();
+   window.scrollTo(0,0);
+@@ -711,9 +710,13 @@
+ 
+ async function initializeLockIn(){
+   try{
+-    await apiRequest('/api/auth/login','POST',{email:'user@lockin.demo',password:'demo123'});
+-    await refreshBookings();
+-  }catch(err){S.bookingsList=[];S.backendError='Booking belum dapat dimuat dari server: '+err.message;}
++    var result=await apiRequest('/api/auth/me');
++    if(result.user){
++      S.role=result.user.role;
++      S.user=result.user.name;
++      if(S.role==='customer') await refreshBookings().catch(function(err){S.backendError=err.message;});
++    }else{S.role=null;S.user='';S.bookingsList=[];}
++  }catch(err){S.role=null;S.user='';S.bookingsList=[];S.backendError=err.message;}
+   render();
+ }
+ 
+@@ -734,22 +737,23 @@
+ }
+ 
+ // Universal Login 1 Pintu
+-function handleUniversalLogin(e){
++async function handleUniversalLogin(e){
+   e.preventDefault();
+   var em=document.getElementById('login-email').value.trim().toLowerCase();
+   var pw=document.getElementById('login-pass').value;
+-  if(em.indexOf('admin')>-1) quickLogin(em,'admin','Admin LockIn');
+-  else if(em.indexOf('vendor')>-1) quickLogin(em,'vendor','Glow Studio PA');
+-  else quickLogin(em,'customer','Rani');
+-}
+-
+-function quickLogin(email,role,name){
+-  S.role=role;
+-  S.user=name;
+-  toast('Berhasil masuk sebagai '+name+' ('+role+')');
+-  if(role==='vendor') go('dashboard');
+-  else if(role==='admin') go('admin');
+-  else go('beranda');
++  var btn=e.target.querySelector('button[type=submit]');
++  if(btn) btn.disabled=true;
++  try{
++    var result=await apiRequest('/api/auth/login','POST',{email:em,password:pw});
++    if(!result.user||!['customer','vendor','admin'].includes(result.user.role)) throw new Error('Role akun tidak valid.');
++    S.role=result.user.role;
++    S.user=result.user.name;
++    S.bookingsList=[];S.activeBid='';S.bookingId='';
++    if(S.role==='customer') await refreshBookings().catch(function(err){S.backendError=err.message;});
++    toast('Berhasil masuk sebagai '+S.user);
++    go(HM[S.role]||'beranda');
++  }catch(err){toast('Login gagal: '+err.message)}
++  finally{if(btn)btn.disabled=false;}
+ }
+ 
+ // Vendor Registration Step 1 & 2
+@@ -1106,7 +1110,11 @@
+     render();
+   }
+   else if(k=='out'){
+-    S.role=null;S.user='';go('beranda');
++    e.preventDefault();
++    apiRequest('/api/auth/logout','POST',{}).then(function(){
++      S.role=null;S.user='';S.bookingsList=[];S.activeBid='';S.bookingId='';
++      toast('Berhasil keluar.');go('beranda');
++    }).catch(function(err){toast('Gagal logout: '+err.message)});
+   }
+   else if(k=='paymidtrans'){
+     var btn=document.getElementById('btn-midtrans');
+diff --git a/backend/tests/auth-access.test.mjs b/backend/tests/auth-access.test.mjs
+new file mode 100644
+--- /dev/null
++++ b/backend/tests/auth-access.test.mjs
+@@ -0,0 +1,77 @@
++import test from 'node:test';
++import assert from 'node:assert/strict';
++import { spawn } from 'node:child_process';
++
++const server = spawn(process.execPath, ['backend/src/index.js'], {
++  cwd: process.cwd(),
++  env: {
++    ...process.env,
++    PORT: '0', HOST: '127.0.0.1',
++    SUPABASE_URL: '', SUPABASE_ANON_KEY: '', SUPABASE_SERVICE_ROLE_KEY: '',
++    MIDTRANS_SERVER_KEY: '', SEPOLIA_RPC_URL: '', SEPOLIA_WRITER_PRIVATE_KEY: ''
++  },
++  stdio: ['ignore', 'pipe', 'pipe']
++});
++let baseUrl;
++let log = '';
++const ready = new Promise((resolve, reject) => {
++  const timer = setTimeout(() => reject(new Error(`Server gagal mulai: ${log}`)), 8000);
++  server.stdout.on('data', chunk => {
++    log += chunk;
++    const match = /http:\/\/127\.0\.0\.1:(\d+)/.exec(log);
++    if (match) { clearTimeout(timer); baseUrl = `http://127.0.0.1:${match[1]}`; resolve(); }
++  });
++  server.once('error', reject);
++});
++async function call(path, { method = 'GET', data, cookie } = {}) {
++  const response = await fetch(baseUrl + path, {
++    method,
++    headers: {
++      ...(cookie ? { cookie } : {}),
++      ...(data ? { 'content-type': 'application/json' } : {})
++    },
++    body: data ? JSON.stringify(data) : undefined
++  });
++  return {
++    status: response.status,
++    data: await response.json(),
++    cookie: response.headers.get('set-cookie')?.split(';')[0]
++  };
++}
++
++test('login dan otorisasi role tidak bisa dipalsukan dari frontend', async t => {
++  await ready;
++  t.after(() => server.kill());
++  const unauthenticated = await call('/api/auth/me');
++  assert.equal(unauthenticated.data.user, null);
++  assert.equal((await call('/api/bookings')).status, 401);
++  assert.equal((await call('/api/auth/login', { method: 'POST', data: {
++    email: 'admin@lockin.demo', password: 'salah'
++  } })).status, 401);
++  const customer = await call('/api/auth/login', { method: 'POST', data: {
++    email: 'user@lockin.demo', password: 'LockInDemo123!'
++  } });
++  assert.equal(customer.status, 200);
++  assert.equal(customer.data.user.role, 'customer');
++  assert.equal((await call('/api/auth/me', { cookie: customer.cookie })).data.user.role, 'customer');
++  assert.equal((await call('/api/disputes', { cookie: customer.cookie })).status, 403);
++  const vendor = await call('/api/auth/login', { method: 'POST', data: {
++    email: 'vendor@lockin.demo', password: 'LockInDemo123!'
++  } });
++  assert.equal(vendor.data.user.role, 'vendor');
++  const admin = await call('/api/auth/login', { method: 'POST', data: {
++    email: 'admin@lockin.demo', password: 'LockInDemo123!'
++  } });
++  assert.equal(admin.data.user.role, 'admin');
++  assert.equal((await call('/api/disputes', { cookie: admin.cookie })).status, 200);
++  assert.equal((await call('/api/auth/logout', { method: 'POST', cookie: admin.cookie })).status, 200);
++  assert.equal((await call('/api/auth/me', { cookie: admin.cookie })).data.user, null);
++  const spoof = await call('/api/auth/register', { method: 'POST', data: {
++    name: 'Coba', email: 'fakeadmin@example.com', password: 'super-secure-test', role: 'admin'
++  } });
++  assert.equal(spoof.status, 201);
++  const spoofLogin = await call('/api/auth/login', { method: 'POST', data: {
++    email: 'fakeadmin@example.com', password: 'super-secure-test'
++  } });
++  assert.equal(spoofLogin.data.user.role, 'customer');
++});
+diff --git a/database/migrations/20261120_auth_profiles.sql b/database/migrations/20261120_auth_profiles.sql
+new file mode 100644
+--- /dev/null
++++ b/database/migrations/20261120_auth_profiles.sql
+@@ -0,0 +1,34 @@
++-- Bootstrap akun yang SUDAH dibuat di Supabase Authentication.
++-- Jalankan melalui SQL Editor setelah memeriksa email dan role yang benar.
++-- Jangan pernah menentukan admin/vendor secara otomatis dari user_metadata;
++-- metadata tersebut tidak boleh menjadi dasar otorisasi.
++-- 1. Tinjau dahulu akun (hasilnya jangan dibagikan ke orang lain):
++SELECT id, email, raw_user_meta_data->>'role' AS claimed_role
++FROM auth.users ORDER BY created_at;
++
++-- 2. Ganti email pada VALUES berikut dengan ketiga akun yang BENAR.
++-- Role pada VALUES adalah keputusan admin proyek, bukan role yang dikirim user.
++-- Jika belum siap mengisi ketiganya, JANGAN jalankan INSERT ini.
++WITH approved_accounts (email, role) AS (
++  VALUES
++    ('REPLACE_CUSTOMER_EMAIL', 'customer'),
++    ('REPLACE_VENDOR_EMAIL', 'vendor'),
++    ('REPLACE_ADMIN_EMAIL', 'admin')
++)
++INSERT INTO public.users (id, name, email, role)
++SELECT a.id,
++       COALESCE(NULLIF(a.raw_user_meta_data->>'name',''), split_part(a.email,'@',1)),
++       a.email, p.role
++FROM auth.users AS a
++JOIN approved_accounts AS p ON lower(p.email) = lower(a.email)
++WHERE p.role IN ('customer','vendor','admin')
++ON CONFLICT (id) DO UPDATE SET
++  name = EXCLUDED.name, email = EXCLUDED.email, role = EXCLUDED.role;
++
++-- 3. Hak minimal untuk service_role mengelola profil dan sesi backend.
++GRANT USAGE ON SCHEMA public TO service_role;
++GRANT SELECT, INSERT ON public.users TO service_role;
++GRANT SELECT, INSERT, DELETE ON public.sessions TO service_role;
++
++-- 4. Validasi setelah bootstrap:
++SELECT role, count(*) AS jumlah FROM public.users GROUP BY role ORDER BY role;
+diff --git a/docs/AUTH_SETUP.md b/docs/AUTH_SETUP.md
+new file mode 100644
+--- /dev/null
++++ b/docs/AUTH_SETUP.md
+@@ -0,0 +1,20 @@
++# LockIn — Penyelarasan Login dan Hak Akses
++
++- Login diproses melalui `POST /api/auth/login` dan Supabase Auth memakai **anon key**.
++- Query database dan penyimpanan sesi menggunakan service-role client yang **terpisah**.
++- Role dan nama pengguna dikembalikan dari `public.users`, bukan ditebak dari email atau `user_metadata.role`.
++- Login dengan akun yang belum ada di `public.users` akan ditolak dengan pesan sinkronisasi profil.
++- Pendaftaran mandiri selalu membuat akun **customer**; akun vendor dan admin ditetapkan oleh pengelola, bukan dari input user.
++- Logout menghapus sesi server. Role di browser hanya mengatur tampilan; API tetap mengecek hak akses.
++
++## Setup akun demo Supabase yang sudah dibuat
++
++1. Pastikan `.env` server berisi `SUPABASE_URL`, `SUPABASE_ANON_KEY`, dan `SUPABASE_SERVICE_ROLE_KEY` milik proyek yang sama.
++2. Di SQL Editor, buka `database/migrations/20261120_auth_profiles.sql`, baca dan isi tiga **email asli** pada `VALUES`. Pastikan masing-masing memang layak diberi role customer/vendor/admin.
++3. Jalankan SQL tersebut. Periksa hasil query akhir: satu akun tiap role.
++4. Restart backend, login melalui halaman `Masuk` menggunakan email dan password Supabase Auth yang sah.
++5. Coba akses role lain: customer tidak boleh memanggil API admin/vendor yang membutuhkan otorisasi.
++
++Jangan memasukkan SQL mentah dari seluruh `schema.sql` untuk memperbaiki login. Tabel `vendors` tetap memerlukan data vendor dan `owner_id` yang menunjuk pada `public.users.id` milik vendor.
++
++**Catatan:** Jika email confirmation Supabase aktif, pelanggan perlu memverifikasi email sebelum bisa login. Pengujian otomatis lokal tidak menguji koneksi Supabase live.

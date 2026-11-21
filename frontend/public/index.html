@@ -150,15 +150,12 @@ footer .w{display:flex;justify-content:space-between;align-items:center;flex-wra
 <script>
 var S={
   city:'Malang',cc:'Malang',eventDate:'',mode:'dp',lunas:false,req:null,vid:0,pkg:1,
-  role:'customer',user:'Rani',next:null,dispute:false,vf:'',pay:'Midtrans',sc:'sukses',item:'g',stage:1,
-  cat:'Semua',dec:'vendor',agree:false,bookingId:'LK-2611',
-  activeBid:'LK-2611',
+  role:null,user:'',next:null,vf:'',pay:'Midtrans',sc:'sukses',item:'g',stage:1,
+  cat:'Semua',dec:'vendor',agree:false,bookingId:'',
+  activeBid:'',
   vendorArrived:false,
   arrivalOtp:'482910',
-  bookingsList:[
-    { id:'LK-2611', vid:1, pkg:1, date:'2026-11-28', price:150000, dpPaid:49500, rest:105000, state:'DPPaid', arrived:false, otp:'482910' },
-    { id:'LI-0E050F78', vid:0, pkg:2, date:'2026-11-25', price:249000, dpPaid:82170, rest:174300, state:'DPPaid', arrived:false, otp:'729401' }
-  ]
+  bookingsList:[],backendError:''
 };
 
 var CAT={MUA:'MUA',Stylist:'Hijab & Hair Stylist',GCC:'Graduation Content Creator',PA:'PA Wisuda',Sign:'Acrylic Standing Sign'},
@@ -450,11 +447,15 @@ var pages={
   },
 
   status:function(){
-    var c=calc(),st=S.stage,sg=S.item=='s';
-    var curBid=S.activeBid||'LK-2611';
+    var curBid=S.activeBid;
     var bItem=S.bookingsList.find(function(b){return b.id===curBid})||S.bookingsList[0];
-    var vName=VD[bItem.vid]?VD[bItem.vid].n:'Vendor Wisuda';
-    var vCat=VD[bItem.vid]?CAT[VD[bItem.vid].c]:'Layanan Wisuda';
+    if(!bItem) return '<div class="w" style="padding-top:24px"><div class="card pad"><h1>Booking Saya</h1><p class="mut">'+(S.backendError||'Belum ada booking. Booking baru akan muncul di sini.')+'</p><a class="btn" href="#daftar">Cari Vendor</a></div></div>';
+    var c=calc(),st=bItem.executionStatus==='COMPLETED'||bItem.state==='Completed'?3:bItem.executionStatus==='IN_PROGRESS'||bItem.arrived?2:1;
+    var isCancelled=bItem.state==='Cancelled',isDisputed=!!(bItem.dispute||bItem.disputed);
+    var isPaid=bItem.paymentStatus==='PAID'||['Paid','Completed','Resolved'].indexOf(bItem.state)>=0;
+    var vName=bItem.vendor_name||(VD[bItem.vid]?VD[bItem.vid].n:'Vendor Wisuda');
+    var vCat=bItem.category||(VD[bItem.vid]?CAT[VD[bItem.vid].c]:'Layanan Wisuda');
+    var statusLabel={Pending:'Menunggu pembayaran',WaitingVendorApproval:'Menunggu persetujuan vendor',DPPaid:'DP dibayar',Paid:'Lunas',Completed:'Selesai',Cancelled:'Dibatalkan',Expired:'Kedaluwarsa',Disputed:'Dalam sengketa',Resolved:'Sengketa selesai'}[bItem.state]||bItem.state;
 
     var T=function(ok,t,sub){
       return '<div style="display:flex;gap:14px;align-items:flex-start;padding:12px 0;border-bottom:1px solid var(--b)">'
@@ -475,18 +476,17 @@ var pages={
       +'<div class="booking-cards-grid">'
       +S.bookingsList.map(function(b){
         var isSel = b.id === curBid;
-        var bv = VD[b.vid];
-        var bName = bv ? bv.n : 'Vendor Wisuda';
-        var bCat = bv ? CAT[bv.c] : 'Layanan';
+        var bName = b.vendor_name||(VD[b.vid] ? VD[b.vid].n : 'Vendor Wisuda');
+        var bCat = b.category||(VD[b.vid] ? CAT[VD[b.vid].c] : 'Layanan');
         var total = b.price + Math.round(b.price * 0.03);
         return '<div class="b-card'+(isSel?' active':'')+'" onclick="switchBooking(\''+b.id+'\')">'
           +'<div>'
           +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">'
-          +'<span class="tag ok" style="font-size:11px">🟢 DP Terkunci di Escrow</span>'
+          +'<span class="tag '+(b.state==='Cancelled'?'':'ok')+'" style="font-size:11px">'+({Pending:'Menunggu pembayaran',WaitingVendorApproval:'Menunggu vendor',DPPaid:'DP dibayar',Paid:'Lunas',Completed:'Selesai',Cancelled:'Dibatalkan',Expired:'Kedaluwarsa',Disputed:'Dalam sengketa',Resolved:'Sengketa selesai'}[b.state]||b.state)+'</span>'
           +'<b style="font-size:13px;color:var(--p)">#'+b.id+'</b>'
           +'</div>'
           +'<h3 style="margin:0 0 4px;font-size:17px;color:var(--t)">'+bName+'</h3>'
-          +'<div class="mut" style="font-size:13px;margin-bottom:12px">'+bCat+' &middot; 📅 '+b.date+' &middot; 📍 Malang</div>'
+          +'<div class="mut" style="font-size:13px;margin-bottom:12px">'+bCat+' &middot; '+b.date+' &middot; '+(b.location||'Malang')+'</div>'
           +'</div>'
           +'<div style="display:flex;justify-content:space-between;align-items:center;padding-top:10px;border-top:1px solid var(--b);font-size:13px">'
           +'<span>Total: <b>'+rp(total)+'</b></span>'
@@ -500,7 +500,7 @@ var pages={
       +'<div style="margin-top:20px;border-top:2px solid var(--b);padding-top:20px">'
       +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">'
       +'<h2 style="margin:0;font-size:20px">Detail Pesanan: <span style="color:var(--p)">#'+curBid+'</span> &mdash; '+vName+'</h2>'
-      +'<span class="tag ok">Escrow Aman</span>'
+      +'<span class="tag '+(isCancelled?'':'ok')+'">'+statusLabel+'</span>'
       +'</div>'
       +'<div class="two" style="padding-top:0">'
       +'<div>'
@@ -508,20 +508,23 @@ var pages={
       +'<div class="card pad" style="margin-bottom:20px">'
       +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">'
       +'<div><h3 style="margin:0;font-size:17px">'+curBid+' &middot; '+vName+'</h3><span class="mut" style="font-size:13px">'+vCat+' &middot; Tanggal Acara: '+bItem.date+'</span></div>'
-      +'<span class="tag ok" style="font-size:13px">DP Terverifikasi</span></div>'
-      +(S.dispute?'<div class="msg" style="background:#FEF2F2;border:1px solid #FCA5A5;color:#991B1B"><b>⚠️ Keluhan diajukan. Pencairan dana ditahan sampai admin memutuskan.</b><p style="margin:4px 0 0;font-size:13px">Tim mediator LockIn sedang meninjau bukti yang telah diunggah.</p></div>':'')
-      +T(1,'Perjanjian Digital Ditandatangani','Kunci kesepakatan on-chain SHA-256')
-      +T(1,'DP 30% Telah Dibayar ('+rp(bItem.dpPaid)+')','Dana aman tersimpan di Rekening Escrow LockIn')
-      +T(S.lunas,'Pelunasan 70% ('+rp(bItem.rest)+')',S.lunas?'Pelunasan berhasil dikonfirmasi':'Jatuh tempo paling lambat H-1 acara')
-      +T(bItem.arrived,'Verifikasi Kehadiran Vendor di Hari H',bItem.arrived?'Vendor telah tiba dan check-in resmi via OTP':'Tunjukkan kode OTP saat vendor tiba di lokasi')
-      +T(st>=2,'Pelaksanaan Acara Selesai','Vendor menyelesaikan layanan sesuai kontrak')
-      +T(st>=3,'Konfirmasi Selesai &amp; Dana Dicairkan','Dana escrow diteruskan ke rekening vendor')
+      +'<span class="tag '+(isCancelled?'':'ok')+'" style="font-size:13px">'+statusLabel+'</span></div>'
+      +(isDisputed?'<div class="msg" style="background:#FEF2F2;border:1px solid #FCA5A5;color:#991B1B"><b>⚠️ Keluhan diajukan. Pencairan dana ditahan sampai admin memutuskan.</b><p style="margin:4px 0 0;font-size:13px">Tim mediator LockIn sedang meninjau bukti yang telah diunggah.</p></div>':'')
+      +(isCancelled?'<div class="msg" style="margin:12px 0;background:#FFF7ED;border:1px solid #FDBA74"><b>Booking dibatalkan</b><br>Aturan: '+(bItem.cancellation_refund_description||'Refund sesuai kebijakan booking.')+'<br>Dikembalikan: <b>'+rp(bItem.cancellation_refund||0)+'</b><br>Tidak dikembalikan: <b>'+rp(bItem.cancellation_not_refunded||0)+'</b></div>':'')
+      +(!isCancelled?T(1,'Perjanjian Digital Disetujui','Kesepakatan tersimpan pada booking'):'')
+      +(!isCancelled?T(bItem.dpPaid>0,'DP Dibayar ('+rp(bItem.dpPaid)+')',bItem.dpPaid>0?'Status pembayaran dari backend':'Menunggu pembayaran DP'):'')
+      +(!isCancelled?T(isPaid,'Pelunasan ('+rp(bItem.rest)+')',isPaid?'Pelunasan terverifikasi oleh backend':'Jatuh tempo sesuai perjanjian'):'')
+      +(!isCancelled?T(bItem.arrived,'Verifikasi Kehadiran Vendor di Hari H',bItem.arrived?'Vendor telah tiba dan check-in resmi via OTP':'Tunjukkan kode OTP saat vendor tiba di lokasi'):'')
+      +(!isCancelled?T(st>=2,st>=3?'Pelaksanaan Acara Selesai':'Pelaksanaan Acara Berlangsung',st>=3?'Vendor menyelesaikan layanan sesuai kontrak':'Kehadiran vendor tercatat; menunggu konfirmasi penyelesaian'):'')
+      +(!isCancelled?T(st>=3,'Konfirmasi Selesai &amp; Dana Dicairkan','Dana escrow diteruskan ke rekening vendor'):'')
       // Action buttons
       +'<div style="margin-top:20px;display:flex;gap:10px;flex-wrap:wrap">'
-      +(!S.lunas&&!S.dispute?'<button class="btn" data-a="payrest">Bayar Pelunasan Sekarang</button>':'')
-      +(bItem.arrived&&st<2&&!S.dispute?'<button class="btn" data-a="vdone" style="background:#059669">✅ Acara Berjalan Lancar (Tandai Selesai)</button>':'')
-      +(st==2&&!S.dispute?'<button class="btn" data-a="confirm" style="background:#059669">✅ Konfirmasi Selesai &amp; Beri Rating</button>':'')
-      +(!S.dispute?'<button class="btn o" data-a="open-complain" style="color:#DC2626;border-color:#DC2626">⚠️ Ajukan Keluhan / Sengketa</button>':'')
+      +(S.role==='customer'&&['Pending','WaitingVendorApproval'].indexOf(bItem.state)>=0&&!isCancelled?'<button class="btn" data-a="paydp">Lanjut Bayar DP</button>':'')
+      +(S.role==='customer'&&bItem.state==='DPPaid'&&!isDisputed&&!isCancelled?'<button class="btn" data-a="payrest">Bayar Pelunasan Sekarang</button>':'')
+      +(S.role==='customer'&&['Pending','WaitingVendorApproval','DPPaid','Paid'].indexOf(bItem.state)>=0&&!isDisputed&&!isCancelled?'<button class="btn o" data-a="cancel-booking" style="color:#DC2626;border-color:#DC2626">Batalkan Booking</button>':'')
+      +(bItem.arrived&&st<2&&!isDisputed&&!isCancelled?'<button class="btn" data-a="vdone" style="background:#059669">✅ Acara Berjalan Lancar (Tandai Selesai)</button>':'')
+      +(st==2&&!isDisputed&&!isCancelled?'<button class="btn" data-a="confirm" style="background:#059669">✅ Konfirmasi Selesai &amp; Beri Rating</button>':'')
+      +(['DPPaid','Paid'].indexOf(bItem.state)>=0&&!isDisputed&&!isCancelled?'<button class="btn o" data-a="open-complain" style="color:#DC2626;border-color:#DC2626">⚠️ Ajukan Keluhan / Sengketa</button>':'')
       +'</div>'
       +'<div style="margin-top:16px;padding:12px;background:#F8FAFC;border:1px solid var(--b);border-radius:12px;font-size:12px;color:var(--m)">'
       +'ℹ️ <b>Sanksi Otomatis Luar Web:</b> Pelunasan wajib diselesaikan melalui sistem paling lambat H-1. Jika sampai H+2 setelah acara belum dilunasi tanpa persetujuan admin, sistem otomatis mendeteksi transaksi luar web dengan penalti 30% dari saldo tertahan.'
@@ -531,7 +534,7 @@ var pages={
       // Sisi Kanan: OTP Arrival Check-in Card + Bukti Blockchain
       +'<div>'
       // Card OTP Kedatangan Vendor
-      +'<div class="card pad" style="margin-bottom:20px;border:2px solid var(--p);background:#EFF6FF">'
+      +'<div class="card pad" style="margin-bottom:20px;border:2px solid var(--p);background:#EFF6FF;display:'+(isCancelled?'none':'block')+'">'
       +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">'
       +'<h3 style="margin:0;font-size:16px;color:var(--p)">📍 Kode OTP Kehadiran Vendor</h3>'
       +'<span class="tag '+(bItem.arrived?'ok':'')+'">'+(bItem.arrived?'Sudah Check-In':'Belum Tiba')+'</span></div>'
@@ -539,7 +542,7 @@ var pages={
       +'<div style="background:#fff;border:2px dashed var(--p);border-radius:12px;padding:14px;text-align:center;letter-spacing:6px;font-size:26px;font-weight:800;color:var(--p);font-family:ui-monospace,monospace">'
       +bItem.otp
       +'</div>'
-      +(!bItem.arrived
+      +(!bItem.arrived&&!isCancelled
         ?'<button class="btn o blk" style="margin-top:12px;font-size:13px;background:#fff" onclick="simulateVendorArrival(\''+curBid+'\')">Simulasikan Vendor Check-in dengan Kode</button>'
         :'<div style="margin-top:10px;font-size:12px;color:#166534;text-align:center">✅ <b>Vendor Terverifikasi Hadir di Lokasi!</b></div>')
       +'</div>'
@@ -565,18 +568,12 @@ var pages={
       +'<p class="mut" style="font-size:13px;margin:0 0 18px">Gunakan 1 pintu masuk untuk semua akun (Pelanggan, Vendor, atau Admin).</p>'
       +'<form onsubmit="handleUniversalLogin(event)">'
       +'<label for="login-email">Alamat Email</label>'
-      +'<input type="email" id="login-email" placeholder="nama@email.com" value="user@lockin.demo" required style="margin-bottom:12px">'
+      +'<input type="email" id="login-email" placeholder="nama@email.com" autocomplete="username" required style="margin-bottom:12px">'
       +'<label for="login-pass">Kata Sandi</label>'
-      +'<input type="password" id="login-pass" value="demo123" required style="margin-bottom:16px">'
+      +'<input type="password" id="login-pass" autocomplete="current-password" required style="margin-bottom:16px">'
       +'<button class="btn blk" type="submit" style="font-size:15px;padding:14px">Masuk ke Akun</button>'
       +'</form>'
-      +'<div style="margin-top:20px;padding-top:16px;border-top:1px dashed var(--b)">'
-      +'<span class="mut" style="font-size:12px;font-weight:700;display:block;margin-bottom:8px">Uji Coba Cepat (Akun Demo):</span>'
-      +'<div style="display:flex;gap:6px;flex-direction:column">'
-      +'<button class="btn o" style="font-size:12px;padding:8px" onclick="quickLogin(\'user@lockin.demo\',\'customer\',\'Rani\')">🎓 Masuk sbg Rani (Pelanggan)</button>'
-      +'<button class="btn o" style="font-size:12px;padding:8px" onclick="quickLogin(\'vendor@lockin.demo\',\'vendor\',\'Glow Studio PA\')">💼 Masuk sbg Vendor</button>'
-      +'<button class="btn o" style="font-size:12px;padding:8px" onclick="quickLogin(\'admin@lockin.demo\',\'admin\',\'Admin LockIn\')">🛡️ Masuk sbg Admin</button>'
-      +'</div></div></div></div>';
+      +'</div></div>';
   },
 
   'daftar-vendor':function(){
@@ -649,13 +646,14 @@ var AC={status:'customer',checkout:'customer',dashboard:'vendor',admin:'admin'};
 var LG={customer:'masuk',vendor:'masuk',admin:'masuk'};
 var HM={customer:'beranda',vendor:'dashboard',admin:'admin'};
 
+function escapeUi(v){return String(v==null?'':v).replace(/[&<>\"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[c]})}
 function nav(){
   var r=S.role,l='',a='';
   if(!r||r=='customer') l='<a href="#beranda">Beranda</a><a href="#daftar">Cari Vendor</a><a href="#cara">FAQ</a>'+(r?'<a href="#status">Booking Saya</a>':'');
   else if(r=='vendor') l='<a href="#dashboard">Dashboard Vendor</a><a href="#cara">FAQ</a>';
   else l='<a href="#admin">Panel Admin</a><a href="#cara">FAQ</a>';
 
-  if(r) a='<details class="mn"><summary aria-label="Menu akun"><span class="av">'+S.user.charAt(0).toUpperCase()+'</span><span>'+S.user+'</span></summary><div class="dd">'+(r=='customer'?'<a href="#status">Booking Saya</a>':r=='vendor'?'<a href="#dashboard">Dashboard</a>':'<a href="#admin">Panel Admin</a>')+'<a href="#beranda" data-a="out">Keluar</a></div></details>';
+  if(r) a='<details class="mn"><summary aria-label="Menu akun"><span class="av">'+escapeUi(S.user.charAt(0).toUpperCase())+'</span><span>'+S.user+'</span></summary><div class="dd">'+(r=='customer'?'<a href="#status">Booking Saya</a>':r=='vendor'?'<a href="#dashboard">Dashboard</a>':'<a href="#admin">Panel Admin</a>')+'<a href="#beranda" data-a="out">Keluar</a></div></details>';
   else a='<a class="btn" href="#masuk">Masuk</a>';
 
   document.getElementById('nv').innerHTML=l;
@@ -667,12 +665,19 @@ function nav(){
 function render(){
   var r=(location.hash||'#beranda').slice(1);
   if(!pages[r]) r='beranda';
+  if(AC[r] && S.role !== AC[r]) {
+    r=S.role?(HM[S.role]||'beranda'):'masuk';
+    history.replaceState(null,'','#'+r);
+  }
   nav();
   document.getElementById('app').innerHTML=pages[r]();
   window.scrollTo(0,0);
 }
 
-window.addEventListener('hashchange',render);
+window.addEventListener('hashchange',function(){
+  if((location.hash||'').slice(1)==='status'&&S.role==='customer') refreshBookings().then(render).catch(function(err){S.backendError=err.message;render();toast(err.message)});
+  else render();
+});
 document.addEventListener('change',function(e){
   var t=e.target.id;
   if(t=='cty'){S.city=e.target.value;if(S.city!='Semua kota')S.cc=S.city;render()}
@@ -682,10 +687,46 @@ document.addEventListener('change',function(e){
 
 function go(n){location.hash='#'+n;render()}
 
+async function apiRequest(path,method,body){
+  var res=await fetch(path,{method:method||'GET',headers:body?{'Content-Type':'application/json'}:{},body:body?JSON.stringify(body):undefined,credentials:'same-origin'});
+  var data=await res.json().catch(function(){return {}});
+  if(!res.ok) throw new Error(data.error||'Permintaan gagal ('+res.status+').');
+  return data;
+}
+
+function normalizeBooking(b){
+  return Object.assign({},b,{date:b.event_date,dpPaid:Number(b.paid)||0,rest:Math.max(0,(Number(b.price)||0)-(Number(b.paid)||0)),arrived:!!b.vendor_arrived,otp:b.arrival_code||'',disputed:!!b.dispute});
+}
+
+async function refreshBookings(selectedId){
+  var rows=await apiRequest('/api/bookings');
+  S.bookingsList=rows.map(normalizeBooking);
+  var selected=S.bookingsList.find(function(b){return b.id===(selectedId||S.activeBid)})||S.bookingsList[0];
+  if(selected){
+    try{selected=normalizeBooking(await apiRequest('/api/bookings/'+encodeURIComponent(selected.id)));S.bookingsList=S.bookingsList.map(function(b){return b.id===selected.id?selected:b});}
+    catch(err){throw new Error('Booking termuat, tetapi detail/status gagal dibaca: '+err.message)}
+    S.activeBid=selected.id;S.bookingId=selected.id;S.lunas=selected.paymentStatus==='PAID'||['Paid','Completed','Resolved'].indexOf(selected.state)>=0;
+  }else{S.activeBid='';S.bookingId='';S.lunas=false;}
+  S.backendError='';
+  return S.bookingsList;
+}
+
+async function initializeLockIn(){
+  try{
+    var result=await apiRequest('/api/auth/me');
+    if(result.user){
+      S.role=result.user.role;
+      S.user=result.user.name;
+      if(S.role==='customer') await refreshBookings().catch(function(err){S.backendError=err.message;});
+    }else{S.role=null;S.user='';S.bookingsList=[];}
+  }catch(err){S.role=null;S.user='';S.bookingsList=[];S.backendError=err.message;}
+  render();
+}
+
 // Multi-booking switcher
 function switchBooking(bid){
   S.activeBid=bid;
-  render();
+  refreshBookings(bid).then(render).catch(function(err){S.backendError=err.message;render();toast(err.message)});
 }
 
 // Simulasi check-in kehadiran vendor via OTP
@@ -699,22 +740,23 @@ function simulateVendorArrival(bid){
 }
 
 // Universal Login 1 Pintu
-function handleUniversalLogin(e){
+async function handleUniversalLogin(e){
   e.preventDefault();
   var em=document.getElementById('login-email').value.trim().toLowerCase();
   var pw=document.getElementById('login-pass').value;
-  if(em.indexOf('admin')>-1) quickLogin(em,'admin','Admin LockIn');
-  else if(em.indexOf('vendor')>-1) quickLogin(em,'vendor','Glow Studio PA');
-  else quickLogin(em,'customer','Rani');
-}
-
-function quickLogin(email,role,name){
-  S.role=role;
-  S.user=name;
-  toast('Berhasil masuk sebagai '+name+' ('+role+')');
-  if(role==='vendor') go('dashboard');
-  else if(role==='admin') go('admin');
-  else go('beranda');
+  var btn=e.target.querySelector('button[type=submit]');
+  if(btn) btn.disabled=true;
+  try{
+    var result=await apiRequest('/api/auth/login','POST',{email:em,password:pw});
+    if(!result.user||!['customer','vendor','admin'].includes(result.user.role)) throw new Error('Role akun tidak valid.');
+    S.role=result.user.role;
+    S.user=result.user.name;
+    S.bookingsList=[];S.activeBid='';S.bookingId='';
+    if(S.role==='customer') await refreshBookings().catch(function(err){S.backendError=err.message;});
+    toast('Berhasil masuk sebagai '+S.user);
+    go(HM[S.role]||'beranda');
+  }catch(err){toast('Login gagal: '+err.message)}
+  finally{if(btn)btn.disabled=false;}
 }
 
 // Vendor Registration Step 1 & 2
@@ -818,8 +860,8 @@ function confirmBankAgreement(){
 function openInvoiceModal(){
   var curBid=S.activeBid||'LK-2611';
   var bItem=S.bookingsList.find(function(b){return b.id===curBid})||S.bookingsList[0];
-  var vName=VD[bItem.vid]?VD[bItem.vid].n:'Vendor Wisuda';
-  var vCat=VD[bItem.vid]?CAT[VD[bItem.vid].c]:'Layanan Wisuda';
+  var vName=bItem.vendor_name||(VD[bItem.vid]?VD[bItem.vid].n:'Vendor Wisuda');
+  var vCat=bItem.category||(VD[bItem.vid]?CAT[VD[bItem.vid].c]:'Layanan Wisuda');
   var fee=Math.round(bItem.price*0.03);
   var total=bItem.price+fee;
   var invoiceNo='INV/2026/'+curBid;
@@ -947,9 +989,11 @@ function openSnapModal(token, redirectUrl, bookingId) {
         },
         onError: function(result) {
           toast('❌ Pembayaran gagal.');
+          closeSnapModalAndSync(bookingId);
         },
         onClose: function() {
           toast('Pop-up pembayaran ditutup.');
+          closeSnapModalAndSync(bookingId);
         }
       });
       return;
@@ -983,10 +1027,7 @@ function closeSnapModalAndSync(bookingId) {
   var m = document.getElementById('snap-inpage-modal');
   if (m) m.remove();
   toast('Sinkronisasi status pembayaran...');
-  fetch('/api/bookings/' + bookingId + '/sync-payment', { method: 'POST' }).finally(function() {
-    if (S.mode === 'lunas') S.lunas = true; else S.stage = 1;
-    go('status');
-  });
+  apiRequest('/api/bookings/' + encodeURIComponent(bookingId) + '/sync-payment','POST',{}).catch(function(err){toast('Sinkronisasi gateway: '+err.message)}).then(function(){return refreshBookings(bookingId)}).then(function(){S.mode='dp';go('status')}).catch(function(err){toast('Status pembayaran belum dapat dibaca: '+err.message)});
 }
 
 // Global Click Delegation
@@ -995,8 +1036,46 @@ document.addEventListener('click',function(e){
   if(!a) return;
   var k=a.dataset.a,v=a.dataset.v;
 
+  if(k==='confirm'){
+    e.stopImmediatePropagation();
+    apiRequest('/api/bookings/'+encodeURIComponent(S.activeBid)+'/complete','POST',{}).then(function(){return refreshBookings(S.activeBid)}).then(function(){toast('Penyelesaian booking tercatat.');render()}).catch(function(err){toast(err.message)});
+    return;
+  }
+  if(k==='cancel-booking'){
+    e.stopImmediatePropagation();
+    (async function(){
+      try{
+        var estimateData=await apiRequest('/api/bookings/'+encodeURIComponent(S.activeBid)+'/refund-estimate');
+        var estimate=estimateData.estimate;
+        var confirmText='Aturan refund: '+estimate.description+'\n\nEstimasi dikembalikan: '+rp(estimate.refundAmount)+'\nTidak dikembalikan: '+rp(estimate.notRefundedAmount)+'\n\nBatalkan booking ini?';
+        if(!window.confirm(confirmText)) return;
+        await apiRequest('/api/bookings/'+encodeURIComponent(S.activeBid)+'/cancel','POST',{});
+        await refreshBookings(S.activeBid);
+        toast('Booking dibatalkan dan hasil refund tersimpan.');
+        render();
+      }catch(err){toast('Pembatalan gagal: '+err.message)}
+    })();
+    return;
+  }
+  if(k==='open-complain'){
+    e.stopImmediatePropagation();
+    (async function(){
+      try{
+        var reason=window.prompt('Masukkan kronologi keluhan sengketa:');
+        if(!reason||!reason.trim()) return;
+        var evidence=window.prompt('Masukkan bukti atau tautan pendukung keluhan:');
+        if(!evidence||!evidence.trim()) return;
+        await apiRequest('/api/bookings/'+encodeURIComponent(S.activeBid)+'/dispute','POST',{reason:reason.trim(),evidence:evidence.trim()});
+        await refreshBookings(S.activeBid);
+        toast('Keluhan tersimpan untuk booking '+S.activeBid+'.');
+        render();
+      }catch(err){toast('Keluhan gagal disimpan: '+err.message)}
+    })();
+    return;
+  }
+
   if(k=='cat'){S.cat=v;render();}
-  else if(k=='item'){S.vid=+v;S.item=VD[S.vid].c=='Sign'?'s':'g';S.pkg=1;go('vendor');}
+  else if(k=='item'){S.vid=+v;S.item=VD[S.vid].c=='Sign'?'s':'g';S.pkg=1;S.activeBid='';S.bookingId='';go('vendor');}
   else if(k=='selpkg'){S.pkg=+v;render();}
   else if(k=='search'){
     var mp={'PA Wisuda':'PA','Graduation Content Creator':'GCC','Hijab & Hair Stylist':'Stylist','MUA':'MUA','Acrylic Standing Sign':'Sign'},sv=document.getElementById('b'),dd=document.getElementById('d');
@@ -1004,6 +1083,10 @@ document.addEventListener('click',function(e){
   }
   else if(k=='payrest'){
     S.mode='lunas';
+    go('checkout');
+  }
+  else if(k=='paydp'){
+    S.mode='dp';
     go('checkout');
   }
   else if(k=='vdone'){
@@ -1018,9 +1101,12 @@ document.addEventListener('click',function(e){
   }
   else if(k=='open-complain'){
     var r=prompt('Masukkan kronologi keluhan sengketa:');
-    if(r){
-      S.dispute=true;
-      toast('⚠️ Keluhan diajukan. Pencairan dana ditahan sampai admin memutuskan.');
+    if(r && r.trim()){
+      var selectedBooking=S.bookingsList.find(function(b){return b.id===S.activeBid;});
+      if(!selectedBooking){toast('Booking tidak ditemukan.');return;}
+      selectedBooking.disputed=true;
+      selectedBooking.complaintText=r.trim();
+      toast('⚠️ Keluhan diajukan untuk booking '+selectedBooking.id+'.');
       render();
     }
   }
@@ -1029,95 +1115,60 @@ document.addEventListener('click',function(e){
     render();
   }
   else if(k=='out'){
-    S.role=null;S.user='';go('beranda');
+    e.preventDefault();
+    apiRequest('/api/auth/logout','POST',{}).then(function(){
+      S.role=null;S.user='';S.bookingsList=[];S.activeBid='';S.bookingId='';
+      toast('Berhasil keluar.');go('beranda');
+    }).catch(function(err){toast('Gagal logout: '+err.message)});
   }
   else if(k=='paymidtrans'){
     var btn=document.getElementById('btn-midtrans');
-    if(btn){btn.disabled=true;btn.textContent='Menghubungkan Midtrans...';}
-    toast('Membuka gateway pembayaran Midtrans...');
-
+    if(btn){btn.disabled=true;btn.textContent='Memproses pembayaran...';}
     (async function(){
       try{
-        // 1. Pastikan selalu terautentikasi di backend
-        await fetch('/api/auth/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: 'user@lockin.demo', password: 'demo123' })
-        }).catch(function(){});
-
-        var bid = S.activeBid || S.bookingId;
-        var vendorId = (S.vid != null ? Number(S.vid) : 0) + 1;
-        if(vendorId > 6 || vendorId < 1) vendorId = 1;
-        var futureDate = S.eventDate || new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0];
-
-        // 2. Jika mode DP, buatkan booking baru di backend jika belum dibuat
-        if(S.mode === 'dp') {
-          var bRes = await fetch('/api/bookings', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              vendorId: vendorId,
-              date: futureDate,
-              location: S.cc || S.city || 'Malang',
-              startTime: '08:00',
-              agreed: true
-            })
-          }).catch(function(){return null;});
-
-          if(bRes && bRes.ok) {
-            var bData = await bRes.json().catch(function(){return {};});
-            if(bData && bData.id) {
-              bid = bData.id;
-              S.bookingId = bid;
-              S.activeBid = bid;
-              var c = calc();
-              if(!S.bookingsList.find(function(x){return x.id === bid})) {
-                S.bookingsList.unshift({
-                  id: bid,
-                  vid: S.vid,
-                  pkg: S.pkg,
-                  date: futureDate,
-                  price: c.i.p,
-                  dpPaid: c.total,
-                  rest: c.rest,
-                  state: 'DPPaid',
-                  arrived: false,
-                  otp: bData.arrival_code || '482910'
-                });
-              }
-            }
+        var bid=S.activeBid;
+        var active=S.bookingsList.find(function(b){return b.id===bid;});
+        if(S.mode==='dp'&&(!active||!['Pending','WaitingVendorApproval'].includes(active.state))){
+          var vendorId=(S.vid!=null?Number(S.vid):0)+1;
+          if(vendorId>6||vendorId<1) vendorId=1;
+          var vendorRows=await apiRequest('/api/vendors');
+          if(vendorRows.length&&typeof vendorRows[0].id==='string'){
+            var front=VD[S.vid],categoryMap={MUA:'MUA',Stylist:'Hijab & Hair Stylist',GCC:'GCC',PA:'PA Wisuda',Sign:'Standing Sign'};
+            var category=categoryMap[front&&front.c];
+            var options=vendorRows.filter(function(x){return x.category===category;});
+            if(!options.length) throw new Error('Vendor kategori ini belum tersedia di database.');
+            options.sort(function(x,y){return Math.abs((x.price||0)-(calc().i.p||0))-Math.abs((y.price||0)-(calc().i.p||0));});
+            vendorId=options[0].id;
           }
+          var futureDate=S.eventDate||new Date(Date.now()+14*86400000).toISOString().split('T')[0];
+          var created=await apiRequest('/api/bookings','POST',{vendorId:vendorId,date:futureDate,location:S.cc||S.city||'Malang',startTime:'08:00',agreed:true});
+          bid=created.id;S.activeBid=bid;S.bookingId=bid;
+          await refreshBookings(bid);
         }
-
-        if(!bid) bid = 'LK-2611';
-
-        // 3. Minta token pembayaran Snap dari backend
-        var pRes = await fetch('/api/bookings/' + bid + '/payment', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ method: 'QRIS', outcome: 'success' })
-        }).catch(function(){return null;});
-
-        var pData = pRes ? await pRes.json().catch(function(){return {};}) : {};
+        if(!bid) throw new Error('Pilih booking untuk melakukan pembayaran.');
+        active=S.bookingsList.find(function(b){return b.id===bid;});
+        var expectedState=active&&active.state;
+        var isFinal=S.mode==='lunas';
+        var payment=await apiRequest('/api/bookings/'+encodeURIComponent(bid)+'/payment','POST',{method:'QRIS',outcome:'success',expectedState:expectedState,paymentType:isFinal?'FINAL':'DP',confirmedFinal:isFinal});
         if(btn){btn.disabled=false;btn.textContent='Bayar';}
-
-        if(pData && (pData.token || pData.redirect_url)){
-          toast('Membuka pop-up pembayaran...');
-          openSnapModal(pData.token, pData.redirect_url, bid);
-        } else {
-          var errMsg = pData.error || 'Gagal membuat sesi pembayaran Midtrans.';
-          toast('⚠️ ' + errMsg);
-          alert('Kendala Pembayaran:\n' + errMsg + '\n\nSilakan coba beberapa saat lagi.');
+        await refreshBookings(bid);
+        if(payment.token||payment.redirect_url){
+          toast('Membuka gateway pembayaran...');
+          openSnapModal(payment.token,payment.redirect_url,bid);
+        }else if(payment.state){
+          S.mode='dp';go('status');toast('Status pembayaran diperbarui dari server: '+payment.state+'.');
+        }else{
+          throw new Error('Server tidak memberikan status pembayaran.');
         }
       }catch(err){
         if(btn){btn.disabled=false;btn.textContent='Bayar';}
-        toast('Gagal memproses pembayaran: ' + err.message);
+        toast('Pembayaran gagal diproses: '+err.message);
       }
     })();
   }
 });
 
-render();
+initializeLockIn();
 </script>
 </body>
 </html>

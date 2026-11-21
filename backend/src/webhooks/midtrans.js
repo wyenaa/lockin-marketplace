@@ -39,17 +39,14 @@ export async function handleMidtransWebhook(req, res, body, localStores = null) 
 export async function recordNotification(notification, localStores = null) {
   let payment = null;
   if (supabase) {
-    try {
-      const { data: payments } = await supabase
-        .from('payments')
-        .select('*')
-        .eq('provider_order_id', notification.order_id)
-        .limit(1);
-      if (payments?.length) payment = payments[0];
-    } catch {}
-  }
-
-  if (!payment && localStores?.localPayments) {
+    const { data: payments, error } = await supabase
+      .from('payments')
+      .select('*')
+      .eq('provider_order_id', notification.order_id)
+      .limit(1);
+    if (error) throw new Error(`Gagal membaca pembayaran: ${error.message}`);
+    if (payments?.length) payment = payments[0];
+  } else if (localStores?.localPayments) {
     payment = Array.from(localStores.localPayments.values()).find(p => p.provider_order_id === notification.order_id);
   }
 
@@ -63,17 +60,17 @@ export async function recordNotification(notification, localStores = null) {
     return { status: 'rejected', reason: 'Jenis pembayaran tidak dikenal.' };
 
   if (payment.payment_type === 'FINAL') {
+    if (!payment.final_confirmed_at) return { status: 'rejected', reason: 'Pelunasan tidak memiliki konfirmasi pelanggan.' };
     let booking = null;
     let dpPaid = false;
     if (supabase) {
-      try {
-        const { data: bk } = await supabase.from('bookings').select('id').eq('id', payment.booking_id).single();
-        const { data: dp } = await supabase.from('payments').select('id').eq('booking_id', payment.booking_id).eq('payment_type', 'DP').eq('outcome', 'success').limit(1);
-        booking = bk;
-        dpPaid = Boolean(dp?.length);
-      } catch {}
-    }
-    if (!booking && localStores?.localBookings) {
+      const { data: bk, error: bookingError } = await supabase.from('bookings').select('id').eq('id', payment.booking_id).maybeSingle();
+      if (bookingError) throw new Error(`Gagal membaca booking pelunasan: ${bookingError.message}`);
+      const { data: dp, error: paymentError } = await supabase.from('payments').select('id').eq('booking_id', payment.booking_id).eq('payment_type', 'DP').eq('outcome', 'success').limit(1);
+      if (paymentError) throw new Error(`Gagal memeriksa DP: ${paymentError.message}`);
+      booking = bk;
+      dpPaid = Boolean(dp?.length);
+    } else if (localStores?.localBookings) {
       booking = localStores.localBookings.get(payment.booking_id);
       const dpPayment = Array.from(localStores.localPayments.values()).find(p => p.booking_id === payment.booking_id && p.payment_type === 'DP' && p.outcome === 'success');
       dpPaid = Boolean(dpPayment);
@@ -91,86 +88,87 @@ export async function recordNotification(notification, localStores = null) {
   const outcome = outcomeMap[nextStatus] || 'pending';
   const now = new Date().toISOString();
 
-  // Update in memory
+  // Treat provider status as accepted only after the database update succeeds.
+  if (supabase) {
+    const { data, error } = await supabase.from('payments').update({
+      outcome,
+      paid_at: outcome === 'success' ? now : undefined
+    }).eq('id', payment.id).eq('outcome', payment.outcome).select('id').maybeSingle();
+    if (error) throw new Error(`Gagal menyimpan status pembayaran: ${error.message}`);
+    if (!data) {
+      const { data: latest, error: latestError } = await supabase.from('payments').select('outcome').eq('id', payment.id).maybeSingle();
+      if (latestError) throw new Error(`Gagal memeriksa callback duplikat: ${latestError.message}`);
+      if (latest?.outcome === 'success') return { status: 'duplicate', reason: 'Sudah tercatat PAID.' };
+      return { status: 'ignored', reason: 'Status pembayaran telah berubah.' };
+    }
+  }
   payment.outcome = outcome;
   if (outcome === 'success') payment.paid_at = now;
-
-  // Update in Supabase
-  if (supabase) {
-    try {
-      await supabase.from('payments').update({
-        outcome,
-        paid_at: outcome === 'success' ? now : undefined
-      }).eq('id', payment.id);
-    } catch {}
-  }
 
   if (nextStatus === 'PAID') {
     let bk = null;
     if (supabase) {
-      try {
-        const { data } = await supabase.from('bookings').select('*').eq('id', payment.booking_id).single();
-        if (data) bk = data;
-      } catch {}
-    }
-    if (!bk && localStores?.localBookings) {
+      const { data, error } = await supabase.from('bookings').select('*').eq('id', payment.booking_id).maybeSingle();
+      if (error) throw new Error(`Gagal membaca booking pembayaran: ${error.message}`);
+      bk = data;
+      if (!bk) throw new Error('Booking pembayaran tidak ditemukan di database.');
+    } else if (localStores?.localBookings) {
       bk = localStores.localBookings.get(payment.booking_id);
     }
 
     if (bk) {
       const state = bk.deposit || bk.state === 'DPPaid' ? 'Paid' : 'DPPaid';
-      bk.paid = (bk.paid || 0) + payment.amount;
-      bk.state = state;
-      bk.updated_at = now;
-
-      if (localStores?.localAudit) {
-        localStores.localAudit.push({ booking_id: payment.booking_id, state, created_at: now });
-      }
+      const paid = (bk.paid || 0) + payment.amount;
 
       if (supabase) {
-        try {
-          await supabase.from('bookings').update({
-            paid: bk.paid,
+        const { error: bookingError } = await supabase.from('bookings').update({
+            paid,
             state,
             updated_at: now
           }).eq('id', payment.booking_id);
-
-          await supabase.from('audit').insert({
+        if (bookingError) throw new Error(`Gagal menyimpan status booking: ${bookingError.message}`);
+        const { error: auditError } = await supabase.from('audit').insert({
             booking_id: payment.booking_id,
             state,
             created_at: now
           });
-
-          await supabase.from('ledger_entries').insert({
+        if (auditError) throw new Error(`Gagal menyimpan audit pembayaran: ${auditError.message}`);
+        const { error: ledgerError } = await supabase.from('ledger_entries').insert({
             booking_id: payment.booking_id,
             payment_id: payment.id,
             entry_type: 'SIMULATED_HELD',
             amount: payment.amount,
             created_at: now
           });
-
-          await supabase.from('blockchain_jobs').upsert({
+        if (ledgerError) throw new Error(`Gagal menyimpan ledger pembayaran: ${ledgerError.message}`);
+        const { error: blockchainError } = await supabase.from('blockchain_jobs').upsert({
             booking_id: payment.booking_id,
             payment_id: payment.id,
             status: 'QUEUED',
             retry_after: 0
           }, { onConflict: 'booking_id,payment_id', ignoreDuplicates: true });
-        } catch {}
+        if (blockchainError) throw new Error(`Gagal mengantrekan blockchain: ${blockchainError.message}`);
       }
+      bk.paid = paid;
+      bk.state = state;
+      bk.updated_at = now;
+      if (localStores?.localAudit) localStores.localAudit.push({ booking_id: payment.booking_id, state, created_at: now });
     }
   } else if (nextStatus === 'EXPIRED') {
     let bk = null;
-    if (localStores?.localBookings) bk = localStores.localBookings.get(payment.booking_id);
+    if (!supabase && localStores?.localBookings) bk = localStores.localBookings.get(payment.booking_id);
+    if (supabase) {
+      const { data, error: bookingError } = await supabase.from('bookings').update({ state: 'Expired', updated_at: now }).eq('id', payment.booking_id).select('*').maybeSingle();
+      if (bookingError) throw new Error(`Gagal menyimpan status booking kedaluwarsa: ${bookingError.message}`);
+      if (!data) throw new Error('Booking kedaluwarsa tidak ditemukan di database.');
+      bk = data;
+      const { error: auditError } = await supabase.from('audit').insert({ booking_id: payment.booking_id, state: 'Expired', created_at: now });
+      if (auditError) throw new Error(`Gagal menyimpan audit kedaluwarsa: ${auditError.message}`);
+    }
     if (bk) {
       bk.state = 'Expired';
       bk.updated_at = now;
       if (localStores?.localAudit) localStores.localAudit.push({ booking_id: payment.booking_id, state: 'Expired', created_at: now });
-    }
-    if (supabase) {
-      try {
-        await supabase.from('bookings').update({ state: 'Expired', updated_at: now }).eq('id', payment.booking_id);
-        await supabase.from('audit').insert({ booking_id: payment.booking_id, state: 'Expired', created_at: now });
-      } catch {}
     }
   }
 

@@ -2,12 +2,12 @@
 // Node.js HTTP server + REST API + static file server
 import 'dotenv/config';
 import http from 'node:http';
-import { randomBytes, createHash } from 'node:crypto';
+import { randomBytes, createHash, scryptSync, timingSafeEqual } from 'node:crypto';
 import { readFileSync, existsSync } from 'node:fs';
 import { dirname, resolve, extname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { supabase, isSupabaseConfigured } from './db/supabase.js';
+import { supabase, isSupabaseConfigured, createUserAuthClient } from './db/supabase.js';
 import { DEMO_VENDORS } from './db/seed.js';
 import { createSnapPayment, verifySignature, interpretNotification, fetchMidtransStatus, isMidtransConfigured } from './services/midtrans.js';
 import { syncBlockchainJobs, isBlockchainConfigured } from './services/blockchain.js';
@@ -31,6 +31,19 @@ const demoAccounts = {
   'vendor@lockin.demo': { id: 'd9d01426-73a7-43e6-86fe-d296b200d0b1', name: 'Vendor Demo', email: 'vendor@lockin.demo', role: 'vendor' },
   'admin@lockin.demo':  { id: 'a3769509-249b-4cb9-8aff-12d1dd5b65d9', name: 'Admin Demo', email: 'admin@lockin.demo', role: 'admin' }
 };
+const localPasswords = new Map(); // Hanya untuk akun lokal yang didaftarkan di mode demo.
+function storeLocalPassword(email, password) {
+  const salt = randomBytes(16).toString('hex');
+  localPasswords.set(email, { salt, hash: scryptSync(password, salt, 64) });
+}
+function verifyLocalPassword(email, password) {
+  if (demoAccounts[email] && ['user@lockin.demo', 'vendor@lockin.demo', 'admin@lockin.demo'].includes(email))
+    return password === 'LockInDemo123!';
+  const saved = localPasswords.get(email);
+  if (!saved) return false;
+  const result = scryptSync(password, saved.salt, saved.hash.length);
+  return timingSafeEqual(saved.hash, result);
+}
 const localSessions = new Map();
 const localBookings = new Map();
 const localPayments = new Map();
@@ -117,6 +130,7 @@ function checkAutoRelease() {
       const dispute = localDisputes.get(b.id);
       if (curTime >= autoReleaseTime && !dispute) {
         b.state = 'Completed';
+        b.execution_state = 'COMPLETED';
         b.updated_at = now();
         localAudit.push({ booking_id: b.id, state: 'Completed:AutoReleased', created_at: now() });
       }
@@ -127,6 +141,22 @@ function checkAutoRelease() {
 // ─── Helpers ────────────────────────────────────────────────────────────────
 const fail = (status, message) => { throw Object.assign(new Error(message), { status }); };
 const now  = () => new Date().toISOString();
+function paymentStatus(b) {
+  if (b.state === 'Cancelled') return 'CANCELLED';
+  if (b.state === 'Refunded') return 'REFUNDED';
+  const total = Math.max(0, Number(b.price) || 0) + Math.max(0, Number(b.deposit) || 0);
+  const paid = Math.max(0, Number(b.paid) || 0);
+  if (paid > 0 && paid >= total) return 'PAID';
+  return paid > 0 ? 'DP_PAID' : 'UNPAID';
+}
+function executionStatus(b) {
+  if (['NOT_STARTED', 'IN_PROGRESS', 'COMPLETED'].includes(b.execution_state)) return b.execution_state;
+  if (b.state === 'Completed') return 'COMPLETED';
+  return b.vendor_arrived ? 'IN_PROGRESS' : 'NOT_STARTED';
+}
+function withBookingStatuses(b) {
+  return { ...b, paymentStatus: paymentStatus(b), executionStatus: executionStatus(b) };
+}
 const localToday = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' });
 const digest = text => '0x' + createHash('sha256').update(text).digest('hex');
 const send = (res, status, data, headers = {}) => {
@@ -134,27 +164,31 @@ const send = (res, status, data, headers = {}) => {
   res.end(JSON.stringify(data));
 };
 
-// ─── Session helper (Supabase Auth + fallback demo sessions) ─────────────────
+// ─── Session helper: server-side session + database-backed role ─────────────
+function sessionToken(req) {
+  return /(?:^|;\s*)lockin_session=([a-f0-9]{64})(?:;|$)/.exec(req.headers.cookie || '')?.[1];
+}
+
+function sessionCookie(req, token, maxAge = 86400) {
+  return `lockin_session=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${maxAge}${req.socket.encrypted ? '; Secure' : ''}`;
+}
+
 async function userOf(req) {
-  const token = /lockin_session=([a-f0-9]+)/.exec(req.headers.cookie || '')?.[1];
+  const token = sessionToken(req);
   if (!token) return null;
-
-  // Cek local session dulu
-  const local = localSessions.get(token);
-  if (local && local.expires > Date.now()) return local.user;
-
-  if (!supabase) return null;
-  try {
-    const { data } = await supabase
-      .from('sessions')
-      .select('*, users(id, name, email, role)')
-      .eq('token', token)
-      .gt('expires', Date.now())
-      .single();
-    return data?.users || null;
-  } catch {
+  if (!supabase) {
+    const local = localSessions.get(token);
+    return local && local.expires > Date.now() ? local.user : null;
+  }
+  // Jangan pernah percaya sesi atau role yang disimpan frontend.
+  const { data, error } = await supabase.from('sessions')
+    .select('expires, users(id, name, email, role)')
+    .eq('token', token).gt('expires', Date.now()).maybeSingle();
+  if (error) {
+    console.error('[Auth] Gagal membaca sesi:', error.code, error.message);
     return null;
   }
+  return data?.users || null;
 }
 
 async function body(req) {
@@ -170,6 +204,21 @@ async function body(req) {
 function validateText(value, label, max = 500) {
   if (typeof value !== 'string' || !value.trim() || value.length > max) fail(400, `${label} tidak valid.`);
   return value.trim();
+}
+
+function bookingCancellationEstimate(b) {
+  const estimate = calculateRefund({
+    eventDate: b.event_date,
+    totalPaid: b.paid || 0,
+    price: b.price
+  });
+  // Preserve the existing rental-deposit handling used by the cancel action.
+  const refundAmount = estimate.refundAmount + (b.deposit && b.paid ? b.deposit : 0);
+  return {
+    ...estimate,
+    refundAmount,
+    notRefundedAmount: Math.max(0, (b.paid || 0) - refundAmount)
+  };
 }
 
 // ─── Expire pending bookings ─────────────────────────────────────────────────
@@ -189,18 +238,16 @@ async function expireBookings() {
 async function getBooking(id, user) {
   let b = null;
   if (supabase) {
-    try {
-      const { data } = await supabase
-        .from('bookings')
-        .select('*, vendors(name, category, owner_id)')
-        .eq('id', id)
-        .single();
-      if (data) {
-        b = { ...data, vendor_name: data.vendors?.name, category: data.vendors?.category, owner_id: data.vendors?.owner_id };
-      }
-    } catch {}
+    const { data, error } = await supabase
+      .from('bookings')
+      .select('*, vendors(name, category, owner_id)')
+      .eq('id', id)
+      .maybeSingle();
+    if (error) fail(503, 'Gagal membaca booking dari database. Coba lagi.');
+    if (data) b = { ...data, vendor_name: data.vendor_name || data.vendors?.name, category: data.category || data.vendors?.category, owner_id: data.owner_id || data.vendors?.owner_id };
+  } else {
+    b = localBookings.get(id);
   }
-  if (!b) b = localBookings.get(id);
   if (!b) fail(404, 'Booking tidak ditemukan.');
   if (user.role !== 'admin' && b.user_id !== user.id &&
      !(user.role === 'vendor' && b.owner_id === user.id))
@@ -226,18 +273,18 @@ async function api(req, res, url) {
     return send(res, 200, { ok: true, mode: 'sandbox', database: isSupabaseConfigured() ? 'Supabase' : 'Lokal Demo', blockchain: isBlockchainConfigured(), midtrans: isMidtransConfigured() });
 
   // ── Auth ──
-  if (path === '/api/auth/me')
+  if (path === '/api/auth/me' && method === 'GET')
     return send(res, 200, { user: user || null });
 
   if (path === '/api/auth/logout' && method === 'POST') {
-    const token = /lockin_session=([a-f0-9]+)/.exec(req.headers.cookie || '')?.[1];
+    const token = sessionToken(req);
     if (token) {
-      localSessions.delete(token);
       if (supabase) {
-        try { await supabase.from('sessions').delete().eq('token', token); } catch {}
-      }
+        const { error } = await supabase.from('sessions').delete().eq('token', token);
+        if (error) fail(503, 'Gagal mengakhiri sesi. Coba lagi.');
+      } else localSessions.delete(token);
     }
-    return send(res, 200, { ok: true }, { 'Set-Cookie': 'lockin_session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0' });
+    return send(res, 200, { ok: true }, { 'Set-Cookie': sessionCookie(req, '', 0) });
   }
 
   if (['/api/auth/login', '/api/auth/register'].includes(path) && method === 'POST') {
@@ -246,41 +293,66 @@ async function api(req, res, url) {
     const password = validateText(d.password, 'Password', 128);
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) fail(400, 'Format email tidak valid.');
 
-    // 1. Cek Akun Demo bawaan langsung (Zero friction untuk pengujian lokal)
-    if (demoAccounts[email] && (password === 'LockInDemo123!' || password === 'demo123')) {
-      const token = randomBytes(32).toString('hex');
-      localSessions.set(token, { user: demoAccounts[email], expires: Date.now() + 86400000 });
-      return send(res, 200, { user: demoAccounts[email] }, { 'Set-Cookie': `lockin_session=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=86400` });
-    }
-
     if (path.endsWith('register')) {
+      const name = validateText(d.name, 'Nama', 80);
       if (password.length < 10) fail(400, 'Password minimal 10 karakter.');
       if (supabase) {
-        const { error } = await supabase.auth.signUp({ email, password, options: { data: { name: validateText(d.name, 'Nama', 80), role: 'customer' } } });
+        let authClient;
+        try { authClient = createUserAuthClient(); }
+        catch { fail(503, 'Konfigurasi autentikasi Supabase belum lengkap.'); }
+        const { data: registered, error } = await authClient.auth.signUp({
+          email, password, options: { data: { name } }
+        });
         if (error) fail(error.status || 400, error.message);
+        if (!registered?.user?.id) fail(503, 'Pendaftaran belum berhasil. Coba lagi.');
+        // Semua pendaftaran mandiri hanya bisa menjadi customer.
+        const { error: profileError } = await supabase.from('users').insert({
+          id: registered.user.id, name, email, role: 'customer'
+        });
+        if (profileError) {
+          console.error('[Auth] Gagal menyimpan profil pelanggan:', profileError.code, profileError.message);
+          fail(503, 'Akun Auth dibuat tetapi profil belum tersimpan. Hubungi admin.');
+        }
+        return send(res, 201, {
+          ok: true, requiresEmailConfirmation: !registered.session,
+          message: registered.session ? 'Akun dibuat. Silakan login.' : 'Akun dibuat. Periksa email untuk verifikasi, kemudian login.'
+        });
       }
-      const newAcc = { id: randomBytes(16).toString('hex'), name: validateText(d.name, 'Nama', 80), email, role: 'customer' };
+      // Mode lokal hanya aktif ketika Supabase tidak dikonfigurasi.
+      if (demoAccounts[email]) fail(409, 'Email sudah terdaftar.');
+      const newAcc = { id: randomBytes(16).toString('hex'), name, email, role: 'customer' };
       demoAccounts[email] = newAcc;
-      const token = randomBytes(32).toString('hex');
-      localSessions.set(token, { user: newAcc, expires: Date.now() + 86400000 });
-      return send(res, 200, { user: newAcc }, { 'Set-Cookie': `lockin_session=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=86400` });
+      storeLocalPassword(email, password);
+      return send(res, 201, { ok: true, message: 'Akun dibuat. Silakan login.' });
     }
 
-    // 2. Cek lewat Supabase Auth jika ada
+    let profile;
     if (supabase) {
-      const { data: authData, error } = await supabase.auth.signInWithPassword({ email, password });
-      if (!error && authData?.user) {
-        const token = randomBytes(32).toString('hex');
-        try {
-          await supabase.from('sessions').insert({ token, user_id: authData.user.id, expires: Date.now() + 86400000 });
-        } catch {}
-        const profile = { id: authData.user.id, name: authData.user.user_metadata?.name || email.split('@')[0], email, role: authData.user.user_metadata?.role || 'customer' };
-        localSessions.set(token, { user: profile, expires: Date.now() + 86400000 });
-        return send(res, 200, { user: profile }, { 'Set-Cookie': `lockin_session=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=86400` });
-      }
+      let authClient;
+      try { authClient = createUserAuthClient(); }
+      catch { fail(503, 'Konfigurasi autentikasi Supabase belum lengkap.'); }
+      const { data: authData, error: loginError } = await authClient.auth.signInWithPassword({ email, password });
+      if (loginError || !authData?.user) fail(401, 'Email atau password salah, atau email belum diverifikasi.');
+      const { data: storedProfile, error: profileError } = await supabase.from('users')
+        .select('id, name, email, role').eq('id', authData.user.id).maybeSingle();
+      if (profileError) fail(503, 'Profil pengguna tidak dapat dibaca dari database.');
+      if (!storedProfile) fail(403, 'Profil akun belum terdaftar di public.users. Minta admin menyinkronkan akun.');
+      profile = storedProfile; // Role HANYA bersumber dari tabel terkelola server.
+    } else {
+      profile = demoAccounts[email];
+      if (!profile || !verifyLocalPassword(email, password)) fail(401, 'Email atau password salah.');
     }
 
-    fail(401, 'Email atau password salah.');
+    const token = randomBytes(32).toString('hex');
+    const expires = Date.now() + 86400000;
+    if (supabase) {
+      const { error } = await supabase.from('sessions').insert({ token, user_id: profile.id, expires });
+      if (error) {
+        console.error('[Auth] Gagal menyimpan sesi:', error.code, error.message);
+        fail(503, 'Login terverifikasi tetapi sesi gagal dibuat. Hubungi admin.');
+      }
+    } else localSessions.set(token, { user: profile, expires });
+    return send(res, 200, { user: profile }, { 'Set-Cookie': sessionCookie(req, token) });
   }
 
   // ── Central Business Policy (public) ──
@@ -330,17 +402,19 @@ async function api(req, res, url) {
   if (path === '/api/vendors' && method === 'GET') {
     let result = [];
     if (supabase) {
-      try {
-        let q = supabase.from('vendors').select('id,name,category,price,deposit,rating,completed,verified,color,description');
-        const category = url.searchParams.get('category');
-        if (category && category !== 'Semua') q = q.eq('category', category);
-        const { data: rows, error } = await q;
-        if (!error && rows?.length) result = rows;
-      } catch {}
+      let q = supabase.from('vendors').select('id,name,category,price,deposit,rating,completed,verified,color,description').order('created_at', { ascending: true });
+      const category = url.searchParams.get('category');
+      if (category && category !== 'Semua') q = q.eq('category', category);
+      const { data: rows, error } = await q;
+      if (error) {
+        console.error('[Supabase vendors]', { code: error.code, message: error.message, hint: error.hint });
+        fail(503, 'Gagal memuat vendor dari database. Coba lagi.');
+      }
+      result = rows || [];
     }
 
     // Fallback otomatis ke vendor demo lokal jika tabel Supabase belum diisi
-    if (!result.length) {
+    if (!supabase) {
       result = [...DEMO_VENDORS];
       const category = url.searchParams.get('category');
       if (category && category !== 'Semua') result = result.filter(v => v.category === category);
@@ -433,6 +507,8 @@ async function api(req, res, url) {
     return send(res, 200, localReviews);
   }
   if (path === '/api/reviews' && method === 'POST') {
+    if (!user) fail(401, 'Silakan login untuk memberi ulasan.');
+    if (user.role !== 'customer') fail(403, 'Hanya pelanggan yang dapat mengirim ulasan.');
     const d = await body(req);
     const rev = {
       id: 'rev-' + randomBytes(4).toString('hex'),
@@ -452,20 +528,19 @@ async function api(req, res, url) {
   // ── Bookings list ──
   if (path === '/api/bookings' && method === 'GET') {
     checkAutoRelease();
-    let rows = [];
+    let rows;
     if (supabase) {
-      try {
-        const { data } = await supabase.from('bookings').select('*, vendors(name, category, owner_id)').order('created_at', { ascending: false });
-        if (data?.length) rows = data;
-      } catch {}
-    }
-    if (!rows.length) {
-      rows = Array.from(localBookings.values());
-    }
+      const { data, error } = await supabase.from('bookings').select('*, vendors(name, category, owner_id)').order('created_at', { ascending: false });
+      if (error) {
+        console.error('[Supabase bookings]', { code: error.code, message: error.message, hint: error.hint });
+        fail(503, 'Gagal memuat booking dari database. Coba muat ulang.');
+      }
+      rows = data || [];
+    } else rows = Array.from(localBookings.values());
     const filtered = rows.filter(b =>
       user.role === 'admin' || b.user_id === user.id ||
       (user.role === 'vendor' && (b.owner_id === user.id || b.vendors?.owner_id === user.id))
-    ).map(b => ({ ...b, vendor_name: b.vendor_name || b.vendors?.name, category: b.category || b.vendors?.category }));
+    ).map(b => withBookingStatuses({ ...b, vendor_name: b.vendor_name || b.vendors?.name, category: b.category || b.vendors?.category }));
     return send(res, 200, filtered);
   }
 
@@ -475,12 +550,10 @@ async function api(req, res, url) {
     const d = await body(req);
     let v = null;
     if (supabase) {
-      try {
-        const { data } = await supabase.from('vendors').select('*').eq('id', d.vendorId).single();
-        if (data) v = data;
-      } catch {}
-    }
-    if (!v) v = DEMO_VENDORS.find(item => String(item.id) === String(d.vendorId));
+      const { data, error } = await supabase.from('vendors').select('*').eq('id', d.vendorId).maybeSingle();
+      if (error) fail(400, 'Vendor tidak dapat dibaca dari database. Muat ulang daftar vendor.');
+      v = data;
+    } else v = DEMO_VENDORS.find(item => String(item.id) === String(d.vendorId));
     if (!v) fail(404, 'Vendor tidak ditemukan.');
     if (!d.agreed) fail(400, 'Setujui perjanjian terlebih dahulu.');
     const date = validateText(d.date, 'Tanggal', 10);
@@ -563,6 +636,7 @@ async function api(req, res, url) {
       deposit: v.deposit,
       paid: 0,
       late_booking: late,
+      execution_state: 'NOT_STARTED',
       vendor_accepted_at: late ? null : now(),
       state: late ? 'WaitingVendorApproval' : 'Pending',
       arrival_code: String(Math.floor(100000 + Math.random() * 900000)),
@@ -573,15 +647,40 @@ async function api(req, res, url) {
       expires: Date.now() + (late ? POLICY.VENDOR_ACCEPT_WINDOW_HOURS * 3600 * 1000 : 86400000),
       off_platform_warning: violationCheck.warning || null
     };
-    localBookings.set(id, bookingData);
-    localAudit.push({ booking_id: id, state: 'AgreementLocked', created_at: now() });
-
     if (supabase) {
-      try {
-        await supabase.from('bookings').insert(bookingData);
-        await supabase.from('audit').insert({ booking_id: id, state: 'AgreementLocked', created_at: now() });
-      } catch {}
+      const { error: bookingError } = await supabase.from('bookings').insert({
+        id: bookingData.id,
+        user_id: bookingData.user_id,
+        vendor_id: bookingData.vendor_id,
+        event_date: bookingData.event_date,
+        location: bookingData.location,
+        start_time: bookingData.start_time,
+        price: bookingData.price,
+        deposit: bookingData.deposit,
+        paid: bookingData.paid,
+        state: bookingData.state,
+        execution_state: bookingData.execution_state,
+        late_booking: bookingData.late_booking,
+        vendor_accepted_at: bookingData.vendor_accepted_at,
+        arrival_code: bookingData.arrival_code,
+        vendor_arrived: bookingData.vendor_arrived,
+        off_platform_warning: bookingData.off_platform_warning,
+        agreement: bookingData.agreement,
+        hash: bookingData.hash,
+        expires: bookingData.expires,
+        created_at: bookingData.created_at
+      });
+      if (bookingError) fail(503, 'Booking gagal disimpan ke database. Periksa data vendor dan coba lagi.');
+      const { error: auditError } = await supabase.from('audit').insert({ booking_id: id, state: 'AgreementLocked', created_at: bookingData.created_at });
+      if (auditError) {
+        const { error: rollbackError } = await supabase.from('bookings').delete().eq('id', id);
+        if (rollbackError) console.error('[Booking rollback]', rollbackError.message);
+        fail(503, 'Booking tidak dapat disimpan karena pencatatan audit gagal.');
+      }
     }
+
+    localBookings.set(id, bookingData);
+    localAudit.push({ booking_id: id, state: 'AgreementLocked', created_at: bookingData.created_at });
 
     return send(res, 201, await getBooking(id, user));
   }
@@ -594,14 +693,14 @@ async function api(req, res, url) {
     const action = match[2];
 
     const isOwner = b.user_id === user.id;
-    const isVendor = user.role === 'vendor' && (b.owner_id === user.id || user.id === 'd9d01426-73a7-43e6-86fe-d296b200d0b1');
+    const isVendor = user.role === 'vendor' && b.owner_id === user.id;
     const isAdmin = user.role === 'admin';
 
     if (method === 'GET' && !action) {
       const pendingPay = Array.from(localPayments.values()).find(p => p.booking_id === b.id && p.outcome === 'pending' && p.redirect_url);
       const dispute = localDisputes.get(b.id) || null;
       return send(res, 200, {
-        ...b,
+        ...withBookingStatuses(b),
         dispute,
         dpBlockchain: null,
         finalBlockchain: null,
@@ -624,12 +723,9 @@ async function api(req, res, url) {
     }
 
     if (method === 'GET' && action === 'refund-estimate') {
-      const estimate = calculateRefund({
-        eventDate: b.event_date,
-        totalPaid: b.paid || 0,
-        price: b.price,
-        isVendorCancellation: user.role === 'vendor'
-      });
+      if (user.role !== 'customer' || !isOwner) fail(403, 'Hanya pemilik booking sebagai pelanggan yang dapat melihat estimasi pembatalan.');
+      if (!['Pending', 'DPPaid', 'Paid', 'WaitingVendorApproval'].includes(b.state)) fail(409, 'Booking tidak dapat dibatalkan.');
+      const estimate = bookingCancellationEstimate(b);
       return send(res, 200, { estimate, booking: b });
     }
 
@@ -681,8 +777,13 @@ async function api(req, res, url) {
 
     if (action === 'payment') {
       if (!isOwner && !isAdmin) fail(403, 'Hanya pemilik booking yang dapat melakukan pembayaran.');
+      if (user.role !== 'customer' || !isOwner) fail(403, 'Hanya pelanggan pemilik booking yang dapat melakukan pembayaran.');
       if (!['Pending', 'DPPaid', 'WaitingVendorApproval'].includes(b.state)) fail(409, 'Booking tidak dapat dibayar pada status ini.');
-      if (d.expectedState && d.expectedState !== b.state) fail(409, 'Status pembayaran telah berubah. Muat ulang halaman.');
+      if (!d.expectedState || d.expectedState !== b.state) fail(409, 'Status pembayaran telah berubah. Muat ulang halaman.');
+
+      const paymentType = b.state === 'DPPaid' ? 'FINAL' : 'DP';
+      if (d.paymentType !== paymentType) fail(409, 'Jenis pembayaran tidak sesuai dengan status booking. Muat ulang halaman.');
+      if (paymentType === 'FINAL' && d.confirmedFinal !== true) fail(400, 'Konfirmasi pelunasan diperlukan sebelum membuat pembayaran FINAL.');
 
       const isLate = Boolean(b.late_booking);
       const upfrontPercent = isLate ? POLICY.LATE_BOOKING_UPFRONT_PERCENT : POLICY.DP_PERCENT;
@@ -691,21 +792,45 @@ async function api(req, res, url) {
         ? (b.deposit ? b.price + b.deposit : Math.round(b.price * (upfrontPercent / 100)))
         : b.price - b.paid;
 
-      const paymentType = b.state === 'DPPaid' ? 'FINAL' : 'DP';
+      const existing = supabase
+        ? await supabase.from('payments').select('*').eq('booking_id', b.id).eq('payment_type', paymentType).order('created_at', { ascending: false })
+        : { data: Array.from(localPayments.values()).filter(p => p.booking_id === b.id && p.payment_type === paymentType), error: null };
+      if (existing.error) fail(503, 'Riwayat pembayaran gagal dibaca dari database.');
+      if (existing.data?.some(p => p.outcome === 'success')) fail(409, 'Pembayaran ini sudah berhasil tercatat.');
+      const pendingExisting = existing.data?.find(p => p.outcome === 'pending');
+      if (pendingExisting) {
+        if (pendingExisting.redirect_url) return send(res, 200, { redirect_url: pendingExisting.redirect_url, token: null, reused: true, id: b.id });
+        fail(409, 'Pembayaran sedang diproses. Tunggu sebentar lalu muat ulang halaman.');
+      }
 
       // Mode Midtrans aktif
       if (isMidtransConfigured() && d.outcome !== 'failed' && d.outcome !== 'expired') {
-        const orderId = `LOCKIN-${paymentType}-${b.id}-${randomBytes(4).toString('hex')}`;
+        const idempotencyKey = `LOCKIN-PAY-${b.id}-${paymentType}-${existing.data?.length || 0}`;
+        const orderId = idempotencyKey;
+        const payData = { id: randomBytes(12).toString('hex'), booking_id: b.id, method: d.method || 'Midtrans', amount, outcome: 'pending', created_at: now(), provider_order_id: orderId, redirect_url: null, payment_type: paymentType, idempotency_key: idempotencyKey, final_confirmed_at: paymentType === 'FINAL' ? now() : null };
+        if (supabase) {
+          const { error } = await supabase.from('payments').insert(payData);
+          if (error) {
+            if (error.code === '23505') fail(409, 'Pembayaran sedang dibuat. Muat ulang halaman untuk melanjutkan.');
+            fail(503, 'Data pembayaran gagal disimpan ke database. Coba lagi.');
+          }
+        }
+        localPayments.set(payData.id, payData);
         let snapRes;
         try { snapRes = await createSnapPayment({ orderId, amount }); }
-        catch (err) { fail(502, 'Gagal membuat checkout Midtrans: ' + err.message); }
+        catch (err) {
+          if (supabase) { const { error } = await supabase.from('payments').delete().eq('id', payData.id); if (error) console.error('[Payment reservation cleanup]', error.message); }
+          localPayments.delete(payData.id);
+          fail(502, 'Gagal membuat checkout Midtrans: ' + err.message);
+        }
         const redirectUrl = typeof snapRes === 'string' ? snapRes : snapRes.redirectUrl;
         const token = typeof snapRes === 'object' ? snapRes.token : null;
-        const payData = { id: randomBytes(12).toString('hex'), booking_id: b.id, method: d.method || 'Midtrans', amount, outcome: 'pending', created_at: now(), provider_order_id: orderId, redirect_url: redirectUrl, payment_type: paymentType };
-        localPayments.set(payData.id, payData);
         if (supabase) {
-          try { await supabase.from('payments').insert(payData); } catch {}
+          const { error } = await supabase.from('payments').update({ redirect_url: redirectUrl }).eq('id', payData.id);
+          if (error) fail(503, 'Checkout dibuat, tetapi tautan pembayaran gagal disimpan.');
         }
+        payData.redirect_url = redirectUrl;
+        localPayments.set(payData.id, payData);
         return send(res, 200, { redirect_url: redirectUrl, token, reused: false, id: b.id });
       }
 
@@ -713,25 +838,50 @@ async function api(req, res, url) {
       if (!['QRIS', 'Virtual Account', 'E-wallet'].includes(d.method)) fail(400, 'Metode pembayaran tidak valid.');
       if (!['success', 'failed', 'expired'].includes(d.outcome)) fail(400, 'Skenario pembayaran tidak valid.');
       const payId = randomBytes(12).toString('hex');
-      const payData = { id: payId, booking_id: b.id, method: d.method, amount, outcome: d.outcome, created_at: now(), payment_type: paymentType };
-      localPayments.set(payId, payData);
-
+      const payData = { id: payId, booking_id: b.id, method: d.method, amount, outcome: d.outcome, created_at: now(), payment_type: paymentType, idempotency_key: `LOCKIN-PAY-${b.id}-${paymentType}-${existing.data?.length || 0}`, final_confirmed_at: paymentType === 'FINAL' ? now() : null };
+      let nextState = b.state, nextPaid = b.paid || 0;
       if (d.outcome === 'success') {
-        const state = b.deposit || b.state === 'DPPaid' ? 'Paid' : 'DPPaid';
-        b.paid = (b.paid || 0) + amount;
-        b.state = state;
-        b.updated_at = now();
-        localAudit.push({ booking_id: b.id, state, created_at: now() });
-      } else if (d.outcome === 'expired') {
-        b.state = 'Expired';
-        b.updated_at = now();
-        localAudit.push({ booking_id: b.id, state: 'Expired', created_at: now() });
+        nextState = b.deposit || b.state === 'DPPaid' ? 'Paid' : 'DPPaid';
+        nextPaid += amount;
+      } else if (d.outcome === 'expired') nextState = 'Expired';
+      const changed = nextState !== b.state || nextPaid !== (b.paid || 0);
+      const updatedAt = changed ? now() : b.updated_at;
+      if (d.outcome === 'success') {
+        payData.paid_at = updatedAt;
       }
+
+      if (supabase) {
+        const { error: paymentError } = await supabase.from('payments').insert(payData);
+        if (paymentError) fail(paymentError.code === '23505' ? 409 : 503, paymentError.code === '23505' ? 'Pembayaran sedang diproses atau sudah tercatat.' : 'Pembayaran gagal disimpan ke database. Status booking tidak diubah.');
+        if (changed) {
+          const { error: auditError } = await supabase.from('audit').insert({ booking_id: b.id, state: nextState, created_at: updatedAt });
+          if (auditError) {
+            const { error: rollbackError } = await supabase.from('payments').delete().eq('id', payId);
+            if (rollbackError) console.error('[Payment rollback]', rollbackError.message);
+            fail(503, 'Status pembayaran tidak dapat dicatat ke audit database.');
+          }
+          const { data: persistedBooking, error: bookingError } = await supabase.from('bookings').update({ paid: nextPaid, state: nextState, updated_at: updatedAt }).eq('id', b.id).eq('state', b.state).select('*').maybeSingle();
+          if (bookingError || !persistedBooking) {
+            await supabase.from('audit').delete().eq('booking_id', b.id).eq('state', nextState).eq('created_at', updatedAt);
+            const { error: rollbackError } = await supabase.from('payments').delete().eq('id', payId);
+            if (rollbackError) console.error('[Payment rollback]', rollbackError.message);
+            fail(bookingError ? 503 : 409, bookingError ? 'Status pembayaran gagal disimpan ke database.' : 'Status booking berubah saat pembayaran diproses. Muat ulang halaman.');
+          }
+          Object.assign(b, persistedBooking);
+        }
+      } else if (changed) {
+        b.paid = nextPaid;
+        b.state = nextState;
+        b.updated_at = updatedAt;
+      }
+
+      localPayments.set(payId, payData);
+      if (changed) localAudit.push({ booking_id: b.id, state: nextState, created_at: updatedAt });
       return send(res, 200, { ...b, outcome: d.outcome });
     }
 
     if (action === 'complete') {
-      if (b.state !== 'Paid' && b.state !== 'DPPaid') fail(409, 'Booking belum memenuhi syarat penyelesaian.');
+      if (b.state !== 'Paid') fail(409, 'Pembayaran belum lunas; booking belum memenuhi syarat penyelesaian.');
       if (isVendor) {
         const evidence = validateText(d.evidence || d.proofUrl || '', 'Bukti penyelesaian pekerjaan', 2000);
         if (!evidence || evidence.trim().length < 5) fail(400, 'Vendor wajib menyertakan bukti penyelesaian kerja (tautan file foto/video hasil atau serah terima).');
@@ -741,28 +891,57 @@ async function api(req, res, url) {
         return send(res, 200, { ...b, message: 'Bukti kerja berhasil diunggah. Menunggu konfirmasi pelanggan atau auto-release 48 jam.' });
       }
 
+      if (!isOwner && !isAdmin) fail(403, 'Hanya pelanggan pemilik booking yang boleh mengonfirmasi penyelesaian.');
       b.state = 'Completed';
+      b.execution_state = 'COMPLETED';
       b.updated_at = now();
+      if (supabase) {
+        const { data, error } = await supabase.from('bookings').update({ state: b.state, execution_state: b.execution_state, updated_at: b.updated_at }).eq('id', b.id).eq('state', 'Paid').select('*').maybeSingle();
+        if (error) fail(503, 'Penyelesaian booking gagal disimpan ke database.');
+        if (!data) fail(409, 'Status booking berubah. Muat ulang halaman.');
+        Object.assign(b, data);
+      }
       localAudit.push({ booking_id: b.id, state: 'Completed', created_at: now() });
       return send(res, 200, b);
     }
 
     if (action === 'cancel') {
+      if (user.role !== 'customer' || !isOwner) fail(403, 'Hanya pelanggan pemilik booking yang dapat membatalkan booking.');
       if (!['Pending', 'DPPaid', 'Paid', 'WaitingVendorApproval'].includes(b.state)) fail(409, 'Booking tidak dapat dibatalkan.');
-      const refundCalc = calculateRefund({
-        eventDate: b.event_date,
-        totalPaid: b.paid || 0,
-        price: b.price,
-        isVendorCancellation: user.role === 'vendor'
-      });
-      const refund = refundCalc.refundAmount + (b.deposit && b.paid ? b.deposit : 0);
-      b.state = 'Cancelled';
-      b.updated_at = now();
-      localAudit.push({ booking_id: b.id, state: `Cancelled:tier=${refundCalc.tier}:refund=${refund}`, created_at: now() });
-      return send(res, 200, { ...b, refund, refundTier: refundCalc.tier, refundDescription: refundCalc.description });
+      const refundCalc = bookingCancellationEstimate(b);
+      const cancelledAt = now();
+      const allowedStates = ['Pending', 'DPPaid', 'Paid', 'WaitingVendorApproval'];
+      if (supabase) {
+        const { data, error } = await supabase.from('bookings').update({
+          state: 'Cancelled',
+          cancellation_refund: refundCalc.refundAmount,
+          cancellation_not_refunded: refundCalc.notRefundedAmount,
+          cancellation_refund_tier: refundCalc.tier,
+          cancellation_refund_description: refundCalc.description,
+          cancelled_at: cancelledAt,
+          updated_at: cancelledAt
+        }).eq('id', b.id).in('state', allowedStates).select('*').maybeSingle();
+        if (error) fail(500, 'Hasil pembatalan gagal disimpan. Coba lagi.');
+        if (!data) fail(409, 'Booking sudah berubah atau telah dibatalkan. Muat ulang halaman.');
+        Object.assign(b, data);
+      } else {
+        b.state = 'Cancelled';
+        b.cancellation_refund = refundCalc.refundAmount;
+        b.cancellation_not_refunded = refundCalc.notRefundedAmount;
+        b.cancellation_refund_tier = refundCalc.tier;
+        b.cancellation_refund_description = refundCalc.description;
+        b.cancelled_at = cancelledAt;
+        b.updated_at = cancelledAt;
+      }
+      localAudit.push({ booking_id: b.id, state: `Cancelled:tier=${refundCalc.tier}:refund=${refundCalc.refundAmount}`, created_at: cancelledAt });
+      if (supabase) {
+        try { await supabase.from('audit').insert({ booking_id: b.id, state: `Cancelled:tier=${refundCalc.tier}:refund=${refundCalc.refundAmount}`, created_at: cancelledAt }); } catch {}
+      }
+      return send(res, 200, { ...b, refund: refundCalc.refundAmount, refundTier: refundCalc.tier, refundDescription: refundCalc.description, notRefunded: refundCalc.notRefundedAmount });
     }
 
     if (action === 'dispute') {
+      if (user.role !== 'customer' || !isOwner) fail(403, 'Hanya pelanggan pemilik booking yang dapat mengajukan keluhan.');
       if (!['DPPaid', 'Paid'].includes(b.state)) fail(409, 'Keluhan hanya untuk booking yang sudah dibayar.');
       const reason = validateText(d.reason, 'Alasan', 1000);
       const evidence = validateText(d.evidence, 'Bukti keluhan', 4000);
@@ -789,26 +968,41 @@ async function api(req, res, url) {
     }
 
     if (action === 'verify-arrival') {
+      if (!isVendor) fail(403, 'Hanya vendor pemilik booking yang dapat mengonfirmasi kedatangan.');
       const code = String(d.otp || d.code || '').trim();
       const expected = String(b.arrival_code || '482910').trim();
       if (!code || code !== expected) {
         fail(400, 'Kode OTP kedatangan tidak cocok. Minta 6-digit kode OTP kedatangan kepada pelanggan.');
       }
       b.vendor_arrived = true;
+      b.execution_state = 'IN_PROGRESS';
       b.vendor_arrived_at = now();
       b.updated_at = now();
+      if (supabase) {
+        const { data, error } = await supabase.from('bookings').update({ vendor_arrived: true, execution_state: b.execution_state, vendor_arrived_at: b.vendor_arrived_at, updated_at: b.updated_at }).eq('id', b.id).select('*').maybeSingle();
+        if (error) fail(503, 'Status kedatangan gagal disimpan ke database.');
+        if (!data) fail(404, 'Booking tidak ditemukan saat status kedatangan disimpan.');
+        Object.assign(b, data);
+      }
       localAudit.push({ booking_id: b.id, state: 'VendorArrivalVerified', created_at: now() });
       return send(res, 200, { ok: true, message: 'Vendor terverifikasi telah tiba dan check-in di lokasi acara.', booking: b });
     }
 
     if (action === 'sync-payment') {
       if (!isMidtransConfigured()) fail(400, 'Midtrans tidak dikonfigurasi.');
-      const pay = Array.from(localPayments.values()).reverse().find(p => p.booking_id === b.id && p.provider_order_id);
+      if (!isOwner && !isAdmin) fail(403, 'Hanya pemilik booking yang dapat menyinkronkan pembayaran.');
+      let pay;
+      if (supabase) {
+        const { data, error } = await supabase.from('payments').select('*').eq('booking_id', b.id).not('provider_order_id', 'is', null).order('created_at', { ascending: false }).limit(1);
+        if (error) fail(503, 'Transaksi gagal dibaca dari database.');
+        pay = data?.[0];
+      } else pay = Array.from(localPayments.values()).reverse().find(p => p.booking_id === b.id && p.provider_order_id);
       if (!pay) fail(404, 'Belum ada transaksi pembayaran Midtrans.');
       try {
         const status = await fetchMidtransStatus(pay.provider_order_id);
         const result = await recordNotification(status, { localBookings, localPayments, localAudit });
-        return send(res, 200, { result, booking: b });
+        const latestBooking = await getBooking(b.id, user);
+        return send(res, 200, { result, booking: withBookingStatuses(latestBooking) });
       } catch (err) { fail(502, 'Gagal memeriksa pembayaran: ' + err.message); }
     }
   }

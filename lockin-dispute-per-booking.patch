@@ -1,0 +1,68 @@
+--- a/frontend/public/index.html
++++ b/frontend/public/index.html
+@@ -150,14 +150,14 @@
+ <script>
+ var S={
+   city:'Malang',cc:'Malang',eventDate:'',mode:'dp',lunas:false,req:null,vid:0,pkg:1,
+-  role:'customer',user:'Rani',next:null,dispute:false,vf:'',pay:'Midtrans',sc:'sukses',item:'g',stage:1,
++  role:'customer',user:'Rani',next:null,vf:'',pay:'Midtrans',sc:'sukses',item:'g',stage:1,
+   cat:'Semua',dec:'vendor',agree:false,bookingId:'LK-2611',
+   activeBid:'LK-2611',
+   vendorArrived:false,
+   arrivalOtp:'482910',
+   bookingsList:[
+-    { id:'LK-2611', vid:1, pkg:1, date:'2026-11-28', price:150000, dpPaid:49500, rest:105000, state:'DPPaid', arrived:false, otp:'482910' },
+-    { id:'LI-0E050F78', vid:0, pkg:2, date:'2026-11-25', price:249000, dpPaid:82170, rest:174300, state:'DPPaid', arrived:false, otp:'729401' }
++    { id:'LK-2611', vid:1, pkg:1, date:'2026-11-28', price:150000, dpPaid:49500, rest:105000, state:'DPPaid', arrived:false, disputed:false, otp:'482910' },
++    { id:'LI-0E050F78', vid:0, pkg:2, date:'2026-11-25', price:249000, dpPaid:82170, rest:174300, state:'DPPaid', arrived:false, disputed:false, otp:'729401' }
+   ]
+ };
+ 
+@@ -453,6 +453,7 @@
+     var c=calc(),st=S.stage,sg=S.item=='s';
+     var curBid=S.activeBid||'LK-2611';
+     var bItem=S.bookingsList.find(function(b){return b.id===curBid})||S.bookingsList[0];
++    var isDisputed=!!bItem.disputed;
+     var vName=VD[bItem.vid]?VD[bItem.vid].n:'Vendor Wisuda';
+     var vCat=VD[bItem.vid]?CAT[VD[bItem.vid].c]:'Layanan Wisuda';
+ 
+@@ -509,7 +510,7 @@
+       +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">'
+       +'<div><h3 style="margin:0;font-size:17px">'+curBid+' &middot; '+vName+'</h3><span class="mut" style="font-size:13px">'+vCat+' &middot; Tanggal Acara: '+bItem.date+'</span></div>'
+       +'<span class="tag ok" style="font-size:13px">DP Terverifikasi</span></div>'
+-      +(S.dispute?'<div class="msg" style="background:#FEF2F2;border:1px solid #FCA5A5;color:#991B1B"><b>⚠️ Keluhan diajukan. Pencairan dana ditahan sampai admin memutuskan.</b><p style="margin:4px 0 0;font-size:13px">Tim mediator LockIn sedang meninjau bukti yang telah diunggah.</p></div>':'')
++      +(isDisputed?'<div class="msg" style="background:#FEF2F2;border:1px solid #FCA5A5;color:#991B1B"><b>⚠️ Keluhan diajukan. Pencairan dana ditahan sampai admin memutuskan.</b><p style="margin:4px 0 0;font-size:13px">Tim mediator LockIn sedang meninjau bukti yang telah diunggah.</p></div>':'')
+       +T(1,'Perjanjian Digital Ditandatangani','Kunci kesepakatan on-chain SHA-256')
+       +T(1,'DP 30% Telah Dibayar ('+rp(bItem.dpPaid)+')','Dana aman tersimpan di Rekening Escrow LockIn')
+       +T(S.lunas,'Pelunasan 70% ('+rp(bItem.rest)+')',S.lunas?'Pelunasan berhasil dikonfirmasi':'Jatuh tempo paling lambat H-1 acara')
+@@ -518,10 +519,10 @@
+       +T(st>=3,'Konfirmasi Selesai &amp; Dana Dicairkan','Dana escrow diteruskan ke rekening vendor')
+       // Action buttons
+       +'<div style="margin-top:20px;display:flex;gap:10px;flex-wrap:wrap">'
+-      +(!S.lunas&&!S.dispute?'<button class="btn" data-a="payrest">Bayar Pelunasan Sekarang</button>':'')
+-      +(bItem.arrived&&st<2&&!S.dispute?'<button class="btn" data-a="vdone" style="background:#059669">✅ Acara Berjalan Lancar (Tandai Selesai)</button>':'')
+-      +(st==2&&!S.dispute?'<button class="btn" data-a="confirm" style="background:#059669">✅ Konfirmasi Selesai &amp; Beri Rating</button>':'')
+-      +(!S.dispute?'<button class="btn o" data-a="open-complain" style="color:#DC2626;border-color:#DC2626">⚠️ Ajukan Keluhan / Sengketa</button>':'')
++      +(!S.lunas&&!isDisputed?'<button class="btn" data-a="payrest">Bayar Pelunasan Sekarang</button>':'')
++      +(bItem.arrived&&st<2&&!isDisputed?'<button class="btn" data-a="vdone" style="background:#059669">✅ Acara Berjalan Lancar (Tandai Selesai)</button>':'')
++      +(st==2&&!isDisputed?'<button class="btn" data-a="confirm" style="background:#059669">✅ Konfirmasi Selesai &amp; Beri Rating</button>':'')
++      +(!isDisputed?'<button class="btn o" data-a="open-complain" style="color:#DC2626;border-color:#DC2626">⚠️ Ajukan Keluhan / Sengketa</button>':'')
+       +'</div>'
+       +'<div style="margin-top:16px;padding:12px;background:#F8FAFC;border:1px solid var(--b);border-radius:12px;font-size:12px;color:var(--m)">'
+       +'ℹ️ <b>Sanksi Otomatis Luar Web:</b> Pelunasan wajib diselesaikan melalui sistem paling lambat H-1. Jika sampai H+2 setelah acara belum dilunasi tanpa persetujuan admin, sistem otomatis mendeteksi transaksi luar web dengan penalti 30% dari saldo tertahan.'
+@@ -1018,9 +1019,12 @@
+   }
+   else if(k=='open-complain'){
+     var r=prompt('Masukkan kronologi keluhan sengketa:');
+-    if(r){
+-      S.dispute=true;
+-      toast('⚠️ Keluhan diajukan. Pencairan dana ditahan sampai admin memutuskan.');
++    if(r && r.trim()){
++      var selectedBooking=S.bookingsList.find(function(b){return b.id===S.activeBid;});
++      if(!selectedBooking){toast('Booking tidak ditemukan.');return;}
++      selectedBooking.disputed=true;
++      selectedBooking.complaintText=r.trim();
++      toast('⚠️ Keluhan diajukan untuk booking '+selectedBooking.id+'.');
+       render();
+     }
+   }

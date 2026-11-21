@@ -51,9 +51,18 @@ CREATE TABLE IF NOT EXISTS public.bookings (
   deposit             INTEGER DEFAULT 0,
   paid                INTEGER DEFAULT 0,
   state               TEXT NOT NULL DEFAULT 'Pending',
+  execution_state     TEXT NOT NULL DEFAULT 'NOT_STARTED',
   late_booking        BOOLEAN DEFAULT FALSE,
   vendor_accepted_at  TIMESTAMPTZ,
+  arrival_code        TEXT,
+  vendor_arrived      BOOLEAN DEFAULT FALSE,
+  off_platform_warning TEXT,
   completion_evidence TEXT,
+  cancellation_refund INTEGER,
+  cancellation_not_refunded INTEGER,
+  cancellation_refund_tier TEXT,
+  cancellation_refund_description TEXT,
+  cancelled_at         TIMESTAMPTZ,
   off_platform_reported BOOLEAN DEFAULT FALSE,
   agreement           TEXT,
   hash                TEXT,
@@ -61,6 +70,15 @@ CREATE TABLE IF NOT EXISTS public.bookings (
   created_at          TIMESTAMPTZ DEFAULT NOW(),
   updated_at          TIMESTAMPTZ DEFAULT NOW()
 );
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS cancellation_refund INTEGER;
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS cancellation_not_refunded INTEGER;
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS cancellation_refund_tier TEXT;
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS cancellation_refund_description TEXT;
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS cancelled_at TIMESTAMPTZ;
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS arrival_code TEXT;
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS vendor_arrived BOOLEAN DEFAULT FALSE;
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS off_platform_warning TEXT;
+ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS execution_state TEXT NOT NULL DEFAULT 'NOT_STARTED';
 CREATE INDEX IF NOT EXISTS bookings_user_id_idx    ON public.bookings(user_id);
 CREATE INDEX IF NOT EXISTS bookings_vendor_id_idx  ON public.bookings(vendor_id);
 CREATE INDEX IF NOT EXISTS bookings_state_idx      ON public.bookings(state);
@@ -73,6 +91,8 @@ CREATE TABLE IF NOT EXISTS public.payments (
   amount            INTEGER NOT NULL,
   outcome           TEXT DEFAULT 'pending',
   payment_type      TEXT DEFAULT 'DP' CHECK (payment_type IN ('DP','FINAL')),
+  idempotency_key   TEXT,
+  final_confirmed_at TIMESTAMPTZ,
   provider_order_id TEXT,
   redirect_url      TEXT,
   paid_at           TIMESTAMPTZ,
@@ -80,6 +100,9 @@ CREATE TABLE IF NOT EXISTS public.payments (
 );
 CREATE INDEX IF NOT EXISTS payments_booking_id_idx ON public.payments(booking_id);
 CREATE UNIQUE INDEX IF NOT EXISTS payments_provider_order_id_uidx ON public.payments(provider_order_id) WHERE provider_order_id IS NOT NULL;
+ALTER TABLE public.payments ADD COLUMN IF NOT EXISTS idempotency_key TEXT;
+ALTER TABLE public.payments ADD COLUMN IF NOT EXISTS final_confirmed_at TIMESTAMPTZ;
+CREATE UNIQUE INDEX IF NOT EXISTS payments_idempotency_key_uidx ON public.payments(idempotency_key) WHERE idempotency_key IS NOT NULL;
 
 -- ── Disputes & Sengketa ────────────────────────────────────
 CREATE TABLE IF NOT EXISTS public.disputes (

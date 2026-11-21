@@ -9,13 +9,16 @@ import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
 
 if (!supabaseUrl || !supabaseKey) {
   console.warn('[Supabase] SUPABASE_URL atau SUPABASE_SERVICE_ROLE_KEY belum diisi di .env — database tidak aktif.');
 }
 
 export const supabase = supabaseUrl && supabaseKey
-  ? createClient(supabaseUrl, supabaseKey)
+  ? createClient(supabaseUrl, supabaseKey, {
+      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false }
+    })
   : null;
 
 /** Helper: jalankan query dan lempar error jika gagal */
@@ -28,3 +31,15 @@ export async function query(fn) {
 
 /** Cek apakah Supabase terkonfigurasi */
 export const isSupabaseConfigured = () => !!supabase;
+
+// Login/pendaftaran menggunakan client anon terpisah. Jangan gunakan client
+// service_role untuk signInWithPassword: sesi pengguna bisa menggantikan
+// authorization header untuk seluruh query database berikutnya.
+export function createUserAuthClient() {
+  if (!supabaseUrl || !supabaseAnonKey) {
+    throw new Error('SUPABASE_ANON_KEY belum dikonfigurasi untuk login.');
+  }
+  return createClient(supabaseUrl, supabaseAnonKey, {
+    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false }
+  });
+}

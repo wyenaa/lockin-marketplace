@@ -1,0 +1,26 @@
+--- a/backend/src/index.js
++++ b/backend/src/index.js
+@@ -347,7 +347,10 @@
+       const category = url.searchParams.get('category');
+       if (category && category !== 'Semua') q = q.eq('category', category);
+       const { data: rows, error } = await q;
+-      if (error) fail(503, 'Gagal memuat vendor dari database. Coba lagi.');
++      if (error) {
++        console.error('[Supabase vendors]', { code: error.code, message: error.message, hint: error.hint });
++        fail(503, 'Gagal memuat vendor dari database. Coba lagi.');
++      }
+       result = rows || [];
+     }
+ 
+@@ -467,7 +470,10 @@
+     let rows;
+     if (supabase) {
+       const { data, error } = await supabase.from('bookings').select('*, vendors(name, category, owner_id)').order('created_at', { ascending: false });
+-      if (error) fail(503, 'Gagal memuat booking dari database. Coba muat ulang.');
++      if (error) {
++        console.error('[Supabase bookings]', { code: error.code, message: error.message, hint: error.hint });
++        fail(503, 'Gagal memuat booking dari database. Coba muat ulang.');
++      }
+       rows = data || [];
+     } else rows = Array.from(localBookings.values());
+     const filtered = rows.filter(b =>
