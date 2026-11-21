@@ -239,6 +239,18 @@ function validateText(value, label, max = 500) {
   if (typeof value !== 'string' || !value.trim() || value.length > max) fail(400, `${label} tidak valid.`);
   return value.trim();
 }
+function optionalText(value, label, max = 500) {
+  if (value == null || value === '') return '';
+  if (typeof value !== 'string' || value.length > max) fail(400, `${label} tidak valid.`);
+  return value.trim();
+}
+
+function isHttpUrl(value) {
+  try {
+    const url = new URL(value);
+    return ['http:', 'https:'].includes(url.protocol) && !!url.hostname;
+  } catch { return false; }
+}
 
 function bookingCancellationEstimate(b) {
   const estimate = calculateRefund({
@@ -512,24 +524,40 @@ async function api(req, res, url) {
   // ── Pendaftaran Vendor 2 Tahap (public) ──
   if (path === '/api/vendor-applications' && method === 'POST') {
     const d = await body(req);
+    const email = validateText(d.email, 'Email', 160).toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) fail(400, 'Format email tidak valid.');
+    const whatsapp = validateText(d.whatsapp, 'WhatsApp', 40);
+    if (!/^\+?[\d\s().-]{9,25}$/.test(whatsapp)) fail(400, 'Format nomor WhatsApp tidak valid.');
+    const instagram = optionalText(d.instagram, 'Instagram', 200);
+    if (instagram && !/^@[\w.]{1,30}$/.test(instagram) && !isHttpUrl(instagram)) fail(400, 'Format Instagram harus berupa @username atau URL HTTP/HTTPS.');
+    const portfolioUrl = optionalText(d.portfolioUrl, 'URL portofolio', 500);
+    if (portfolioUrl && !isHttpUrl(portfolioUrl)) fail(400, 'URL portofolio harus menggunakan HTTP atau HTTPS yang valid.');
     const appData = {
       id: 'VAPP-' + randomBytes(4).toString('hex').toUpperCase(),
       name: validateText(d.brandName || d.name, 'Nama Usaha', 120),
-      owner_name: validateText(d.ownerName || d.name, 'Nama Pemilik', 80),
-      email: validateText(d.email, 'Email', 160).toLowerCase(),
-      whatsapp: validateText(d.whatsapp, 'WhatsApp', 40),
+      owner_name: validateText(d.ownerName, 'Nama Pemilik', 80),
+      email,
+      whatsapp,
       category: validateText(d.category, 'Kategori Jasa', 60),
-      instagram: d.instagram ? String(d.instagram).trim() : '',
-      portfolio_url: d.portfolioUrl ? String(d.portfolioUrl).trim() : '',
-      description: d.description ? String(d.description).trim() : '',
-      price_range: d.priceRange || 'Mulai 250rb',
+      instagram,
+      portfolio_url: portfolioUrl,
+      description: optionalText(d.description, 'Deskripsi', 2000),
+      price_range: d.priceRange ? validateText(d.priceRange, 'Kisaran tarif', 120) : 'Belum dicantumkan',
       status: 'pending_approval',
       created_at: now()
     };
-    localVendorApplications.push(appData);
+    if (supabase) {
+      const { error } = await supabase.from('vendor_applications').insert(appData);
+      if (error) {
+        console.error('[Vendor Applications] Gagal menyimpan pengajuan:', error.code, error.message);
+        fail(503, 'Pengajuan belum tersimpan. Silakan coba lagi nanti.');
+      }
+    } else {
+      localVendorApplications.push(appData);
+    }
     return send(res, 201, {
       ok: true,
-      message: 'Pendaftaran vendor berhasil dikirim! Tim kurasi admin LockIn akan memverifikasi dalam 1x24 jam. Kredensial dan password akan dikirimkan ke email terdaftar setelah disetujui.',
+      message: 'Pengajuan jasa berhasil tersimpan dan menunggu persetujuan tim LockIn. Pengajuan ini belum membuat akun login.',
       application: appData
     });
   }

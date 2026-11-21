@@ -597,14 +597,15 @@ var pages={
       +'<h2 style="margin:0;font-size:22px">Pendaftaran Vendor Baru</h2>'
       +'<span class="tag" id="vreg-step-badge">Tahap 1 dari 2</span></div>'
       +'<p class="mut" style="font-size:13px;margin:0 0 16px">Daftarkan usahamu untuk menjangkau ribuan wisudawan di Malang dan sekitarnya.</p>'
+      +'<div id="vreg-form">'
       // Form Step 1
       +'<div id="vreg-step1">'
       +'<label for="vn">Nama Usaha / Brand Jasa</label><input type="text" id="vn" placeholder="Contoh: Ratu Kebaya Wisuda" style="margin-bottom:10px">'
       +'<label for="vo">Nama Pemilik Usaha</label><input type="text" id="vo" placeholder="Nama lengkap pemilik" style="margin-bottom:10px">'
       +'<label for="vk">Kategori Layanan Utama</label><select id="vk" style="margin-bottom:10px"><option>PA Wisuda</option><option>Graduation Content Creator</option><option>Hijab &amp; Hair Stylist</option><option>MUA</option><option>Acrylic Standing Sign</option></select>'
-      +'<label for="ve">Alamat Email Aktif (Untuk Penerimaan Akun)</label><input type="email" id="ve" placeholder="email@usaha.com" style="margin-bottom:10px">'
-      +'<label for="vw">Nomor WhatsApp Aktif</label><input type="text" id="vw" placeholder="08xxxxxxxxxx" style="margin-bottom:16px">'
-      +'<button class="btn blk" onclick="nextVregStep(2)">Lanjut ke Tahap 2: Detail Portofolio &rarr;</button>'
+      +'<label for="ve">Alamat Email Aktif</label><input type="email" id="ve" placeholder="email@usaha.com" required style="margin-bottom:10px">'
+      +'<label for="vw">Nomor WhatsApp Aktif</label><input type="tel" id="vw" placeholder="08xxxxxxxxxx" required style="margin-bottom:16px">'
+      +'<button type="button" class="btn blk" onclick="nextVregStep(2)">Lanjut ke Tahap 2: Detail Portofolio &rarr;</button>'
       +'</div>'
       // Form Step 2
       +'<div id="vreg-step2" style="display:none">'
@@ -613,8 +614,19 @@ var pages={
       +'<label for="vpr">Kisaran Tarif Layanan</label><input type="text" id="vpr" placeholder="Contoh: Mulai 250.000 s/d 500.000" style="margin-bottom:10px">'
       +'<label for="vd">Deskripsi Singkat Keahlian</label><textarea id="vd" rows="2" placeholder="Ceritakan pengalaman dan keunggulan jasamu..." style="margin-bottom:16px"></textarea>'
       +'<div style="display:flex;gap:8px">'
-      +'<button class="btn o" style="flex:1" onclick="nextVregStep(1)">&larr; Kembali</button>'
-      +'<button class="btn" style="flex:2" onclick="submitVendorApplication()">Kirim Pendaftaran</button>'
+      +'<button type="button" class="btn o" style="flex:1" onclick="nextVregStep(1)">&larr; Kembali</button>'
+      +'<button type="button" id="vreg-submit" class="btn" style="flex:2" onclick="submitVendorApplication()">Kirim Pendaftaran</button>'
+      +'</div><div id="vreg-message" role="status" aria-live="polite" style="display:none;margin-top:12px;padding:10px 12px;border-radius:10px;font-size:13px"></div></div>'
+      +'</div>'
+      +'<div id="vreg-success" style="display:none;text-align:center;padding:22px 8px">'
+      +'<div style="width:52px;height:52px;border-radius:50%;margin:0 auto 12px;background:var(--ok);color:var(--okt);display:flex;align-items:center;justify-content:center;font-size:26px;font-weight:700">&#10003;</div>'
+      +'<h3 style="margin:0 0 8px;color:var(--t);font-size:20px">Pengajuan Berhasil Dikirim!</h3>'
+      +'<span class="tag ok">Menunggu Persetujuan Admin</span>'
+      +'<p class="mut" style="font-size:13px;margin:12px 0">Tim LockIn akan meninjau pengajuan usaha jasamu.</p>'
+      +'<p id="vreg-success-id" style="display:none;margin:0 0 16px;color:var(--t);font-size:13px">ID Pengajuan: <b></b></p>'
+      +'<div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">'
+      +'<button type="button" class="btn o" onclick="go(\'beranda\')">Kembali ke Beranda</button>'
+      +'<button type="button" class="btn" onclick="resetVendorApplicationForm()">Daftarkan Usaha Lain</button>'
       +'</div></div></div></div>';
   },
 
@@ -1114,8 +1126,12 @@ async function handleUniversalLogin(e){
 function nextVregStep(step){
   if(step===2){
     var vn=document.getElementById('vn').value.trim();
+    var vo=document.getElementById('vo').value.trim();
+    var vk=document.getElementById('vk').value.trim();
     var ve=document.getElementById('ve').value.trim();
-    if(!vn||!ve){toast('Lengkapi nama usaha dan email terlebih dahulu');return;}
+    var vw=document.getElementById('vw').value.trim();
+    if(!vn||!vo||!vk||!ve||!vw){toast('Lengkapi nama usaha, pemilik, kategori, email, dan WhatsApp.');return;}
+    if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(ve)){toast('Format email tidak valid.');return;}
     document.getElementById('vreg-step1').style.display='none';
     document.getElementById('vreg-step2').style.display='block';
     document.getElementById('vreg-step-badge').textContent='Tahap 2 dari 2';
@@ -1126,13 +1142,49 @@ function nextVregStep(step){
   }
 }
 
-function submitVendorApplication(){
-  toast('Mengirim pendaftaran vendor...');
-  setTimeout(function(){
-    alert('✅ Pendaftaran Berhasil Dikirim!\n\nTim kurasi admin LockIn akan memverifikasi tokomu dalam 1x24 jam. Akun dan password masuk akan dikirimkan otomatis ke alamat email yang didaftarkan.');
-    go('beranda');
-  },700);
+var vendorApplicationSending=false;
+async function submitVendorApplication(){
+  if(vendorApplicationSending)return;
+  var value=function(id){return document.getElementById(id).value.trim()};
+  var message=document.getElementById('vreg-message'),button=document.getElementById('vreg-submit');
+  var showMessage=function(text,error){message.textContent=text;message.style.display='block';message.style.background=error?'var(--bad)':'var(--ok)';message.style.color=error?'var(--badt)':'var(--okt)'};
+  var data={brandName:value('vn'),ownerName:value('vo'),category:value('vk'),email:value('ve'),whatsapp:value('vw'),instagram:value('vi'),portfolioUrl:value('vp'),priceRange:value('vpr'),description:value('vd')};
+  if(!data.brandName||!data.ownerName||!data.category||!data.email||!data.whatsapp){showMessage('Lengkapi semua data wajib pada Tahap 1.',true);return;}
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email)){showMessage('Format email tidak valid.',true);return;}
+  if(data.instagram&&!/^@[\w.]{1,30}$/.test(data.instagram)&&!validHttpUrl(data.instagram)){showMessage('Instagram harus berupa @username atau URL HTTP/HTTPS yang valid.',true);return;}
+  if(data.portfolioUrl&&!validHttpUrl(data.portfolioUrl)){showMessage('URL portofolio harus menggunakan HTTP/HTTPS yang valid.',true);return;}
+  vendorApplicationSending=true;button.disabled=true;button.textContent='Mengirim...';showMessage('Mengirim pengajuan ke server...',false);
+  try{
+    var result=await apiRequest('/api/vendor-applications','POST',data);
+    if(!result.ok||!result.application||result.application.status!=='pending_approval')throw new Error('Server belum mengonfirmasi penyimpanan pengajuan.');
+    showVendorApplicationSuccess(result.application.id);
+    toast('Pengajuan vendor berhasil dikirim.');
+  }catch(err){showMessage(err.message||'Pengajuan gagal disimpan. Silakan coba lagi.',true);toast('Pengajuan gagal: '+(err.message||'Kesalahan server.'));}
+  finally{vendorApplicationSending=false;button.disabled=false;button.textContent='Kirim Pendaftaran';}
 }
+
+function showVendorApplicationSuccess(applicationId){
+  document.getElementById('vreg-form').style.display='none';
+  document.getElementById('vreg-success').style.display='block';
+  var idRow=document.getElementById('vreg-success-id'),idValue=idRow.querySelector('b');
+  if(applicationId){idValue.textContent=applicationId;idRow.style.display='block'}
+  else{idValue.textContent='';idRow.style.display='none'}
+}
+
+function resetVendorApplicationForm(){
+  ['vn','vo','ve','vw','vi','vp','vpr','vd'].forEach(function(id){document.getElementById(id).value=''});
+  document.getElementById('vk').selectedIndex=0;
+  document.getElementById('vreg-step1').style.display='block';
+  document.getElementById('vreg-step2').style.display='none';
+  document.getElementById('vreg-step-badge').textContent='Tahap 1 dari 2';
+  document.getElementById('vreg-message').textContent='';
+  document.getElementById('vreg-message').style.display='none';
+  document.getElementById('vreg-success').style.display='none';
+  document.getElementById('vreg-form').style.display='block';
+  var button=document.getElementById('vreg-submit');button.disabled=false;button.textContent='Kirim Pendaftaran';
+}
+
+function validHttpUrl(value){try{var url=new URL(value);return (url.protocol==='http:'||url.protocol==='https:')&&!!url.hostname}catch(e){return false}}
 
 // Bank-Style Agreement Scroll Modal
 function openBankTermsModal(){
