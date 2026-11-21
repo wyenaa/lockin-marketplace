@@ -27,9 +27,18 @@ const publicRoot = resolve(root, '../../frontend/public');
 
 // ─── Local In-Memory Store (Fallback saat Supabase tables belum di-run) ──────
 const demoAccounts = {
-  'user@lockin.demo':   { id: 'd32824cc-da8b-4ed5-b8aa-af8a62daac53', name: 'Pelanggan Demo', email: 'user@lockin.demo', role: 'customer' },
-  'vendor@lockin.demo': { id: 'd9d01426-73a7-43e6-86fe-d296b200d0b1', name: 'Vendor Demo', email: 'vendor@lockin.demo', role: 'vendor' },
-  'admin@lockin.demo':  { id: 'a3769509-249b-4cb9-8aff-12d1dd5b65d9', name: 'Admin Demo', email: 'admin@lockin.demo', role: 'admin' }
+  // Pelanggan / Customer (Rani)
+  'pelanggan@lockin.id': { id: 'd32824cc-da8b-4ed5-b8aa-af8a62daac53', name: 'Rani (Wisudawan UB)', email: 'pelanggan@lockin.id', role: 'customer' },
+  'user@lockin.demo':    { id: 'd32824cc-da8b-4ed5-b8aa-af8a62daac53', name: 'Rani (Wisudawan UB)', email: 'user@lockin.demo', role: 'customer' },
+  'rani@lockin.id':      { id: 'd32824cc-da8b-4ed5-b8aa-af8a62daac53', name: 'Rani (Wisudawan UB)', email: 'rani@lockin.id', role: 'customer' },
+
+  // Vendor (Glow Studio PA)
+  'vendor@lockin.id':    { id: 'd9d01426-73a7-43e6-86fe-d296b200d0b1', name: 'Glow Studio PA', email: 'vendor@lockin.id', role: 'vendor' },
+  'vendor@lockin.demo':  { id: 'd9d01426-73a7-43e6-86fe-d296b200d0b1', name: 'Glow Studio PA', email: 'vendor@lockin.demo', role: 'vendor' },
+
+  // Admin LockIn
+  'admin@lockin.id':     { id: 'a3769509-249b-4cb9-8aff-12d1dd5b65d9', name: 'Admin LockIn', email: 'admin@lockin.id', role: 'admin' },
+  'admin@lockin.demo':   { id: 'a3769509-249b-4cb9-8aff-12d1dd5b65d9', name: 'Admin LockIn', email: 'admin@lockin.demo', role: 'admin' }
 };
 const localSessions = new Map();
 const localBookings = new Map();
@@ -38,6 +47,53 @@ const localDisputes = new Map();
 const localEvidence = new Map();
 const localReports  = [];
 const localAudit    = [];
+
+// Pemetaan UUID Vendor Supabase resmi
+const VENDOR_UUIDS = [
+  'e0000000-0000-4000-8000-000000000001', // 1: Lolita Makeup
+  'b8d6fb1a-2121-4701-bc90-83eaa7970c60', // 2: Makeup Rinsil
+  'e0000000-0000-4000-8000-000000000003', // 3: Magda MUA
+  'e0000000-0000-4000-8000-000000000004', // 4: Hijab Do Malang
+  'e0000000-0000-4000-8000-000000000005', // 5: Lolita Makeup (add-on hairdo)
+  'e0000000-0000-4000-8000-000000000006', // 6: Dokumentasi Wisuda
+  'e0000000-0000-4000-8000-000000000007', // 7: Moment Graduation
+  'e0000000-0000-4000-8000-000000000008', // 8: Glow Studio PA
+  'e0000000-0000-4000-8000-000000000009'  // 9: Arbeya Flo
+];
+
+async function syncBookingToSupabase(b) {
+  if (!supabase) return;
+  try {
+    const isUuid = (val) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(val));
+    const vendor_id = isUuid(b.vendor_id)
+      ? b.vendor_id
+      : (VENDOR_UUIDS[(Number(b.vendor_id) - 1) % VENDOR_UUIDS.length] || VENDOR_UUIDS[0]);
+
+    const payload = {
+      id: b.id,
+      user_id: isUuid(b.user_id) ? b.user_id : 'd32824cc-da8b-4ed5-b8aa-af8a62daac53',
+      vendor_id,
+      event_date: b.event_date || '2026-12-05',
+      location: b.location || 'Malang',
+      start_time: b.start_time || '08:00',
+      price: b.price || 150000,
+      deposit: b.deposit || 0,
+      paid: b.paid || 0,
+      state: b.state || 'Pending',
+      late_booking: Boolean(b.late_booking),
+      arrival_code: b.arrival_code || '482910',
+      vendor_arrived: Boolean(b.vendor_arrived),
+      agreement: typeof b.agreement === 'object' ? JSON.stringify(b.agreement) : (b.agreement || ''),
+      hash: b.hash || '',
+      updated_at: new Date().toISOString()
+    };
+
+    const { error } = await supabase.from('bookings').upsert(payload, { onConflict: 'id' });
+    if (error) console.error('[Supabase Upsert Booking Error]', error.message);
+  } catch (err) {
+    console.error('[Supabase Upsert Exception]', err.message);
+  }
+}
 const localReviews  = [
   { id: 'rev-1', vendor_name: 'Hijab Do Malang', client_name: 'Rani K.', rating: 5, comment: 'Puas banget! Datang tepat waktu, hijab stylist rapi dan tahan seharian pas wisuda.', date: '15 Nov 2026' },
   { id: 'rev-2', vendor_name: 'Glow Studio PA', client_name: 'Dinda P.', rating: 5, comment: 'PA-nya super helpful, nemenin dari pagi sampai foto toga beres.', date: '12 Nov 2026' },
@@ -106,6 +162,7 @@ const defaultDemoBooking = {
   created_at: new Date(Date.now() - 86400000).toISOString()
 };
 localBookings.set('LK-2611', defaultDemoBooking);
+syncBookingToSupabase(defaultDemoBooking);
 
 // Auto-release worker check: Jika 48 jam pasca acara tanpa keluhan, dana otomatis cair ke vendor
 function checkAutoRelease() {
@@ -246,8 +303,9 @@ async function api(req, res, url) {
     const password = validateText(d.password, 'Password', 128);
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) fail(400, 'Format email tidak valid.');
 
-    // 1. Cek Akun Demo bawaan langsung (Zero friction untuk pengujian lokal)
-    if (demoAccounts[email] && (password === 'LockInDemo123!' || password === 'demo123')) {
+    // 1. Cek Akun Demo bawaan langsung (Kredensial resmi demo presentasi)
+    const validPasswords = ['password123', 'demo123', 'LockInDemo123!', 'pelanggan123', 'vendor123', 'admin123'];
+    if (demoAccounts[email] && validPasswords.includes(password)) {
       const token = randomBytes(32).toString('hex');
       localSessions.set(token, { user: demoAccounts[email], expires: Date.now() + 86400000 });
       return send(res, 200, { user: demoAccounts[email] }, { 'Set-Cookie': `lockin_session=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=86400` });
@@ -575,12 +633,9 @@ async function api(req, res, url) {
     };
     localBookings.set(id, bookingData);
     localAudit.push({ booking_id: id, state: 'AgreementLocked', created_at: now() });
-
+    await syncBookingToSupabase(bookingData);
     if (supabase) {
-      try {
-        await supabase.from('bookings').insert(bookingData);
-        await supabase.from('audit').insert({ booking_id: id, state: 'AgreementLocked', created_at: now() });
-      } catch {}
+      try { await supabase.from('audit').insert({ booking_id: id, state: 'AgreementLocked', created_at: now() }); } catch {}
     }
 
     return send(res, 201, await getBooking(id, user));
@@ -722,10 +777,12 @@ async function api(req, res, url) {
         b.state = state;
         b.updated_at = now();
         localAudit.push({ booking_id: b.id, state, created_at: now() });
+        await syncBookingToSupabase(b);
       } else if (d.outcome === 'expired') {
         b.state = 'Expired';
         b.updated_at = now();
         localAudit.push({ booking_id: b.id, state: 'Expired', created_at: now() });
+        await syncBookingToSupabase(b);
       }
       return send(res, 200, { ...b, outcome: d.outcome });
     }
@@ -744,6 +801,7 @@ async function api(req, res, url) {
       b.state = 'Completed';
       b.updated_at = now();
       localAudit.push({ booking_id: b.id, state: 'Completed', created_at: now() });
+      await syncBookingToSupabase(b);
       return send(res, 200, b);
     }
 
@@ -798,6 +856,7 @@ async function api(req, res, url) {
       b.vendor_arrived_at = now();
       b.updated_at = now();
       localAudit.push({ booking_id: b.id, state: 'VendorArrivalVerified', created_at: now() });
+      await syncBookingToSupabase(b);
       return send(res, 200, { ok: true, message: 'Vendor terverifikasi telah tiba dan check-in di lokasi acara.', booking: b });
     }
 
@@ -808,6 +867,7 @@ async function api(req, res, url) {
       try {
         const status = await fetchMidtransStatus(pay.provider_order_id);
         const result = await recordNotification(status, { localBookings, localPayments, localAudit });
+        await syncBookingToSupabase(b);
         return send(res, 200, { result, booking: b });
       } catch (err) { fail(502, 'Gagal memeriksa pembayaran: ' + err.message); }
     }

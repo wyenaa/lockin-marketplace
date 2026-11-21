@@ -559,24 +559,18 @@ var pages={
   },
 
   masuk:function(){
-    return '<div class="w sec" style="max-width:440px;margin:20px auto">'
+    return '<div class="w sec" style="max-width:440px;margin:30px auto">'
       +'<div class="card pad">'
       +'<h2 style="font-size:22px;margin:0 0 6px">Masuk ke LockIn</h2>'
-      +'<p class="mut" style="font-size:13px;margin:0 0 18px">Gunakan 1 pintu masuk untuk semua akun (Pelanggan, Vendor, atau Admin).</p>'
+      +'<p class="mut" style="font-size:13px;margin:0 0 20px">Gunakan 1 pintu masuk untuk semua akun (Pelanggan, Vendor, atau Admin).</p>'
       +'<form onsubmit="handleUniversalLogin(event)">'
       +'<label for="login-email">Alamat Email</label>'
-      +'<input type="email" id="login-email" placeholder="nama@email.com" value="user@lockin.demo" required style="margin-bottom:12px">'
+      +'<input type="email" id="login-email" placeholder="contoh: pelanggan@lockin.id" required style="margin-bottom:14px">'
       +'<label for="login-pass">Kata Sandi</label>'
-      +'<input type="password" id="login-pass" value="demo123" required style="margin-bottom:16px">'
-      +'<button class="btn blk" type="submit" style="font-size:15px;padding:14px">Masuk ke Akun</button>'
+      +'<input type="password" id="login-pass" placeholder="••••••••" required style="margin-bottom:20px">'
+      +'<button class="btn blk" type="submit" id="btn-login-submit" style="font-size:15px;padding:14px">Masuk ke Akun</button>'
       +'</form>'
-      +'<div style="margin-top:20px;padding-top:16px;border-top:1px dashed var(--b)">'
-      +'<span class="mut" style="font-size:12px;font-weight:700;display:block;margin-bottom:8px">Uji Coba Cepat (Akun Demo):</span>'
-      +'<div style="display:flex;gap:6px;flex-direction:column">'
-      +'<button class="btn o" style="font-size:12px;padding:8px" onclick="quickLogin(\'user@lockin.demo\',\'customer\',\'Rani\')">🎓 Masuk sbg Rani (Pelanggan)</button>'
-      +'<button class="btn o" style="font-size:12px;padding:8px" onclick="quickLogin(\'vendor@lockin.demo\',\'vendor\',\'Glow Studio PA\')">💼 Masuk sbg Vendor</button>'
-      +'<button class="btn o" style="font-size:12px;padding:8px" onclick="quickLogin(\'admin@lockin.demo\',\'admin\',\'Admin LockIn\')">🛡️ Masuk sbg Admin</button>'
-      +'</div></div></div></div>';
+      +'</div></div>';
   },
 
   'daftar-vendor':function(){
@@ -699,13 +693,39 @@ function simulateVendorArrival(bid){
 }
 
 // Universal Login 1 Pintu
-function handleUniversalLogin(e){
+async function handleUniversalLogin(e){
   e.preventDefault();
   var em=document.getElementById('login-email').value.trim().toLowerCase();
   var pw=document.getElementById('login-pass').value;
-  if(em.indexOf('admin')>-1) quickLogin(em,'admin','Admin LockIn');
-  else if(em.indexOf('vendor')>-1) quickLogin(em,'vendor','Glow Studio PA');
-  else quickLogin(em,'customer','Rani');
+  var btn=document.getElementById('btn-login-submit');
+  if(btn){ btn.disabled=true; btn.textContent='Memverifikasi...'; }
+
+  try{
+    var res=await fetch('/api/auth/login',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({email:em,password:pw})
+    });
+    var data=await res.json().catch(function(){return {};});
+    if(res.ok && data && data.user){
+      var u=data.user;
+      S.role=u.role;
+      S.user=u.name;
+      toast('✅ Berhasil masuk sebagai '+u.name);
+      if(btn){ btn.disabled=false; btn.textContent='Masuk ke Akun'; }
+      if(u.role==='vendor') go('dashboard');
+      else if(u.role==='admin') go('admin');
+      else go('beranda');
+    }else{
+      if(btn){ btn.disabled=false; btn.textContent='Masuk ke Akun'; }
+      var msg=(data&&data.error)||'Email atau kata sandi tidak cocok.';
+      toast('❌ '+msg);
+      alert('Gagal Masuk:\n'+msg+'\n\nSilakan periksa kembali email dan kata sandi Anda.');
+    }
+  }catch(err){
+    if(btn){ btn.disabled=false; btn.textContent='Masuk ke Akun'; }
+    toast('Terjadi kendala koneksi ke server.');
+  }
 }
 
 function quickLogin(email,role,name){
