@@ -155,7 +155,8 @@ var S={
   activeBid:'',
   vendorArrived:false,
   arrivalOtp:'482910',
-  bookingsList:[],backendError:'',vendorError:'',finalCheckoutBooking:null,finalCheckoutLoading:false,finalCheckoutError:''
+  bookingsList:[],backendError:'',vendorError:'',finalCheckoutBooking:null,finalCheckoutLoading:false,finalCheckoutError:'',
+  vendorBookings:[],vendorDashboardLoading:false,vendorDashboardError:''
 };
 
 var CAT={MUA:'MUA',Stylist:'Hijab & Hair Stylist',GCC:'Graduation Content Creator',PA:'PA Wisuda',Sign:'Acrylic Standing Sign'},
@@ -632,15 +633,33 @@ var pages={
   },
 
   dashboard:function(){
-    var c=calc();
-    return '<div class="w sec"><h2>Dashboard Vendor &amp; Pesanan</h2>'
-      +'<div class="grid"><div class="card pad"><span class="mut">Total Booking Masuk</span><h2 style="font-size:30px;margin:4px 0 0">2</h2></div><div class="card pad"><span class="mut">Dana Tertahan di Escrow</span><h2 style="font-size:30px;margin:4px 0 0;color:var(--p)">Rp131.670</h2></div><div class="card pad"><span class="mut">Siap Dicairkan</span><h2 style="font-size:30px;margin:4px 0 0;color:var(--okt)">Rp0</h2></div></div>'
-      +'<div class="card pad" style="margin-top:20px">'
-      +'<h3>Daftar Pesanan Wisudawan</h3>'
-      +'<div class="row"><b>LK-2611 &middot; Rani (Wisudawan)</b><span class="tag ok">DP Terbayar</span></div>'
-      +'<div class="row"><b>LI-0E050F78 &middot; Sarah (Wisudawan)</b><span class="tag ok">DP Terbayar</span></div>'
-      +'<p class="mut" style="margin-top:12px;font-size:13px">Paket layanan dan harga dapat disesuaikan fleksibel sesuai ketersediaan tokomu.</p>'
-      +'</div></div>';
+    if(S.role!=='vendor') return '<div class="w sec"><div class="card pad"><h2>Akses dashboard vendor tidak tersedia.</h2><p class="mut">Masuk menggunakan akun vendor untuk melihat pesanan.</p></div></div>';
+    var rows=S.vendorBookings||[],fundsReady=rows.every(function(b){return b.paymentBreakdown&&b.paymentBreakdownVerified!==false});
+    var verifiedTotal=fundsReady?rows.reduce(function(sum,b){return sum+(Number(b.paymentBreakdown.dpAmount)||0)+(Number(b.paymentBreakdown.finalAmount)||0)},0):null;
+    var contents=S.vendorDashboardLoading
+      ?'<div class="msg">Memuat booking vendor dari server...</div>'
+      :S.vendorDashboardError
+        ?'<div class="msg" style="background:#FEF2F2;border:1px solid #FCA5A5;color:#991B1B">'+escapeUi(S.vendorDashboardError)+'<div style="margin-top:12px"><button class="btn o" data-a="refresh-vendor-dashboard">Coba lagi</button></div></div>'
+        :!rows.length
+          ?'<div class="msg">Belum ada booking untuk vendor ini.</div>'
+          :rows.map(function(b){
+            var agreement={};try{agreement=typeof b.agreement==='string'?JSON.parse(b.agreement):b.agreement||{}}catch{}
+            var packageName=b.package_name||agreement.packageName||'Paket tidak tersedia';
+            var stateLabel={Pending:'Menunggu pembayaran',WaitingVendorApproval:'Menunggu persetujuan',DPPaid:'DP dibayar',Paid:'Lunas',Completed:'Selesai',Cancelled:'Dibatalkan',Expired:'Kedaluwarsa',Disputed:'Dalam sengketa',Resolved:'Sengketa selesai',Refunded:'Direfund'}[b.state]||b.state||'Status tidak tersedia';
+            return '<div style="padding:14px 0;border-bottom:1px solid var(--b)">'
+              +'<div class="row"><b>#'+escapeUi(b.id)+' &middot; '+escapeUi(b.vendor_name||'Vendor tidak tersedia')+'</b><span class="tag '+(['Cancelled','Expired','Refunded'].includes(b.state)?'':'ok')+'">'+escapeUi(stateLabel)+'</span></div>'
+              +'<div class="row"><span>Pelanggan</span><b>'+escapeUi(b.customer_name||'Nama belum tersedia')+'</b></div>'
+              +'<div class="row"><span>Paket</span><b>'+escapeUi(packageName)+'</b></div>'
+              +'<div class="row"><span>Tanggal acara</span><b>'+escapeUi(b.event_date||'Belum tersedia')+'</b></div>'
+              +'<div class="row"><span>Lokasi</span><b>'+escapeUi(b.location||'Belum tersedia')+'</b></div>'
+              +'<div class="row"><span>Harga</span><b>'+rp(Number(b.price)||0)+'</b></div>'
+              +'</div>';
+          }).join('');
+    return '<div class="w sec"><div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap"><h2>Dashboard Vendor &amp; Pesanan</h2><button class="btn o" data-a="refresh-vendor-dashboard">Muat ulang</button></div>'
+      +'<div class="grid"><div class="card pad"><span class="mut">Total Booking Masuk</span><h2 style="font-size:30px;margin:4px 0 0">'+(S.vendorDashboardLoading?'…':S.vendorDashboardError?'—':rows.length)+'</h2></div>'
+      +'<div class="card pad"><span class="mut">Pembayaran Berhasil (terverifikasi)</span><h2 style="font-size:24px;margin:4px 0 0;color:var(--p)">'+(S.vendorDashboardLoading?'Memuat…':S.vendorDashboardError||verifiedTotal===null?'Belum tersedia':rp(verifiedTotal))+'</h2></div>'
+      +'<div class="card pad"><span class="mut">Status Pencairan</span><h2 style="font-size:24px;margin:4px 0 0;color:var(--m)">Belum tersedia</h2></div></div>'
+      +'<div class="card pad" style="margin-top:20px"><h3>Daftar Pesanan</h3>'+contents+'</div></div>';
   },
 
   admin:function(){
@@ -687,6 +706,7 @@ function render(){
 
 window.addEventListener('hashchange',function(){
   if((location.hash||'').slice(1)==='status'&&S.role==='customer') refreshBookings().then(render).catch(function(err){S.backendError=err.message;render();toast(err.message)});
+  else if((location.hash||'').slice(1)==='dashboard'&&S.role==='vendor') refreshVendorDashboard();
   else render();
 });
 document.addEventListener('change',function(e){
@@ -737,6 +757,21 @@ async function refreshBookings(selectedId){
   return S.bookingsList;
 }
 
+async function refreshVendorDashboard(){
+  if(S.role!=='vendor') return;
+  S.vendorDashboardLoading=true;S.vendorDashboardError='';S.vendorBookings=[];
+  if((location.hash||'').slice(1)==='dashboard') render();
+  try{
+    var rows=await apiRequest('/api/bookings');
+    if(!Array.isArray(rows)) throw new Error('Server mengirim format daftar booking yang tidak valid.');
+    S.vendorBookings=rows;
+  }catch(err){S.vendorDashboardError=err.message;}
+  finally{
+    S.vendorDashboardLoading=false;
+    if((location.hash||'').slice(1)==='dashboard'&&S.role==='vendor') render();
+  }
+}
+
 async function loadVendorCatalog(){
   try{
     var rows=await apiRequest('/api/vendors');
@@ -756,6 +791,7 @@ async function initializeLockIn(){
       S.role=result.user.role;
       S.user=result.user.name;
       if(S.role==='customer') await refreshBookings().catch(function(err){S.backendError=err.message;});
+      if(S.role==='vendor'&&(location.hash||'').slice(1)==='dashboard') await refreshVendorDashboard();
     }else{S.role=null;S.user='';S.bookingsList=[];}
   }catch(err){S.role=null;S.user='';S.bookingsList=[];S.backendError=err.message;}
   render();
@@ -1073,6 +1109,12 @@ document.addEventListener('click',function(e){
   var a=e.target.closest('[data-a]');
   if(!a) return;
   var k=a.dataset.a,v=a.dataset.v;
+
+  if(k==='refresh-vendor-dashboard'){
+    if(S.role==='vendor') refreshVendorDashboard();
+    else toast('Dashboard hanya tersedia untuk akun vendor.');
+    return;
+  }
 
   if(k==='confirm'){
     e.stopImmediatePropagation();

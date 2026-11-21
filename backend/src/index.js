@@ -560,17 +560,34 @@ async function api(req, res, url) {
     checkAutoRelease();
     let rows;
     if (supabase) {
-      const { data, error } = await supabase.from('bookings').select('*, vendors(name, category, owner_id)').order('created_at', { ascending: false });
+      const bookingSelect = user.role === 'vendor'
+        ? '*, vendors(name, category, owner_id), users(name)'
+        : '*, vendors(name, category, owner_id)';
+      const { data, error } = await supabase.from('bookings').select(bookingSelect).order('created_at', { ascending: false });
       if (error) {
         console.error('[Supabase bookings]', { code: error.code, message: error.message, hint: error.hint });
         fail(503, 'Gagal memuat booking dari database. Coba muat ulang.');
       }
       rows = data || [];
     } else rows = Array.from(localBookings.values());
-    const filtered = rows.filter(b =>
+    let filtered = rows.filter(b =>
       user.role === 'admin' || b.user_id === user.id ||
       (user.role === 'vendor' && (b.owner_id === user.id || b.vendors?.owner_id === user.id))
-    ).map(b => withBookingStatuses({ ...b, vendor_name: b.vendor_name || b.vendors?.name, category: b.category || b.vendors?.category }));
+    ).map(b => {
+      const localCustomer = Object.values(demoAccounts).find(account => account.id === b.user_id);
+      const { users, ...booking } = b;
+      const customer = user.role === 'vendor' ? { customer_name: b.users?.name || localCustomer?.name || null } : {};
+      return withBookingStatuses({ ...booking, vendor_name: b.vendor_name || b.vendors?.name, category: b.category || b.vendors?.category, ...customer });
+    });
+    if (user.role === 'vendor') {
+      filtered = await Promise.all(filtered.map(async booking => {
+        try {
+          return { ...booking, paymentBreakdown: await getSuccessfulPaymentBreakdown(booking.id), paymentBreakdownVerified: true };
+        } catch {
+          return { ...booking, paymentBreakdown: null, paymentBreakdownVerified: false };
+        }
+      }));
+    }
     return send(res, 200, filtered);
   }
 
