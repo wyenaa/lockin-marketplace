@@ -157,7 +157,8 @@ var S={
   arrivalOtp:'482910',
   bookingsList:[],backendError:'',vendorError:'',finalCheckoutBooking:null,finalCheckoutLoading:false,finalCheckoutError:'',
   vendorBookings:[],vendorDashboardLoading:false,vendorDashboardError:'',activeVendorBid:'',
-  vendorDetail:null,vendorDetailLoading:false,vendorDetailError:''
+  vendorDetail:null,vendorDetailLoading:false,vendorDetailError:'',
+  vendorVerifyLoading:false,vendorVerifyError:'',vendorVerifySuccess:'',vendorOtpInput:''
 };
 
 var CAT={MUA:'MUA',Stylist:'Hijab & Hair Stylist',GCC:'Graduation Content Creator',PA:'PA Wisuda',Sign:'Acrylic Standing Sign'},
@@ -397,7 +398,7 @@ var pages={
       +'<div class="row"><span>Pelunasan (Sisa 70% H-1)</span><b>'+rp(c.rest)+'</b></div>'
       +'<div class="row"><span>Biaya Layanan Platform (3%)</span><b>'+rp(c.fee)+'</b></div>'
       +'<div class="row" style="border-bottom:2px solid var(--t);padding:14px 0"><span style="font-weight:700;font-size:16px">Dibayar Sekarang</span><b style="font-size:19px;color:var(--p)">'+rp(c.total)+'</b></div>'
-      +'<div style="margin:16px 0;padding:12px;border-radius:12px;background:#F8FAFC;border:1px solid var(--b);font-size:12px;color:var(--m);line-height:1.5">'
+      +'<div style="margin:16px 0;padding:12px;border-radius:12px;background:rgba(29,78,216,.08);border:1px solid var(--b);font-size:12px;color:var(--t);line-height:1.5">'
       +'🔒 <b>Proteksi Escrow LockIn:</b> DP ditahan di rekening penampung resmi. Pelunasan jatuh tempo H-1 sebelum acara wisuda.'
       +'</div>'
       +'<button class="btn blk" onclick="openBankTermsModal()" style="font-size:14px;padding:14px;background:#1D4ED8">'
@@ -704,6 +705,54 @@ var pages={
       }[d.executionStatus || d.execution_state] || (d.state === 'Completed' ? 'Selesai' : d.vendor_arrived ? 'Sedang Berlangsung' : 'Belum Dimulai');
       var stateLabel = {Pending:'Menunggu pembayaran',WaitingVendorApproval:'Menunggu persetujuan',DPPaid:'DP dibayar',Paid:'Lunas',Completed:'Selesai',Cancelled:'Dibatalkan',Expired:'Kedaluwarsa',Disputed:'Dalam sengketa',Resolved:'Sengketa selesai',Refunded:'Direfund'}[d.state]||d.state||'Status tidak tersedia';
 
+      var todayJakarta = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' });
+      var isAlreadyVerified = Boolean(d.vendor_arrived || d.execution_state === 'IN_PROGRESS' || d.execution_state === 'COMPLETED' || d.state === 'Completed');
+      var isFullyPaid = (d.state === 'Paid' || d.state === 'Completed');
+      var isBeforeEventDate = Boolean(d.event_date && typeof d.event_date === 'string' && todayJakarta < d.event_date);
+
+      var arrivalSectionHtml = '';
+      if(isAlreadyVerified){
+        arrivalSectionHtml = '<div class="card pad" style="margin-top:16px;background:rgba(22,101,52,0.06);border:1px solid var(--ok)">'
+          +'<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">'
+          +'<div><h3 style="margin:0 0 4px;font-size:16px;color:var(--t)">📍 Verifikasi Kehadiran</h3>'
+          +'<p style="margin:0;font-size:13px;color:var(--m)">Kehadiran vendor di lokasi acara telah diverifikasi.'+(d.vendor_arrived_at?' Waktu check-in: <b>'+escapeUi(d.vendor_arrived_at)+'</b>':'')+'</p></div>'
+          +'<span class="tag ok" style="font-size:13px;padding:6px 14px">Kehadiran Terverifikasi</span>'
+          +'</div>'
+          +'</div>';
+      } else if(!isFullyPaid){
+        arrivalSectionHtml = '<div class="card pad" style="margin-top:16px">'
+          +'<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">'
+          +'<div><h3 style="margin:0 0 4px;font-size:16px;color:var(--t)">📍 Verifikasi Kehadiran</h3>'
+          +'<p style="margin:0;font-size:13px;color:var(--m)">Pelanggan belum menyelesaikan pelunasan booking. Form kehadiran hanya aktif jika pesanan berstatus lunas.</p></div>'
+          +'<span class="tag" style="font-size:12px;padding:6px 12px">Menunggu pelunasan</span>'
+          +'</div>'
+          +'</div>';
+      } else if(isBeforeEventDate){
+        arrivalSectionHtml = '<div class="card pad" style="margin-top:16px">'
+          +'<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">'
+          +'<div><h3 style="margin:0 0 4px;font-size:16px;color:var(--t)">📍 Verifikasi Kehadiran</h3>'
+          +'<p style="margin:0;font-size:13px;color:var(--m)">Jadwal acara: <b>'+escapeUi(d.event_date)+'</b>. Minta 6 digit kode OTP dari pelanggan saat tiba di lokasi pada hari H.</p></div>'
+          +'<span class="tag" style="font-size:12px;padding:6px 12px">Verifikasi tersedia pada hari pelaksanaan</span>'
+          +'</div>'
+          +'</div>';
+      } else {
+        var errBox = S.vendorVerifyError ? '<div style="margin-top:12px;padding:10px 14px;background:var(--bad);color:var(--badt);border-radius:10px;font-size:13px;font-weight:600">⚠️ '+escapeUi(S.vendorVerifyError)+'</div>' : '';
+        var succBox = S.vendorVerifySuccess ? '<div style="margin-top:12px;padding:10px 14px;background:var(--ok);color:var(--okt);border-radius:10px;font-size:13px;font-weight:600">✅ '+escapeUi(S.vendorVerifySuccess)+'</div>' : '';
+        arrivalSectionHtml = '<div class="card pad" style="margin-top:16px;border:2px solid var(--p)">'
+          +'<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;margin-bottom:12px">'
+          +'<div><h3 style="margin:0 0 4px;font-size:16px;color:var(--t)">📍 Verifikasi Kehadiran</h3>'
+          +'<p style="margin:0;font-size:13px;color:var(--m)">Masukkan 6 digit kode OTP kedatangan yang diberikan oleh pelanggan di lokasi acara.</p></div>'
+          +'<span class="tag ok" style="font-size:11px">Siap Check-in</span>'
+          +'</div>'
+          +'<div style="display:flex;gap:10px;align-items:center;max-width:440px;flex-wrap:wrap">'
+          +'<input type="text" id="vendor-otp-input" inputmode="numeric" pattern="[0-9]*" maxlength="6" placeholder="6 digit OTP" value="'+escapeUi(S.vendorOtpInput||'')+'" style="max-width:180px;font-size:16px;letter-spacing:3px;font-weight:700;text-align:center" '+(S.vendorVerifyLoading?'disabled':'')+'>'
+          +'<button class="btn" data-a="submit-vendor-arrival" data-v="'+escapeUi(d.id)+'" '+(S.vendorVerifyLoading?'disabled':'')+' style="font-size:14px;padding:12px 18px">'+(S.vendorVerifyLoading?'Memverifikasi...':'Verifikasi Kehadiran')+'</button>'
+          +'</div>'
+          +errBox
+          +succBox
+          +'</div>';
+      }
+
       detailHtml = '<div style="margin-top:24px;border-top:2px solid var(--b);padding-top:20px">'
         +'<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;margin-bottom:16px">'
         +'<div><h2 style="margin:0;font-size:20px">Detail Pesanan: <span style="color:var(--p)">#'+escapeUi(d.id)+'</span></h2>'
@@ -731,10 +780,12 @@ var pages={
         +'<div class="row"><span>Sisa Pelunasan (70%)</span><b>'+rp(finalVal)+' '+(isFinalPaid?'<span class="tag ok" style="font-size:10px">Lunas</span>':'<span class="tag" style="font-size:10px">Menunggu</span>')+'</b></div>'
         +'<div class="row"><span>Status Pembayaran</span><b><span class="tag '+(isFinalPaid?'ok':'')+'">'+escapeUi(payStatusLabel)+'</span></b></div>'
         +'<div class="row"><span>Dana Masuk (Tercatat)</span><b style="color:var(--p)">'+rp(Number(d.paid)||0)+'</b></div>'
-        +'<div style="margin-top:16px;padding:12px;background:#F8FAFC;border:1px solid var(--b);border-radius:12px;font-size:12px;color:var(--m)">'
+        +'<div style="margin-top:16px;padding:12px;border-radius:12px;background:rgba(29,78,216,.08);border:1px solid var(--b);font-size:12px;color:var(--t);line-height:1.5">'
         +'🔒 <b>Proteksi Escrow LockIn:</b> Dana ditahan di rekening penampung resmi sampai pelaksanaan acara wisuda selesai.'
         +'</div>'
-        +'</div></div></div>';
+        +'</div></div>'
+        +arrivalSectionHtml
+        +'</div>';
     }
     return '<div class="w sec"><div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap"><h2>Dashboard Vendor &amp; Pesanan</h2><button class="btn o" data-a="refresh-vendor-dashboard">Muat ulang</button></div>'
       +'<div class="grid"><div class="card pad"><span class="mut">Total Booking Masuk</span><h2 style="font-size:30px;margin:4px 0 0">'+(S.vendorDashboardLoading?'…':S.vendorDashboardError?'—':rows.length)+'</h2></div>'
@@ -860,6 +911,10 @@ async function selectVendorBooking(bid){
   S.vendorDetail=null;
   S.vendorDetailLoading=true;
   S.vendorDetailError='';
+  S.vendorVerifyLoading=false;
+  S.vendorVerifyError='';
+  S.vendorVerifySuccess='';
+  S.vendorOtpInput='';
   render();
   try{
     var detail=await apiRequest('/api/bookings/'+encodeURIComponent(bid));
@@ -873,6 +928,58 @@ async function selectVendorBooking(bid){
   }finally{
     if(S.activeVendorBid===bid){
       S.vendorDetailLoading=false;
+      render();
+    }
+  }
+}
+
+async function submitVendorArrival(bid){
+  if(!bid || bid !== S.activeVendorBid) return;
+  if(S.vendorVerifyLoading) return;
+
+  var inputEl = document.getElementById('vendor-otp-input');
+  var code = (inputEl ? inputEl.value : S.vendorOtpInput || '').trim();
+  S.vendorOtpInput = code;
+  S.vendorVerifyError = '';
+  S.vendorVerifySuccess = '';
+
+  if(!/^\d{6}$/.test(code)){
+    S.vendorVerifyError = 'Kode OTP kedatangan harus berupa 6 digit angka.';
+    render();
+    return;
+  }
+
+  S.vendorVerifyLoading = true;
+  render();
+
+  try{
+    var res = await apiRequest('/api/bookings/'+encodeURIComponent(bid)+'/verify-arrival', 'POST', { otp: code });
+    if(S.activeVendorBid !== bid) return;
+
+    S.vendorVerifySuccess = res.message || 'Kehadiran vendor berhasil diverifikasi.';
+    S.vendorOtpInput = '';
+
+    var updatedDetail = await apiRequest('/api/bookings/'+encodeURIComponent(bid));
+    if(S.activeVendorBid === bid){
+      S.vendorDetail = updatedDetail;
+      var idx = (S.vendorBookings || []).findIndex(function(b){ return b.id === bid; });
+      if(idx !== -1){
+        S.vendorBookings[idx] = Object.assign({}, S.vendorBookings[idx], {
+          vendor_arrived: updatedDetail.vendor_arrived,
+          execution_state: updatedDetail.execution_state,
+          executionStatus: updatedDetail.executionStatus,
+          state: updatedDetail.state
+        });
+      }
+    }
+    toast('✅ Kehadiran berhasil diverifikasi!');
+  }catch(err){
+    if(S.activeVendorBid === bid){
+      S.vendorVerifyError = err.message || 'Verifikasi kehadiran gagal.';
+    }
+  }finally{
+    if(S.activeVendorBid === bid){
+      S.vendorVerifyLoading = false;
       render();
     }
   }
@@ -1296,6 +1403,11 @@ document.addEventListener('click',function(e){
     return;
   }
 
+  if(k==='submit-vendor-arrival'){
+    submitVendorArrival(v);
+    return;
+  }
+
   if(k==='confirm'){
     e.stopImmediatePropagation();
     apiRequest('/api/bookings/'+encodeURIComponent(S.activeBid)+'/complete','POST',{}).then(function(){return refreshBookings(S.activeBid)}).then(function(){toast('Penyelesaian booking tercatat.');render()}).catch(function(err){toast(err.message)});
@@ -1424,6 +1536,20 @@ document.addEventListener('click',function(e){
         toast('Pembayaran gagal diproses: '+err.message);
       }
     })();
+  }
+});
+
+document.addEventListener('input', function(e){
+  if(e.target && e.target.id === 'vendor-otp-input'){
+    S.vendorOtpInput = e.target.value.replace(/\D/g, '').slice(0, 6);
+    if(e.target.value !== S.vendorOtpInput) e.target.value = S.vendorOtpInput;
+  }
+});
+
+document.addEventListener('keydown', function(e){
+  if(e.target && e.target.id === 'vendor-otp-input' && e.key === 'Enter'){
+    e.preventDefault();
+    submitVendorArrival(S.activeVendorBid);
   }
 });
 

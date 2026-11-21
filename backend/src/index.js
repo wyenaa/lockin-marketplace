@@ -29,6 +29,7 @@ const publicRoot = resolve(root, '../../frontend/public');
 const demoAccounts = {
   'user@lockin.demo':   { id: 'd32824cc-da8b-4ed5-b8aa-af8a62daac53', name: 'Pelanggan Demo', email: 'user@lockin.demo', role: 'customer' },
   'vendor@lockin.demo': { id: 'd9d01426-73a7-43e6-86fe-d296b200d0b1', name: 'Vendor Demo', email: 'vendor@lockin.demo', role: 'vendor' },
+  'vendor2@lockin.demo': { id: 'd9d01426-73a7-43e6-86fe-d296b200d0b2', name: 'Vendor Lain', email: 'vendor2@lockin.demo', role: 'vendor' },
   'admin@lockin.demo':  { id: 'a3769509-249b-4cb9-8aff-12d1dd5b65d9', name: 'Admin Demo', email: 'admin@lockin.demo', role: 'admin' }
 };
 const localPasswords = new Map(); // Hanya untuk akun lokal yang didaftarkan di mode demo.
@@ -37,7 +38,7 @@ function storeLocalPassword(email, password) {
   localPasswords.set(email, { salt, hash: scryptSync(password, salt, 64) });
 }
 function verifyLocalPassword(email, password) {
-  if (demoAccounts[email] && ['user@lockin.demo', 'vendor@lockin.demo', 'admin@lockin.demo'].includes(email))
+  if (demoAccounts[email] && ['user@lockin.demo', 'vendor@lockin.demo', 'vendor2@lockin.demo', 'admin@lockin.demo'].includes(email))
     return password === 'LockInDemo123!';
   const saved = localPasswords.get(email);
   if (!saved) return false;
@@ -57,6 +58,7 @@ const localReviews  = [
   { id: 'rev-3', vendor_name: 'Lolita Makeup', client_name: 'Sarah M.', rating: 5, comment: 'Makeup flawless dan gak cakey sama sekali. Recommended wisudawan UB!', date: '10 Nov 2026' }
 ];
 const localVendorApplications = [];
+const otpAttempts = new Map();
 
 // Seed default booking untuk demo pengujian LK-2611
 const defaultDemoAgreement = JSON.stringify({
@@ -577,7 +579,11 @@ async function api(req, res, url) {
       const localCustomer = Object.values(demoAccounts).find(account => account.id === b.user_id);
       const { users, ...booking } = b;
       const customer = user.role === 'vendor' ? { customer_name: b.users?.name || localCustomer?.name || null } : {};
-      return withBookingStatuses({ ...booking, vendor_name: b.vendor_name || b.vendors?.name, category: b.category || b.vendors?.category, ...customer });
+      const resBooking = withBookingStatuses({ ...booking, vendor_name: b.vendor_name || b.vendors?.name, category: b.category || b.vendors?.category, ...customer });
+      if (user.role === 'vendor') {
+        delete resBooking.arrival_code;
+      }
+      return resBooking;
     });
     if (user.role === 'vendor') {
       filtered = await Promise.all(filtered.map(async booking => {
@@ -762,8 +768,12 @@ async function api(req, res, url) {
     if (method === 'GET' && !action) {
       const pendingPay = Array.from(localPayments.values()).find(p => p.booking_id === b.id && p.outcome === 'pending' && p.redirect_url);
       const dispute = localDisputes.get(b.id) || null;
+      const resBooking = withBookingStatuses(b);
+      if (user.role === 'vendor') {
+        delete resBooking.arrival_code;
+      }
       return send(res, 200, {
-        ...withBookingStatuses(b),
+        ...resBooking,
         paymentBreakdown: await getSuccessfulPaymentBreakdown(b.id),
         dispute,
         dpBlockchain: null,
@@ -809,7 +819,9 @@ async function api(req, res, url) {
       b.vendor_accepted_at = now();
       b.updated_at = now();
       localAudit.push({ booking_id: b.id, state: 'VendorAccepted', created_at: now() });
-      return send(res, 200, { ...b, message: 'Booking diterima oleh vendor.' });
+      const resBooking = withBookingStatuses(b);
+      if (user.role === 'vendor') delete resBooking.arrival_code;
+      return send(res, 200, { ...resBooking, message: 'Booking diterima oleh vendor.' });
     }
 
     if (action === 'reject') {
@@ -819,7 +831,9 @@ async function api(req, res, url) {
       b.paid = 0;
       b.updated_at = now();
       localAudit.push({ booking_id: b.id, state: `VendorRejected:refund=${refund}`, created_at: now() });
-      return send(res, 200, { ...b, refund, message: 'Booking ditolak vendor. Dana 100% dikembalikan ke pelanggan.' });
+      const resBooking = withBookingStatuses(b);
+      if (user.role === 'vendor') delete resBooking.arrival_code;
+      return send(res, 200, { ...resBooking, refund, message: 'Booking ditolak vendor. Dana 100% dikembalikan ke pelanggan.' });
     }
 
     const d = await body(req);
@@ -958,7 +972,9 @@ async function api(req, res, url) {
         b.completion_evidence = evidence;
         b.updated_at = now();
         localAudit.push({ booking_id: b.id, state: 'VendorProofSubmitted', created_at: now() });
-        return send(res, 200, { ...b, message: 'Bukti kerja berhasil diunggah. Menunggu konfirmasi pelanggan atau auto-release 48 jam.' });
+        const resBooking = withBookingStatuses(b);
+        if (user.role === 'vendor') delete resBooking.arrival_code;
+        return send(res, 200, { ...resBooking, message: 'Bukti kerja berhasil diunggah. Menunggu konfirmasi pelanggan atau auto-release 48 jam.' });
       }
 
       if (!isOwner && !isAdmin) fail(403, 'Hanya pelanggan pemilik booking yang boleh mengonfirmasi penyelesaian.');
@@ -1038,24 +1054,130 @@ async function api(req, res, url) {
     }
 
     if (action === 'verify-arrival') {
-      if (!isVendor) fail(403, 'Hanya vendor pemilik booking yang dapat mengonfirmasi kedatangan.');
-      const code = String(d.otp || d.code || '').trim();
-      const expected = String(b.arrival_code || '482910').trim();
-      if (!code || code !== expected) {
-        fail(400, 'Kode OTP kedatangan tidak cocok. Minta 6-digit kode OTP kedatangan kepada pelanggan.');
+      if (user.role !== 'vendor' || b.owner_id !== user.id) {
+        fail(403, 'Hanya vendor pemilik booking yang dapat mengonfirmasi kedatangan.');
       }
-      b.vendor_arrived = true;
-      b.execution_state = 'IN_PROGRESS';
-      b.vendor_arrived_at = now();
-      b.updated_at = now();
+      if (b.state === 'Cancelled') {
+        fail(409, 'Booking telah dibatalkan.');
+      }
+      if (b.state !== 'Paid') {
+        fail(409, 'Hanya booking yang telah berstatus lunas (Paid) yang dapat diverifikasi kedatangannya.');
+      }
+      if (b.vendor_arrived || b.execution_state === 'IN_PROGRESS' || b.execution_state === 'COMPLETED' || b.state === 'Completed') {
+        fail(409, 'Kedatangan vendor sudah pernah diverifikasi sebelumnya.');
+      }
+
+      const todayJakarta = localToday();
+      if (!b.event_date || typeof b.event_date !== 'string') {
+        fail(400, 'Tanggal acara booking tidak valid.');
+      }
+      if (todayJakarta < b.event_date) {
+        fail(400, 'Verifikasi kehadiran hanya dapat dilakukan pada hari pelaksanaan acara (hari H) atau setelahnya.');
+      }
+
+      const attemptKey = `otp:${b.id}`;
+      const nowTs = Date.now();
+      const attemptRecord = otpAttempts.get(attemptKey) || { count: 0, lockedUntil: 0 };
+      if (attemptRecord.lockedUntil > nowTs) {
+        const waitMin = Math.ceil((attemptRecord.lockedUntil - nowTs) / 60000);
+        fail(429, `Terlalu banyak percobaan OTP yang salah. Coba lagi dalam ${waitMin} menit.`);
+      }
+
+      const expectedCode = typeof b.arrival_code === 'string' ? b.arrival_code.trim() : '';
+      if (!expectedCode || !/^\d{6}$/.test(expectedCode)) {
+        fail(400, 'Kode OTP kedatangan belum tersedia pada booking ini.');
+      }
+
+      const inputCode = String(d.otp != null ? d.otp : d.code != null ? d.code : '').trim();
+      if (!/^\d{6}$/.test(inputCode)) {
+        fail(400, 'Kode OTP kedatangan wajib tepat 6 digit angka.');
+      }
+
+      const inputBuf = Buffer.from(inputCode, 'utf8');
+      const expectedBuf = Buffer.from(expectedCode, 'utf8');
+      const match = inputBuf.length === expectedBuf.length && timingSafeEqual(inputBuf, expectedBuf);
+
+      if (!match) {
+        attemptRecord.count += 1;
+        if (attemptRecord.count >= 5) {
+          attemptRecord.lockedUntil = nowTs + (15 * 60 * 1000);
+          otpAttempts.set(attemptKey, attemptRecord);
+          fail(429, 'Terlalu banyak percobaan OTP yang salah. Verifikasi untuk booking ini ditangguhkan selama 15 menit.');
+        }
+        otpAttempts.set(attemptKey, attemptRecord);
+        const remaining = 5 - attemptRecord.count;
+        fail(400, `Kode OTP kedatangan tidak cocok. Sisa percobaan: ${remaining}.`);
+      }
+
+      otpAttempts.delete(attemptKey);
+
+      const arrivedAt = now();
+      const executionState = 'IN_PROGRESS';
+
       if (supabase) {
-        const { data, error } = await supabase.from('bookings').update({ vendor_arrived: true, execution_state: b.execution_state, vendor_arrived_at: b.vendor_arrived_at, updated_at: b.updated_at }).eq('id', b.id).select('*').maybeSingle();
-        if (error) fail(503, 'Status kedatangan gagal disimpan ke database.');
-        if (!data) fail(404, 'Booking tidak ditemukan saat status kedatangan disimpan.');
+        const updatePayload = {
+          vendor_arrived: true,
+          execution_state: executionState,
+          updated_at: arrivedAt
+        };
+        let { data, error } = await supabase
+          .from('bookings')
+          .update({ ...updatePayload, vendor_arrived_at: arrivedAt })
+          .eq('id', b.id)
+          .eq('vendor_arrived', false)
+          .eq('state', 'Paid')
+          .select('*')
+          .maybeSingle();
+
+        if (error && error.code === '42703') {
+          const fallback = await supabase
+            .from('bookings')
+            .update(updatePayload)
+            .eq('id', b.id)
+            .eq('vendor_arrived', false)
+            .eq('state', 'Paid')
+            .select('*')
+            .maybeSingle();
+          data = fallback.data;
+          error = fallback.error;
+        }
+
+        if (error) {
+          console.error('[Supabase verify-arrival error]', error.code, error.message);
+          fail(503, 'Status kedatangan gagal disimpan ke database.');
+        }
+        if (!data) {
+          fail(409, 'Verifikasi kedatangan gagal diproses karena status booking telah berubah atau sudah diverifikasi.');
+        }
         Object.assign(b, data);
+        b.vendor_arrived_at = arrivedAt;
+      } else {
+        if (b.vendor_arrived) {
+          fail(409, 'Kedatangan vendor sudah pernah diverifikasi sebelumnya.');
+        }
+        b.vendor_arrived = true;
+        b.execution_state = executionState;
+        b.vendor_arrived_at = arrivedAt;
+        b.updated_at = arrivedAt;
       }
-      localAudit.push({ booking_id: b.id, state: 'VendorArrivalVerified', created_at: now() });
-      return send(res, 200, { ok: true, message: 'Vendor terverifikasi telah tiba dan check-in di lokasi acara.', booking: b });
+
+      localAudit.push({ booking_id: b.id, state: 'VendorArrivalVerified', created_at: arrivedAt });
+      if (supabase) {
+        try {
+          await supabase.from('audit').insert({ booking_id: b.id, state: 'VendorArrivalVerified', created_at: arrivedAt });
+        } catch (auditErr) {
+          console.error('[Audit verify-arrival error]', auditErr);
+        }
+      }
+
+      const resBooking = withBookingStatuses(b);
+      delete resBooking.arrival_code;
+
+      return send(res, 200, {
+        ok: true,
+        message: 'Vendor terverifikasi telah tiba dan check-in di lokasi acara.',
+        booking: resBooking
+      });
     }
 
     if (action === 'sync-payment') {
