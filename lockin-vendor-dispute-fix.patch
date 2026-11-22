@@ -1,0 +1,103 @@
+--- a/backend/src/index.js
++++ b/backend/src/index.js
+@@ -1612,7 +1612,18 @@
+     if (supabase) {
+       let query = supabase.from('disputes').select(DISPUTE_SELECT).order('created_at', { ascending: false });
+       if (user.role === 'vendor') {
+-        const { data: ownedBookings, error: ownedError } = await supabase.from('bookings').select('id').eq('owner_id', user.id);
++        // owner_id berada di tabel vendors, bukan bookings. Ambil ID vendor milik akun
++        // terlebih dahulu agar daftar sengketa tidak bocor ke vendor lain.
++        const { data: ownedVendors, error: vendorsError } = await supabase
++          .from('vendors').select('id').eq('owner_id', user.id);
++        if (vendorsError) {
++          console.error('[Vendor dispute ownership]', { code: vendorsError.code });
++          fail(503, 'Gagal memeriksa vendor pemilik booking.');
++        }
++        const vendorIds = (ownedVendors || []).map(vendor => vendor.id);
++        if (!vendorIds.length) return send(res, 200, []);
++        const { data: ownedBookings, error: ownedError } = await supabase
++          .from('bookings').select('id').in('vendor_id', vendorIds);
+         if (ownedError) {
+           console.error('[Vendor dispute booking access]', { code: ownedError.code });
+           fail(503, 'Gagal memeriksa booking vendor untuk daftar sengketa.');
+@@ -1628,7 +1639,7 @@
+       }
+       const bookingIds = (disputes || []).map(dispute => dispute.booking_id);
+       const bookingResult = bookingIds.length
+-        ? await supabase.from('bookings').select('id,event_date,paid,state,vendor_name,owner_id,vendors(name)').in('id', bookingIds)
++        ? await supabase.from('bookings').select('id,event_date,paid,state,vendors(name,owner_id)').in('id', bookingIds)
+         : { data: [], error: null };
+       if (bookingResult.error) {
+         console.error('[Dispute booking details]', { code: bookingResult.error.code });
+@@ -1637,7 +1648,7 @@
+       const bookingById = new Map((bookingResult.data || []).map(booking => [booking.id, booking]));
+       return send(res, 200, (disputes || []).map(dispute => {
+         const booking = bookingById.get(dispute.booking_id) || {};
+-        return { ...dispute, event_date: booking.event_date, paid: booking.paid, state: booking.state, vendor_name: booking.vendor_name || booking.vendors?.name, owner_id: booking.owner_id };
++        return { ...dispute, event_date: booking.event_date, paid: booking.paid, state: booking.state, vendor_name: booking.vendors?.name, owner_id: booking.vendors?.owner_id };
+       }));
+     }
+     const rows = Array.from(localDisputes.values()).map(d => {
+--- a/frontend/public/index.html
++++ b/frontend/public/index.html
+@@ -784,7 +784,7 @@
+           +rows.map(function(b){
+             var isSel=b.id===S.activeVendorBid;
+             var stateLabel={Pending:'Menunggu pembayaran',WaitingVendorApproval:'Menunggu persetujuan',DPPaid:'DP dibayar',Paid:'Lunas',Completed:'Selesai',Cancelled:'Dibatalkan',Expired:'Kedaluwarsa',Disputed:'Dalam Sengketa',Resolved:'Sengketa selesai',Refunded:'Direfund'}[b.state]||b.state||'Status tidak tersedia';
+-            var isNegative=['Cancelled','Expired','Refunded'].includes(b.state);
++            var isNegative=['Cancelled','Expired','Refunded','Disputed'].includes(b.state);
+             return '<div class="b-card'+(isSel?' active':'')+'" data-a="select-vendor-booking" data-v="'+escapeUi(b.id)+'" style="cursor:pointer">'
+               +'<div>'
+               +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">'
+@@ -793,7 +793,6 @@
+               +'</div>'
+               +'<h3 style="margin:0 0 4px;font-size:17px;color:var(--t)">'+escapeUi(b.vendor_name||'Vendor tidak tersedia')+'</h3>'
+               +'<div class="mut" style="font-size:13px;margin-bottom:12px">Tanggal Acara: <b>'+escapeUi(b.event_date||'Belum tersedia')+'</b></div>'
+-              +(b.state==='Disputed'?'<span class="tag" style="font-size:11px;background:var(--bad);color:var(--badt)">Dalam Sengketa</span>':'')
+               +releaseStatusInline(b)
+               +'</div>'
+               +'<div style="display:flex;justify-content:space-between;align-items:center;padding-top:10px;border-top:1px solid var(--b);font-size:13px">'
+--- /dev/null
++++ b/database/migrations/20261123_vendor_dispute_response_fields.sql
+@@ -0,0 +1,15 @@
++-- LockIn Sengketa 1B: backward-compatible fields for persistent vendor response.
++-- Run ONCE in Supabase SQL Editor; safe to rerun. No existing rows modified.
++-- This is not a refund/release migration.
++BEGIN;
++ALTER TABLE public.disputes
++  ADD COLUMN IF NOT EXISTS vendor_evidence_url TEXT,
++  ADD COLUMN IF NOT EXISTS decision_reason TEXT,
++  ADD COLUMN IF NOT EXISTS decided_at TIMESTAMPTZ;
++
++-- Only the trusted backend's service_role may read or submit vendor responses.
++-- Do not grant these rights to anon/authenticated.
++GRANT SELECT ON TABLE public.disputes TO service_role;
++GRANT UPDATE (response, vendor_evidence_url) ON TABLE public.disputes TO service_role;
++COMMIT;
++NOTIFY pgrst, 'reload schema';
+--- /dev/null
++++ b/backend/tests/vendor-dispute-schema.test.mjs
+@@ -0,0 +1,23 @@
++import test from 'node:test';
++import assert from 'node:assert/strict';
++import { readFile } from 'node:fs/promises';
++
++test('persistent dispute select matches additive migration columns', async () => {
++  const backend = await readFile('backend/src/index.js', 'utf8');
++  const migration = await readFile('database/migrations/20261123_vendor_dispute_response_fields.sql', 'utf8');
++  for (const column of ['vendor_evidence_url', 'decision_reason', 'decided_at']) {
++    assert.match(backend, new RegExp(`\\b${column}\\b`));
++    assert.match(migration, new RegExp(`ADD COLUMN IF NOT EXISTS ${column}\\b`));
++  }
++  assert.match(migration, /GRANT UPDATE \(response, vendor_evidence_url\) ON TABLE public\.disputes TO service_role/);
++  assert.doesNotMatch(migration, /GRANT.+TO (anon|authenticated)/);
++});
++
++test('vendor dispute list checks ownership through vendors, not nonexistent booking columns', async () => {
++  const backend = await readFile('backend/src/index.js', 'utf8');
++  const listing = backend.slice(backend.indexOf("if (path === '/api/disputes'"), backend.indexOf('const disputeMatch ='));
++  assert.match(listing, /from\('vendors'\)\.select\('id'\)\.eq\('owner_id', user\.id\)/);
++  assert.match(listing, /from\('bookings'\)\.select\('id'\)\.in\('vendor_id', vendorIds\)/);
++  assert.doesNotMatch(listing, /from\('bookings'\)\.select\('id'\)\.eq\('owner_id'/);
++  assert.doesNotMatch(listing, /select\('id,event_date,paid,state,vendor_name,owner_id,/);
++});

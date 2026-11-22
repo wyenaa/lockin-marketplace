@@ -432,6 +432,40 @@ async function getBooking(id, user) {
   return b;
 }
 
+const DISPUTE_SELECT = 'id,booking_id,reason,evidence,evidence_url,response,vendor_evidence_url,decision,decision_reason,refund,vendor_response_due,created_at,decided_at';
+
+async function getDisputeForBooking(bookingId) {
+  if (!supabase) return localDisputes.get(bookingId) || null;
+  const { data, error } = await supabase.from('disputes').select(DISPUTE_SELECT).eq('booking_id', bookingId).maybeSingle();
+  if (error) {
+    console.error('[Booking dispute read]', { code: error.code });
+    fail(503, 'Gagal membaca sengketa dari database. Coba lagi.');
+  }
+  return data || null;
+}
+
+async function getDisputeById(disputeId) {
+  if (!supabase) return Array.from(localDisputes.values()).find(dispute => dispute.id === disputeId) || null;
+  const { data, error } = await supabase.from('disputes').select(DISPUTE_SELECT).eq('id', disputeId).maybeSingle();
+  if (error) {
+    console.error('[Dispute read]', { code: error.code });
+    fail(503, 'Gagal membaca sengketa dari database. Coba lagi.');
+  }
+  return data || null;
+}
+
+function validateOptionalEvidenceUrl(value) {
+  if (value == null || value === '') return null;
+  const raw = validateText(value, 'Tautan bukti', 2000);
+  try {
+    const parsed = new URL(raw);
+    if (!['http:', 'https:'].includes(parsed.protocol) || !parsed.hostname) throw new Error('invalid');
+  } catch {
+    fail(400, 'Tautan bukti harus berupa URL http atau https yang valid.');
+  }
+  return raw;
+}
+
 // ─── API Router ───────────────────────────────────────────────────────────────
 async function api(req, res, url) {
   await expireBookings();
@@ -1080,7 +1114,7 @@ async function api(req, res, url) {
 
     if (method === 'GET' && !action) {
       const pendingPay = Array.from(localPayments.values()).find(p => p.booking_id === b.id && p.outcome === 'pending' && p.redirect_url);
-      const dispute = localDisputes.get(b.id) || null;
+      const dispute = await getDisputeForBooking(b.id);
       const resBooking = withBookingStatuses(b);
       if (user.role === 'vendor') {
         delete resBooking.arrival_code;
@@ -1575,6 +1609,48 @@ async function api(req, res, url) {
   // ── Disputes (vendor/admin) ──
   if (path === '/api/disputes' && method === 'GET') {
     if (user.role !== 'admin' && user.role !== 'vendor') fail(403, 'Akses ditolak.');
+    if (supabase) {
+      let query = supabase.from('disputes').select(DISPUTE_SELECT).order('created_at', { ascending: false });
+      if (user.role === 'vendor') {
+        // owner_id berada di tabel vendors, bukan bookings. Ambil ID vendor milik akun
+        // terlebih dahulu agar daftar sengketa tidak bocor ke vendor lain.
+        const { data: ownedVendors, error: vendorsError } = await supabase
+          .from('vendors').select('id').eq('owner_id', user.id);
+        if (vendorsError) {
+          console.error('[Vendor dispute ownership]', { code: vendorsError.code });
+          fail(503, 'Gagal memeriksa vendor pemilik booking.');
+        }
+        const vendorIds = (ownedVendors || []).map(vendor => vendor.id);
+        if (!vendorIds.length) return send(res, 200, []);
+        const { data: ownedBookings, error: ownedError } = await supabase
+          .from('bookings').select('id').in('vendor_id', vendorIds);
+        if (ownedError) {
+          console.error('[Vendor dispute booking access]', { code: ownedError.code });
+          fail(503, 'Gagal memeriksa booking vendor untuk daftar sengketa.');
+        }
+        const ownedIds = (ownedBookings || []).map(booking => booking.id);
+        if (!ownedIds.length) return send(res, 200, []);
+        query = query.in('booking_id', ownedIds);
+      }
+      const { data: disputes, error: disputeError } = await query;
+      if (disputeError) {
+        console.error('[Dispute list read]', { code: disputeError.code });
+        fail(503, 'Gagal membaca daftar sengketa dari database.');
+      }
+      const bookingIds = (disputes || []).map(dispute => dispute.booking_id);
+      const bookingResult = bookingIds.length
+        ? await supabase.from('bookings').select('id,event_date,paid,state,vendors(name,owner_id)').in('id', bookingIds)
+        : { data: [], error: null };
+      if (bookingResult.error) {
+        console.error('[Dispute booking details]', { code: bookingResult.error.code });
+        fail(503, 'Gagal membaca ringkasan booking sengketa.');
+      }
+      const bookingById = new Map((bookingResult.data || []).map(booking => [booking.id, booking]));
+      return send(res, 200, (disputes || []).map(dispute => {
+        const booking = bookingById.get(dispute.booking_id) || {};
+        return { ...dispute, event_date: booking.event_date, paid: booking.paid, state: booking.state, vendor_name: booking.vendors?.name, owner_id: booking.vendors?.owner_id };
+      }));
+    }
     const rows = Array.from(localDisputes.values()).map(d => {
       const b = localBookings.get(d.booking_id) || {};
       return { ...d, event_date: b.event_date, paid: b.paid, state: b.state, vendor_name: b.vendor_name, owner_id: b.owner_id };
@@ -1586,14 +1662,32 @@ async function api(req, res, url) {
   if (disputeMatch && method === 'POST') {
     const d = await body(req);
     const disputeId = disputeMatch[1];
-    const dispute = Array.from(localDisputes.values()).find(x => x.id === disputeId);
+    const dispute = await getDisputeById(disputeId);
     if (!dispute) fail(404, 'Sengketa tidak ditemukan.');
     const b = await getBooking(dispute.booking_id, user);
     if (dispute.decision) fail(409, 'Sengketa telah diputuskan.');
     if (disputeMatch[2] === 'response') {
       if (user.role !== 'vendor' || b.owner_id !== user.id) fail(403, 'Hanya vendor terkait yang dapat menanggapi.');
-      dispute.response = validateText(d.response, 'Tanggapan', 4000);
-      return send(res, 200, { ok: true });
+      if (b.state !== 'Disputed') fail(409, 'Booking tidak lagi berada dalam status sengketa aktif.');
+      if (String(dispute.response || '').trim()) fail(409, 'Tanggapan vendor sudah dikirim dan tidak dapat diubah.');
+      const responseText = validateText(d.response, 'Tanggapan', 4000);
+      if (responseText.length < 5) fail(400, 'Tanggapan vendor wajib diisi minimal 5 karakter.');
+      const vendorEvidenceUrl = validateOptionalEvidenceUrl(d.evidenceUrl);
+      if (supabase) {
+        let update = supabase.from('disputes').update({ response: responseText, vendor_evidence_url: vendorEvidenceUrl }).eq('id', dispute.id).is('decision', null);
+        update = dispute.response == null ? update.is('response', null) : update.eq('response', '');
+        const { data: updated, error } = await update.select(DISPUTE_SELECT).maybeSingle();
+        if (error) {
+          console.error('[Persist vendor dispute response]', { code: error.code });
+          fail(503, 'Tanggapan gagal disimpan secara persisten. Sengketa tetap aktif.');
+        }
+        if (!updated) fail(409, 'Tanggapan sudah dikirim atau sengketa telah berubah. Muat ulang detail sengketa.');
+        return send(res, 200, { ok: true, dispute: updated, reviewStatus: 'Menunggu Peninjauan Admin' });
+      }
+      dispute.response = responseText;
+      dispute.vendor_evidence_url = vendorEvidenceUrl;
+      localDisputes.set(dispute.booking_id, dispute);
+      return send(res, 200, { ok: true, dispute, reviewStatus: 'Menunggu Peninjauan Admin' });
     }
     if (user.role !== 'admin') fail(403, 'Hanya admin yang dapat memutuskan sengketa.');
     if (!['vendor', 'sebagian', 'penuh', 'release', 'partial', 'full'].includes(d.decision)) fail(400, 'Keputusan tidak valid.');

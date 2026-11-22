@@ -203,6 +203,7 @@ var S={
   vendorBookings:[],vendorDashboardLoading:false,vendorDashboardError:'',activeVendorBid:'',
   vendorDetail:null,vendorDetailLoading:false,vendorDetailError:'',
   vendorVerifyLoading:false,vendorVerifyError:'',vendorVerifySuccess:'',vendorOtpInput:'',
+  vendorDisputeBookingId:'',vendorDisputeId:'',vendorDisputeLoading:false,vendorDisputeForm:{response:'',evidenceUrl:''},vendorDisputeErrors:{},vendorDisputePreviousFocus:null,
   disputeModalBookingId:'',disputeModalLoading:false,disputeForm:{title:'',evidence:'',evidenceUrl:''},disputeErrors:{},disputePreviousFocus:null
 };
 
@@ -782,8 +783,8 @@ var pages={
           :'<div class="booking-cards-grid">'
           +rows.map(function(b){
             var isSel=b.id===S.activeVendorBid;
-            var stateLabel={Pending:'Menunggu pembayaran',WaitingVendorApproval:'Menunggu persetujuan',DPPaid:'DP dibayar',Paid:'Lunas',Completed:'Selesai',Cancelled:'Dibatalkan',Expired:'Kedaluwarsa',Disputed:'Dalam sengketa',Resolved:'Sengketa selesai',Refunded:'Direfund'}[b.state]||b.state||'Status tidak tersedia';
-            var isNegative=['Cancelled','Expired','Refunded'].includes(b.state);
+            var stateLabel={Pending:'Menunggu pembayaran',WaitingVendorApproval:'Menunggu persetujuan',DPPaid:'DP dibayar',Paid:'Lunas',Completed:'Selesai',Cancelled:'Dibatalkan',Expired:'Kedaluwarsa',Disputed:'Dalam Sengketa',Resolved:'Sengketa selesai',Refunded:'Direfund'}[b.state]||b.state||'Status tidak tersedia';
+            var isNegative=['Cancelled','Expired','Refunded','Disputed'].includes(b.state);
             return '<div class="b-card'+(isSel?' active':'')+'" data-a="select-vendor-booking" data-v="'+escapeUi(b.id)+'" style="cursor:pointer">'
               +'<div>'
               +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">'
@@ -857,6 +858,14 @@ var pages={
           +'<span class="tag ok" style="font-size:13px;padding:6px 14px">Kehadiran Terverifikasi</span>'
           +'</div>'
           +'</div>';
+      } else if(d.state === 'Disputed'){
+        arrivalSectionHtml = '<div class="card pad" style="margin-top:16px">'
+          +'<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">'
+          +'<div><h3 style="margin:0 0 4px;font-size:16px;color:var(--t)">📍 Verifikasi Kehadiran</h3>'
+          +'<p style="margin:0;font-size:13px;color:var(--m)">'+(isFinalPaid?'Pembayaran booking sudah lunas. ':'')+'Verifikasi kehadiran ditunda karena booking sedang dalam sengketa dan menunggu keputusan admin.</p></div>'
+          +'<span class="tag" style="font-size:12px;padding:6px 12px;background:var(--bad);color:var(--badt)">Ditunda karena sengketa</span>'
+          +'</div>'
+          +'</div>';
       } else if(!isFullyPaid){
         arrivalSectionHtml = '<div class="card pad" style="margin-top:16px">'
           +'<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">'
@@ -891,6 +900,7 @@ var pages={
           +'</div>';
       }
 
+      var vendorDisputeHtml=renderVendorDisputeSection(d);
       detailHtml = '<div style="margin-top:24px;border-top:2px solid var(--b);padding-top:20px">'
         +'<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;margin-bottom:16px">'
         +'<div><h2 style="margin:0;font-size:20px">Detail Pesanan: <span style="color:var(--p)">#'+escapeUi(d.id)+'</span></h2>'
@@ -925,6 +935,7 @@ var pages={
         +releaseStatusCard(releaseBooking)
         +blockchainEvidenceCard(d.blockchainEvidence)
         +arrivalSectionHtml
+        +vendorDisputeHtml
         +'</div>';
     }
     return '<div class="w sec"><div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap"><h2>Dashboard Vendor &amp; Pesanan</h2><button class="btn o" data-a="refresh-vendor-dashboard">Muat ulang</button></div>'
@@ -983,6 +994,47 @@ var LG={customer:'masuk',vendor:'masuk',admin:'masuk'};
 var HM={customer:'beranda',vendor:'dashboard',admin:'admin'};
 
 function escapeUi(v){return String(v==null?'':v).replace(/[&<>\"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[c]})}
+function renderVendorDisputeSection(booking){
+  var dispute=booking&&booking.dispute;
+  if(!dispute)return '';
+  var response=String(dispute.response||'').trim(),hasDecision=!!dispute.decision;
+  var status=hasDecision?'Telah Diputuskan Admin':response?'Menunggu Peninjauan Admin':'Menunggu Tanggapan Vendor';
+  var urlBlock=function(label,value){
+    if(!value)return '';
+    var safe=safeVendorApplicationUrl(value);
+    return '<div class="row"><span>'+label+'</span><b>'+(safe?'<a href="'+escapeUi(safe)+'" target="_blank" rel="noopener noreferrer" style="color:var(--p);text-decoration:underline">Lihat bukti</a>':escapeUi(value))+'</b></div>';
+  };
+  return '<section class="card pad" style="margin-top:16px;border:1px solid var(--b)" aria-label="Sengketa Booking">'
+    +'<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px"><h3 style="margin:0;font-size:16px;color:var(--t)">Sengketa Booking</h3><span class="tag" style="background:var(--bad);color:var(--badt)">'+escapeUi(status)+'</span></div>'
+    +'<div class="row"><span>Judul keluhan pelanggan</span><b>'+escapeUi(dispute.reason||'Belum tersedia')+'</b></div>'
+    +'<div style="margin-top:10px"><label>Bukti pendukung tertulis</label><div style="padding:12px;border:1px solid var(--b);border-radius:12px;background:var(--bg);color:var(--t);font-size:13px;white-space:pre-wrap;overflow-wrap:anywhere">'+escapeUi(dispute.evidence||'Belum tersedia')+'</div></div>'
+    +urlBlock('Tautan bukti pelanggan',dispute.evidence_url)
+    +(response?'<div style="margin-top:12px"><label>Tanggapan vendor</label><div style="padding:12px;border:1px solid var(--b);border-radius:12px;background:var(--bg);color:var(--t);font-size:13px;white-space:pre-wrap;overflow-wrap:anywhere">'+escapeUi(response)+'</div>'+urlBlock('Tautan bukti tambahan',dispute.vendor_evidence_url)+'</div>':'')
+    +(!hasDecision&&!response?'<p class="mut" style="font-size:12px;margin:10px 0">Dana yang belum dicairkan tetap ditahan secara simulasi selama sengketa aktif.</p><button type="button" class="btn" data-a="respond-dispute" data-v="'+escapeUi(booking.id)+'">Tanggapi Sengketa</button>':'')
+    +'</section>';
+}
+function validateVendorDisputeForm(form){
+  form=form||{};var response=String(form.response||'').trim(),url=String(form.evidenceUrl||'').trim(),errors={};
+  if(!response||response.length<5)errors.response='Tanggapan wajib diisi minimal 5 karakter.';
+  else if(response.length>4000)errors.response='Tanggapan maksimal 4.000 karakter.';
+  if(url){try{var parsed=new URL(url);if(!['http:','https:'].includes(parsed.protocol)||!parsed.hostname)throw new Error('invalid')}catch(_){errors.evidenceUrl='Masukkan tautan http:// atau https:// yang valid.'}}
+  return {valid:Object.keys(errors).length===0,errors:errors,response:response,evidenceUrl:url};
+}
+function renderVendorDisputeModal(){
+  var bookingId=S.vendorDisputeBookingId;if(!bookingId)return '';
+  var d=S.vendorDetail&&String(S.vendorDetail.id)===String(bookingId)?S.vendorDetail:null,dispute=d&&d.dispute;
+  if(!dispute)return '';
+  var form=S.vendorDisputeForm||{response:'',evidenceUrl:''},errors=S.vendorDisputeErrors||{};
+  var fieldError=function(key,id){return errors[key]?'<p class="dispute-field-error" id="vendor-dispute-'+id+'-error" role="alert">'+escapeUi(errors[key])+'</p>':''};
+  return '<div class="dispute-modal-backdrop" id="vendor-dispute-modal-backdrop"><section class="dispute-modal" role="dialog" aria-modal="true" aria-labelledby="vendor-dispute-modal-title" aria-describedby="vendor-dispute-modal-description">'
+    +'<header style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:18px 20px;border-bottom:1px solid var(--b)"><div><h2 id="vendor-dispute-modal-title" style="margin:0;color:var(--t)">Tanggapi Sengketa</h2><p id="vendor-dispute-modal-description" class="mut" style="font-size:12px;margin:3px 0 0">Tanggapan akan tersimpan pada sengketa booking ini.</p></div><button type="button" class="btn o" data-a="close-vendor-dispute" aria-label="Tutup tanggapan sengketa" style="padding:7px 11px" '+(S.vendorDisputeLoading?'disabled':'')+'>Tutup</button></header>'
+    +'<form id="vendor-dispute-form" novalidate><div class="dispute-modal-body">'
+    +'<div class="admin-application-detail-grid"><div class="admin-application-detail"><label>Nama Vendor</label><div>'+escapeUi(d.vendor_name||'Vendor')+'</div></div><div class="admin-application-detail"><label>ID Booking</label><div>'+escapeUi(bookingId)+'</div></div></div>'
+    +'<div><label for="vendor-dispute-response">Tanggapan Vendor <span aria-hidden="true">*</span></label><textarea id="vendor-dispute-response" maxlength="4000" required aria-invalid="'+!!errors.response+'"'+(errors.response?' aria-describedby="vendor-dispute-response-error"':'')+'>'+escapeUi(form.response)+'</textarea>'+fieldError('response','response')+'<p class="mut" style="font-size:11px;margin:4px 0 0">Minimal 5 dan maksimal 4.000 karakter.</p></div>'
+    +'<div><label for="vendor-dispute-evidence-url">Tautan Bukti Tambahan <span class="mut" style="font-weight:500">(opsional)</span></label><input id="vendor-dispute-evidence-url" type="url" maxlength="2000" value="'+escapeUi(form.evidenceUrl)+'" placeholder="https://..." aria-invalid="'+!!errors.evidenceUrl+'"'+(errors.evidenceUrl?' aria-describedby="vendor-dispute-evidence-url-error"':'')+'>'+fieldError('evidenceUrl','evidence-url')+'</div>'
+    +(errors.form?'<div class="msg" role="alert" style="margin:0;background:var(--bad);color:var(--badt)">'+escapeUi(errors.form)+'</div>':'')
+    +'</div><div class="dispute-modal-actions"><button type="button" class="btn o" data-a="close-vendor-dispute" '+(S.vendorDisputeLoading?'disabled':'')+'>Batal</button><button type="submit" class="btn" '+(S.vendorDisputeLoading?'disabled':'')+'>'+(S.vendorDisputeLoading?'Mengirim...':'Kirim Tanggapan')+'</button></div></form></section></div>';
+}
 function disputeFormValidation(form){
   form=form||{};
   var title=String(form.title||'').trim(),evidence=String(form.evidence||'').trim(),url=String(form.evidenceUrl||'').trim(),errors={};
@@ -1089,7 +1141,7 @@ function render(){
     history.replaceState(null,'','#'+r);
   }
   nav();
-  document.getElementById('app').innerHTML=pages[r]()+renderDisputeModal();
+  document.getElementById('app').innerHTML=pages[r]()+renderDisputeModal()+renderVendorDisputeModal();
   window.scrollTo(0,0);
 }
 
@@ -1129,6 +1181,45 @@ async function submitBookingDispute(){
   }catch(err){
     S.disputeModalLoading=false;S.disputeErrors={form:err.message||'Sengketa gagal dikirim. Periksa kembali data dan coba lagi.'};render();
     var submit=document.querySelector('#dispute-form button[type="submit"]');if(submit)submit.focus();
+  }
+}
+
+function openVendorDisputeModal(bookingId){
+  if(S.role!=='vendor'||S.vendorDisputeLoading)return;
+  var booking=S.vendorDetail,dispute=booking&&booking.dispute;
+  if(!booking||String(booking.id)!==String(bookingId)||booking.state!=='Disputed'||!dispute){toast('Detail sengketa booking tidak tersedia. Muat ulang booking.');return;}
+  if(dispute.decision||String(dispute.response||'').trim()){toast('Tanggapan sengketa sudah dikirim atau sengketa telah ditinjau.');return;}
+  S.vendorDisputePreviousFocus=document.activeElement;S.vendorDisputeBookingId=String(booking.id);S.vendorDisputeId=String(dispute.id);
+  S.vendorDisputeForm={response:'',evidenceUrl:''};S.vendorDisputeErrors={};render();
+  var field=document.getElementById('vendor-dispute-response');if(field)field.focus();
+}
+
+function closeVendorDisputeModal(){
+  if(S.vendorDisputeLoading)return;
+  var previous=S.vendorDisputePreviousFocus;S.vendorDisputeBookingId='';S.vendorDisputeId='';S.vendorDisputeForm={response:'',evidenceUrl:''};S.vendorDisputeErrors={};S.vendorDisputePreviousFocus=null;
+  render();if(previous&&document.contains(previous))previous.focus();else{var trigger=document.querySelector('[data-a="respond-dispute"]');if(trigger)trigger.focus();}
+}
+
+async function submitVendorDisputeResponse(){
+  if(S.role!=='vendor'||S.vendorDisputeLoading||!S.vendorDisputeBookingId||!S.vendorDisputeId)return;
+  var bookingId=S.vendorDisputeBookingId,disputeId=S.vendorDisputeId,checked=validateVendorDisputeForm(S.vendorDisputeForm);
+  S.vendorDisputeErrors=checked.errors;
+  if(!checked.valid){render();var firstError=Object.keys(checked.errors)[0],field=document.getElementById('vendor-dispute-'+(firstError==='evidenceUrl'?'evidence-url':firstError));if(field)field.focus();return;}
+  S.vendorDisputeLoading=true;S.vendorDisputeErrors={};render();
+  try{
+    var payload={response:checked.response};if(checked.evidenceUrl)payload.evidenceUrl=checked.evidenceUrl;
+    var result=await apiRequest('/api/disputes/'+encodeURIComponent(disputeId)+'/response','POST',payload);
+    if(!result.ok||!result.dispute||result.dispute.id!==disputeId||!String(result.dispute.response||'').trim())throw new Error('Server belum mengonfirmasi penyimpanan tanggapan.');
+    var previous=S.vendorDisputePreviousFocus;
+    if(S.vendorDetail&&String(S.vendorDetail.id)===bookingId)S.vendorDetail=Object.assign({},S.vendorDetail,{dispute:result.dispute});
+    S.vendorDisputeLoading=false;S.vendorDisputeBookingId='';S.vendorDisputeId='';S.vendorDisputeForm={response:'',evidenceUrl:''};S.vendorDisputeErrors={};S.vendorDisputePreviousFocus=null;render();
+    try{var refreshed=await apiRequest('/api/bookings/'+encodeURIComponent(bookingId));if(S.activeVendorBid===bookingId)S.vendorDetail=refreshed;render();}
+    catch(refreshError){toast('Tanggapan tersimpan. Detail terbaru belum dapat dimuat: '+refreshError.message);return;}
+    toast('Tanggapan tersimpan. Status sengketa: Menunggu Peninjauan Admin.');
+    if(previous&&document.contains(previous))previous.focus();else{var trigger=document.querySelector('[data-a="select-vendor-booking"][data-v="'+bookingId+'"]');if(trigger)trigger.focus();}
+  }catch(err){
+    S.vendorDisputeLoading=false;S.vendorDisputeErrors={form:err.message||'Tanggapan gagal disimpan. Coba lagi.'};render();
+    var submit=document.querySelector('#vendor-dispute-form button[type="submit"]');if(submit)submit.focus();
   }
 }
 
@@ -1790,6 +1881,7 @@ function closeSnapModalAndSync(bookingId) {
 document.addEventListener('click',function(e){
   if(e.target.id==='admin-application-modal-backdrop'&&S.role==='admin'){S.adminApplicationDetail='';S.adminApplicationConfirmStatus='';render();return}
   if(e.target.id==='dispute-modal-backdrop'){closeDisputeModal();return}
+  if(e.target.id==='vendor-dispute-modal-backdrop'){closeVendorDisputeModal();return}
   var a=e.target.closest('[data-a]');
   if(!a) return;
   var k=a.dataset.a,v=a.dataset.v;
@@ -1821,6 +1913,8 @@ document.addEventListener('click',function(e){
   }
 
   if(k==='close-dispute-modal'){closeDisputeModal();return;}
+  if(k==='respond-dispute'){openVendorDisputeModal(v);return;}
+  if(k==='close-vendor-dispute'){closeVendorDisputeModal();return;}
 
   if(k==='request-admin-application-decision'){
     if(S.role==='admin'&&!S.adminApplicationActionLoading&&['approved','rejected'].includes(a.dataset.status)){S.adminApplicationDetail=v;S.adminApplicationConfirmStatus=a.dataset.status;S.adminApplicationActionError='';S.adminApplicationActionSuccess='';render()}
@@ -1964,6 +2058,8 @@ document.addEventListener('input', function(e){
   if(e.target&&e.target.id==='dispute-title')S.disputeForm.title=e.target.value;
   if(e.target&&e.target.id==='dispute-evidence')S.disputeForm.evidence=e.target.value;
   if(e.target&&e.target.id==='dispute-evidence-url')S.disputeForm.evidenceUrl=e.target.value;
+  if(e.target&&e.target.id==='vendor-dispute-response')S.vendorDisputeForm.response=e.target.value;
+  if(e.target&&e.target.id==='vendor-dispute-evidence-url')S.vendorDisputeForm.evidenceUrl=e.target.value;
   if(e.target && e.target.id === 'vendor-otp-input'){
     S.vendorOtpInput = e.target.value.replace(/\D/g, '').slice(0, 6);
     if(e.target.value !== S.vendorOtpInput) e.target.value = S.vendorOtpInput;
@@ -1971,11 +2067,12 @@ document.addEventListener('input', function(e){
 });
 
 document.addEventListener('keydown', function(e){
-  if(S.disputeModalBookingId){
-    if(e.key==='Escape'){e.preventDefault();closeDisputeModal();return;}
+  if(S.disputeModalBookingId||S.vendorDisputeBookingId){
+    var vendorModal=!!S.vendorDisputeBookingId,activeDialog=document.querySelector(vendorModal?'.dispute-modal':'#dispute-modal-backdrop .dispute-modal');
+    if(e.key==='Escape'){e.preventDefault();if(vendorModal)closeVendorDisputeModal();else closeDisputeModal();return;}
     if(e.key==='Tab'){
-      var dialog=document.querySelector('.dispute-modal'),focusable=dialog?Array.prototype.slice.call(dialog.querySelectorAll('button:not([disabled]),textarea:not([disabled]),input:not([disabled]),a[href],[tabindex]:not([tabindex="-1"])')):[];
-      if(focusable.length){var first=focusable[0],last=focusable[focusable.length-1];if(!dialog.contains(document.activeElement)){e.preventDefault();first.focus()}else if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus()}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus()}}
+      var focusable=activeDialog?Array.prototype.slice.call(activeDialog.querySelectorAll('button:not([disabled]),textarea:not([disabled]),input:not([disabled]),a[href],[tabindex]:not([tabindex="-1"])')):[];
+      if(focusable.length){var first=focusable[0],last=focusable[focusable.length-1];if(!activeDialog.contains(document.activeElement)){e.preventDefault();first.focus()}else if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus()}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus()}}
     }
   }
   if(e.target && e.target.id === 'vendor-otp-input' && e.key === 'Enter'){
@@ -1986,6 +2083,7 @@ document.addEventListener('keydown', function(e){
 
 document.addEventListener('submit',function(e){
   if(e.target&&e.target.id==='dispute-form'){e.preventDefault();submitBookingDispute();}
+  if(e.target&&e.target.id==='vendor-dispute-form'){e.preventDefault();submitVendorDisputeResponse();}
 });
 
 initializeLockIn();

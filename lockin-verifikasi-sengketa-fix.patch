@@ -1,0 +1,19 @@
+--- a/frontend/public/index.html
++++ b/frontend/public/index.html
+@@ -858,8 +858,16 @@
+           +'<p style="margin:0;font-size:13px;color:var(--m)">Kehadiran vendor di lokasi acara telah diverifikasi.'+(d.vendor_arrived_at?' Waktu check-in: <b>'+escapeUi(d.vendor_arrived_at)+'</b>':'')+'</p></div>'
+           +'<span class="tag ok" style="font-size:13px;padding:6px 14px">Kehadiran Terverifikasi</span>'
+           +'</div>'
+           +'</div>';
++      } else if(d.state === 'Disputed'){
++        arrivalSectionHtml = '<div class="card pad" style="margin-top:16px">'
++          +'<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">'
++          +'<div><h3 style="margin:0 0 4px;font-size:16px;color:var(--t)">📍 Verifikasi Kehadiran</h3>'
++          +'<p style="margin:0;font-size:13px;color:var(--m)">'+(isFinalPaid?'Pembayaran booking sudah lunas. ':'')+'Verifikasi kehadiran ditunda karena booking sedang dalam sengketa dan menunggu keputusan admin.</p></div>'
++          +'<span class="tag" style="font-size:12px;padding:6px 12px;background:var(--bad);color:var(--badt)">Ditunda karena sengketa</span>'
++          +'</div>'
++          +'</div>';
+       } else if(!isFullyPaid){
+         arrivalSectionHtml = '<div class="card pad" style="margin-top:16px">'
+           +'<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">'
+           +'<div><h3 style="margin:0 0 4px;font-size:16px;color:var(--t)">📍 Verifikasi Kehadiran</h3>'
