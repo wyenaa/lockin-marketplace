@@ -1,0 +1,12 @@
+diff --git a/frontend/public/index.html b/frontend/public/index.html
+--- a/frontend/public/index.html
++++ b/frontend/public/index.html
+@@ -8,8 +8,6 @@
+ <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Caveat:wght@700&display=swap">
+ <style>
+ :root{--bg:#F6F9FF;--c:#fff;--t:#0F172A;--m:#475569;--p:#1D4ED8;--pl:#DBEAFE;--b:#E2E8F0;--a:#C2410C;--ok:#DCFCE7;--okt:#166534;--bad:#FEE2E2;--badt:#991B1B;--hero:#DCEAFF;color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+-@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0B1220;--c:#131D33;--t:#E5E7EB;--m:#A3B1C6;--p:#60A5FA;--pl:#1E3A6B;--b:#25324D;--a:#FB923C;--ok:#12391F;--okt:#86EFAC;--bad:#4A1717;--badt:#FCA5A5;--hero:#10203F;color-scheme:dark}}
+-:root[data-theme="dark"]{--bg:#0B1220;--c:#131D33;--t:#E5E7EB;--m:#A3B1C6;--p:#60A5FA;--pl:#1E3A6B;--b:#25324D;--a:#FB923C;--ok:#12391F;--okt:#86EFAC;--bad:#4A1717;--badt:#FCA5A5;--hero:#10203F;color-scheme:dark}
+ html{scroll-padding-top:env(safe-area-inset-top,0px);height:100%}
+ *{box-sizing:border-box}
+ body{margin:0;min-height:100vh;display:flex;flex-direction:column;background:var(--bg);color:var(--t);font-family:'Plus Jakarta Sans',system-ui,sans-serif;line-height:1.5}
