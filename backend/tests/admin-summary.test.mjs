@@ -67,6 +67,14 @@ test('admin summary enforces roles and counts total, active, and open disputes f
   const cancelled = await request(`/api/bookings/${cancelledBooking.data.id}/cancel`, { cookie: customer.cookie, method: 'POST', body: {} });
   assert.equal(cancelled.status, 200);
 
+  const failedBooking = await create(30);
+  assert.equal(failedBooking.status, 201);
+  const failedPayment = await request(`/api/bookings/${failedBooking.data.id}/payment`, {
+    cookie: customer.cookie, method: 'POST',
+    body: { method: 'QRIS', outcome: 'failed', expectedState: 'Pending', paymentType: 'DP' }
+  });
+  assert.equal(failedPayment.status, 200);
+
   const allBookings = await request('/api/bookings', { cookie: admin.cookie });
   const summary = await request('/api/admin/summary', { cookie: admin.cookie });
   assert.equal(summary.status, 200);
@@ -75,10 +83,36 @@ test('admin summary enforces roles and counts total, active, and open disputes f
   assert.equal(summary.data.totalBookings, allBookings.data.length);
   assert.equal(summary.data.activeBookings, allBookings.data.filter(booking => activeStates.includes(booking.state)).length);
   assert.equal(summary.data.openDisputes, allBookings.data.filter(booking => booking.state === 'Disputed').length);
-  assert.equal(summary.data.totalBookings, 3);
-  assert.equal(summary.data.activeBookings, 2);
+  assert.equal(summary.data.totalBookings, 4);
+  assert.equal(summary.data.activeBookings, 3);
   assert.equal(summary.data.openDisputes, 1);
-  assert.deepEqual(summary.data.smartContractFunds, { available: false, label: 'Belum tersedia' });
+  assert.deepEqual(summary.data.simulatedEscrowFunds, { available: false, label: 'Belum tersedia' });
+});
+
+test('verified escrow total excludes released service funds and vendor deposits and rejects incomplete ledger rows', async () => {
+  const source = await readFile('backend/src/index.js', 'utf8');
+  const start = source.indexOf('function verifiedSimulatedEscrowTotal(');
+  const end = source.indexOf('\nfunction vendorPackages(', start);
+  assert.ok(start >= 0 && end > start);
+  const { runInNewContext } = await import('node:vm');
+  const summarize = runInNewContext(source.slice(start, end) + '\nverifiedSimulatedEscrowTotal;');
+  const bookings = [
+    { id: 'held', price: 100, deposit: 20, paid: 50 },
+    { id: 'released', price: 200, deposit: 0, paid: 200 }
+  ];
+  const payments = [
+    { id: 'pay-held', booking_id: 'held', amount: 50, outcome: 'success' },
+    { id: 'pay-release', booking_id: 'released', amount: 200, outcome: 'success' },
+    { id: 'pay-failed', booking_id: 'held', amount: 30, outcome: 'failed' }
+  ];
+  const ledger = [
+    { booking_id: 'held', payment_id: 'pay-held', entry_type: 'SIMULATED_HELD', amount: 50 },
+    { booking_id: 'released', payment_id: 'pay-release', entry_type: 'SIMULATED_HELD', amount: 200 },
+    { booking_id: 'released', payment_id: null, entry_type: 'SIMULATED_RELEASE', amount: 200 }
+  ];
+  assert.equal(summarize(bookings, payments, ledger), 30);
+  assert.equal(summarize(bookings, payments, ledger.slice(0, 2).map(row => row.booking_id === 'held' ? { ...row, amount: 49 } : row)), null);
+  assert.equal(summarize(bookings, payments, [...ledger, { ...ledger[0] }]), null);
 });
 
 test('vendor application list is admin-only and ordered newest-first', async () => {
@@ -138,6 +172,9 @@ test('admin panel renders API indicators with loading and error states and no ha
   assert.match(renderer, /summary\.totalBookings/);
   assert.match(renderer, /summary\.activeBookings/);
   assert.match(renderer, /summary\.openDisputes/);
+  assert.match(renderer, /Dana Escrow \(Simulasi\)/);
+  assert.match(renderer, /summary\.simulatedEscrowFunds/);
+  assert.match(renderer, /Total dana jasa tertahan dari ledger terverifikasi/);
   assert.doesNotMatch(renderer, /Setujui|Tolak/);
   assert.match(html, /apiRequest\('\/api\/admin\/summary'\)/);
   assert.match(html, /S\.role!=='admin'\)return/);
@@ -159,12 +196,14 @@ test('vendor application UI escapes text and only creates links for valid HTTP(S
   };
   const context = {
     URL, Date, Intl,
-    S: { adminSummary: { totalBookings: 1, activeBookings: 1, openDisputes: 0, smartContractFunds: { label: 'Belum tersedia' } }, adminApplications: [hostileApplication], adminApplicationsFilter: 'all', adminApplicationDetail: 'VAPP-TEST' },
+    S: { adminSummary: { totalBookings: 1, activeBookings: 1, openDisputes: 0, simulatedEscrowFunds: { available: true, amount: 123456 } }, adminApplications: [hostileApplication], adminApplicationsFilter: 'all', adminApplicationDetail: 'VAPP-TEST' },
     rp: amount => 'Rp'+Math.round(amount).toLocaleString('id-ID')
   };
   const executable = html.slice(helperStart, helperEnd)+'\nvar pages={'+html.slice(rendererStart, rendererEnd)+'\n}; pages.admin();';
   const { runInNewContext } = await import('node:vm');
   const cardHtml = runInNewContext(executable, context);
+  assert.match(cardHtml, /Dana Escrow \(Simulasi\)/);
+  assert.match(cardHtml, /Rp123\.456/);
   const modalHtml = runInNewContext(html.slice(helperStart, helperEnd)+'\n'+html.slice(html.indexOf('function renderAdminApplicationModal', helperEnd), html.indexOf('function nav()', helperEnd))+'\nrenderAdminApplicationModal("VAPP-TEST");', context);
   assert.doesNotMatch(cardHtml, /<img src=x|<script>alert|<i>MUA/);
   assert.match(cardHtml, /&lt;img src=x onerror=alert\(1\)&gt;/);
@@ -188,6 +227,9 @@ test('vendor application UI escapes text and only creates links for valid HTTP(S
   context.S.adminApplications[0].status='approved';
   const processedModal = runInNewContext(html.slice(helperStart, helperEnd)+'\n'+html.slice(html.indexOf('function renderAdminApplicationModal', helperEnd), html.indexOf('function nav()', helperEnd))+'\nrenderAdminApplicationModal("VAPP-TEST");', context);
   assert.doesNotMatch(processedModal, /Tolak Pengajuan|Setujui Pengajuan|Ya, Setujui|Ya, Tolak/);
+  context.S.adminSummary.simulatedEscrowFunds={available:false,label:'Belum tersedia'};
+  const unavailableFundsHtml=runInNewContext(executable, context);
+  assert.match(unavailableFundsHtml, /Dana Escrow \(Simulasi\)[\s\S]*?Belum tersedia/);
   context.S.adminApplications[0].city=null;
   context.S.adminApplications[0].base_price=null;
   const legacyModal = runInNewContext(html.slice(helperStart, helperEnd)+'\n'+html.slice(html.indexOf('function renderAdminApplicationModal', helperEnd), html.indexOf('function nav()', helperEnd))+'\nrenderAdminApplicationModal("VAPP-TEST");', context);

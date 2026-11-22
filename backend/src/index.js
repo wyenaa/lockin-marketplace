@@ -212,6 +212,57 @@ async function getReleaseStatus(booking) {
   const onHold = activeDispute || ['Disputed', 'Cancelled', 'Refunded', 'Resolved', 'Completed'].includes(booking.state);
   return { simulated: true, status: onHold ? 'ON_HOLD' : 'HELD', amount: serviceHeldAmount, releasedAt: null };
 }
+function verifiedSimulatedEscrowTotal(bookings, payments, ledgerRows) {
+  if (!Array.isArray(bookings) || !Array.isArray(payments) || !Array.isArray(ledgerRows)) return null;
+  const bookingById = new Map(bookings.map(booking => [booking.id, booking]));
+  const successfulPayments = payments.filter(payment => payment.outcome === 'success');
+  const successfulById = new Map(successfulPayments.map(payment => [payment.id, payment]));
+  const heldByBooking = new Map(), releaseByBooking = new Map(), paymentsByBooking = new Map(), heldPaymentIds = new Set();
+  for (const payment of successfulPayments) {
+    if (!payment.id || !bookingById.has(payment.booking_id) || !Number.isSafeInteger(Number(payment.amount)) || Number(payment.amount) <= 0) return null;
+    const rows = paymentsByBooking.get(payment.booking_id) || [];
+    rows.push(payment);
+    paymentsByBooking.set(payment.booking_id, rows);
+  }
+  for (const entry of ledgerRows) {
+    if (!bookingById.has(entry.booking_id) || !Number.isSafeInteger(Number(entry.amount)) || Number(entry.amount) <= 0) return null;
+    if (entry.entry_type === 'SIMULATED_HELD') {
+      const payment = successfulById.get(entry.payment_id);
+      if (!payment || heldPaymentIds.has(entry.payment_id) || Number(payment.amount) !== Number(entry.amount)) return null;
+      heldPaymentIds.add(entry.payment_id);
+      const rows = heldByBooking.get(entry.booking_id) || [];
+      rows.push(entry);
+      heldByBooking.set(entry.booking_id, rows);
+    } else if (entry.entry_type === 'SIMULATED_RELEASE') {
+      if (entry.payment_id != null) return null;
+      const rows = releaseByBooking.get(entry.booking_id) || [];
+      rows.push(entry);
+      releaseByBooking.set(entry.booking_id, rows);
+    } else return null;
+  }
+  let total = 0;
+  for (const booking of bookings) {
+    const successful = paymentsByBooking.get(booking.id) || [];
+    const held = heldByBooking.get(booking.id) || [];
+    const releases = releaseByBooking.get(booking.id) || [];
+    const paid = Number(booking.paid) || 0;
+    const successfulTotal = successful.reduce((sum, payment) => sum + Number(payment.amount), 0);
+    if (!Number.isSafeInteger(successfulTotal) || paid !== successfulTotal || held.length !== successful.length) return null;
+    if (!successful.length && (held.length || releases.length)) return null;
+    if (releases.length > 1) return null;
+    if (!successful.length) continue;
+    const price = Number(booking.price), deposit = Number(booking.deposit) || 0;
+    const heldTotal = held.reduce((sum, entry) => sum + Number(entry.amount), 0);
+    if (!Number.isSafeInteger(price) || price <= 0 || !Number.isSafeInteger(deposit) || deposit < 0 || heldTotal !== successfulTotal) return null;
+    if (releases.length) {
+      if (Number(releases[0].amount) !== price) return null;
+      continue;
+    }
+    total += Math.min(price, Math.max(0, heldTotal - deposit));
+    if (!Number.isSafeInteger(total)) return null;
+  }
+  return total;
+}
 function vendorPackages(v) {
   const base = Math.max(0, Number(v.price) || 0);
   const basic = { id: '1', name: 'Paket Hemat / Basic', desc: 'Layanan esensial standar untuk wisudawan mandiri.', price: base, durasi: '1 Sesi (~2 jam)', revisi: '1x revisi' };
@@ -683,12 +734,35 @@ async function api(req, res, url) {
       activeBookings = bookings.filter(booking => ADMIN_ACTIVE_BOOKING_STATES.includes(booking.state)).length;
       openDisputes = bookings.filter(booking => booking.state === 'Disputed').length;
     }
+    let simulatedEscrowFunds = { available: false, label: 'Belum tersedia' };
+    try {
+      let bookings, successfulPayments, ledgerRows;
+      if (supabase) {
+        const results = await Promise.all([
+          supabase.from('bookings').select('id,price,deposit,paid'),
+          supabase.from('payments').select('id,booking_id,amount,outcome').eq('outcome', 'success'),
+          supabase.from('ledger_entries').select('booking_id,payment_id,entry_type,amount').in('entry_type', ['SIMULATED_HELD', 'SIMULATED_RELEASE'])
+        ]);
+        const queryError = results.find(result => result.error || !Array.isArray(result.data));
+        if (queryError) throw queryError.error || new Error('Ledger escrow tidak tersedia.');
+        [bookings, successfulPayments, ledgerRows] = results.map(result => result.data);
+      } else {
+        bookings = Array.from(localBookings.values());
+        successfulPayments = Array.from(localPayments.values()).filter(payment => payment.outcome === 'success');
+        ledgerRows = localLedgerEntries.filter(entry => ['SIMULATED_HELD', 'SIMULATED_RELEASE'].includes(entry.entry_type));
+      }
+      const amount = verifiedSimulatedEscrowTotal(bookings, successfulPayments, ledgerRows);
+      if (amount !== null) simulatedEscrowFunds = { available: true, amount };
+      else console.error('[Admin summary] Ledger escrow tidak lengkap atau tidak konsisten; total tidak ditampilkan.');
+    } catch (error) {
+      console.error('[Admin summary] Gagal memverifikasi ledger escrow:', error.message);
+    }
     return send(res, 200, {
       totalBookings,
       activeBookings,
       activeBookingStates: ADMIN_ACTIVE_BOOKING_STATES,
       openDisputes,
-      smartContractFunds: { available: false, label: 'Belum tersedia' }
+      simulatedEscrowFunds
     });
   }
 
