@@ -2,7 +2,7 @@
 // Node.js HTTP server + REST API + static file server
 import 'dotenv/config';
 import http from 'node:http';
-import { randomBytes, createHash, scryptSync, timingSafeEqual } from 'node:crypto';
+import { randomBytes, randomUUID, createHash, scryptSync, timingSafeEqual } from 'node:crypto';
 import { readFileSync, existsSync } from 'node:fs';
 import { dirname, resolve, extname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -48,6 +48,16 @@ function verifyLocalPassword(email, password) {
 const localSessions = new Map();
 const localBookings = new Map();
 const ADMIN_ACTIVE_BOOKING_STATES = ['Pending', 'WaitingVendorApproval', 'DPPaid', 'Paid', 'Disputed'];
+const VENDOR_APPLICATION_CITIES = ['Malang', 'Surabaya', 'Yogyakarta', 'Semarang', 'Solo', 'Bandung', 'Bogor'];
+const VENDOR_APPLICATION_CATEGORY_MAP = {
+  'PA Wisuda': 'PA Wisuda',
+  'Graduation Content Creator': 'GCC',
+  'Hijab & Hair Stylist': 'Hijab & Hair Stylist',
+  'MUA': 'MUA',
+  'Acrylic Standing Sign': 'Standing Sign',
+  'GCC': 'GCC',
+  'Standing Sign': 'Standing Sign'
+};
 const localPayments = new Map();
 const localDisputes = new Map();
 const localEvidence = new Map();
@@ -59,6 +69,7 @@ const localReviews  = [
   { id: 'rev-3', vendor_name: 'Lolita Makeup', client_name: 'Sarah M.', rating: 5, comment: 'Makeup flawless dan gak cakey sama sekali. Recommended wisudawan UB!', date: '10 Nov 2026' }
 ];
 const localVendorApplications = [];
+const localVendorApplicationVendorIds = new Map();
 const otpAttempts = new Map();
 
 // Seed default booking untuk demo pengujian LK-2611
@@ -188,6 +199,31 @@ function vendorPackages(v) {
     { id: '2', name: 'Paket Lengkap / Standard (Favorit)', desc: 'Layanan komplit: styling inti + bonus touchup saat prosesi.', price: Math.round(base * 1.25 / 1000) * 1000, durasi: '3-4 Jam', revisi: '2x revisi' },
     { id: '3', name: 'Paket Premium / Exclusive', desc: 'Standby seharian penuh + prioritas hasil cepat + bundling aksesoris.', price: Math.round(base * 1.5 / 1000) * 1000, durasi: 'Full Day', revisi: 'Revisi bebas' }
   ];
+}
+function approvedVendorDetails(application) {
+  validateText(application?.name, 'Nama Usaha', 120);
+  validateText(application?.owner_name, 'Nama Pemilik', 80);
+  const email = validateText(application?.email, 'Email', 160);
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) fail(400, 'Email pengajuan tidak valid.');
+  validateText(application?.whatsapp, 'WhatsApp', 40);
+  const category = VENDOR_APPLICATION_CATEGORY_MAP[application?.category];
+  if (!category) fail(400, 'Kategori pengajuan tidak didukung katalog LockIn.');
+  const city = validateText(application?.city, 'Kota layanan', 60);
+  if (!VENDOR_APPLICATION_CITIES.includes(city)) fail(400, 'Kota layanan pengajuan tidak didukung.');
+  const basePrice = Number(application?.base_price);
+  if (!Number.isSafeInteger(basePrice) || basePrice <= 0 || basePrice > 2147483647)
+    fail(400, 'Harga dasar harus berupa Rupiah bulat positif agar sesuai dengan kolom katalog.');
+  const packages = vendorPackages({ category, price: basePrice });
+  const priceMax = Math.max(...packages.map(pkg => pkg.price));
+  if (!Number.isSafeInteger(priceMax) || priceMax <= 0 || priceMax > 2147483647)
+    fail(400, 'Harga paket tertinggi melebihi batas kolom katalog.');
+  return {
+    category, city, price: basePrice, priceMax,
+    instagram: optionalText(application.instagram, 'Instagram', 200),
+    whatsapp: application.whatsapp.trim(),
+    description: optionalText(application.description, 'Deskripsi', 2000),
+    color: ({ MUA: 'gold', 'Hijab & Hair Stylist': 'green', GCC: 'blue', 'PA Wisuda': 'pink', 'Standing Sign': 'purple' })[category]
+  };
 }
 function withVendorPackages(v) {
   return { ...v, packages: vendorPackages(v) };
@@ -468,7 +504,7 @@ async function api(req, res, url) {
     }
 
     const city = url.searchParams.get('city');
-    if (city && !'malang'.includes(city.toLowerCase())) return send(res, 200, []);
+    if (city) result = result.filter(v => String(v.city || '').toLowerCase() === city.toLowerCase());
     const date = url.searchParams.get('date');
     if (date) {
       const bookedIds = new Set();
@@ -496,7 +532,10 @@ async function api(req, res, url) {
     if (supabase) {
       const { data, error } = await supabase.from('vendors').select('*').eq('id', id).maybeSingle();
       if (error) fail(503, 'Detail vendor gagal dimuat dari database.');
-      v = data;
+      if (data) {
+        const { source_application_id: _sourceApplicationId, ...publicVendor } = data;
+        v = publicVendor;
+      }
     } else {
       v = DEMO_VENDORS.find(item => String(item.id) === String(id));
     }
@@ -527,6 +566,13 @@ async function api(req, res, url) {
     const d = await body(req);
     const email = validateText(d.email, 'Email', 160).toLowerCase();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) fail(400, 'Format email tidak valid.');
+    const city = validateText(d.city, 'Kota layanan', 60);
+    if (!VENDOR_APPLICATION_CITIES.includes(city)) fail(400, 'Pilih kota layanan yang tersedia.');
+    const rawBasePrice = d.basePrice != null ? d.basePrice : d.base_price;
+    const basePriceText = typeof rawBasePrice === 'number' && Number.isFinite(rawBasePrice) ? String(rawBasePrice)
+      : typeof rawBasePrice === 'string' ? rawBasePrice.trim() : '';
+    const basePrice = /^\d+(?:\.\d{1,2})?$/.test(basePriceText) ? Number(basePriceText) : NaN;
+    if (!Number.isFinite(basePrice) || basePrice <= 0 || basePrice > 9999999999.99) fail(400, 'Harga dasar harus lebih dari Rp0, maksimal Rp9.999.999.999,99, dan paling banyak dua angka desimal.');
     const whatsapp = validateText(d.whatsapp, 'WhatsApp', 40);
     if (!/^\+?[\d\s().-]{9,25}$/.test(whatsapp)) fail(400, 'Format nomor WhatsApp tidak valid.');
     const instagram = optionalText(d.instagram, 'Instagram', 200);
@@ -540,10 +586,12 @@ async function api(req, res, url) {
       email,
       whatsapp,
       category: validateText(d.category, 'Kategori Jasa', 60),
+      city,
+      base_price: basePrice,
       instagram,
       portfolio_url: portfolioUrl,
       description: optionalText(d.description, 'Deskripsi', 2000),
-      price_range: d.priceRange ? validateText(d.priceRange, 'Kisaran tarif', 120) : 'Belum dicantumkan',
+      price_range: 'Mulai Rp' + basePrice.toLocaleString('id-ID', { minimumFractionDigits: Number.isInteger(basePrice) ? 0 : 2, maximumFractionDigits: 2 }),
       status: 'pending_approval',
       created_at: now()
     };
@@ -636,6 +684,72 @@ async function api(req, res, url) {
       applications = [...localVendorApplications].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
     }
     return send(res, 200, applications);
+  }
+
+  const applicationDecisionMatch = /^\/api\/admin\/vendor-applications\/([^/]+)\/status$/.exec(path);
+  if (applicationDecisionMatch && method === 'PATCH') {
+    if (user.role !== 'admin') fail(403, 'Hanya admin yang dapat memproses pengajuan vendor jasa.');
+    const applicationId = applicationDecisionMatch[1];
+    if (!/^VAPP-[A-F0-9]{8}$/i.test(applicationId)) fail(400, 'ID pengajuan tidak valid.');
+    const d = await body(req);
+    if (!['approved', 'rejected'].includes(d.status)) fail(400, 'Status harus approved atau rejected.');
+
+    if (supabase) {
+      let expectedBasePrice = null, expectedCategory = null, priceMax = null;
+      if (d.status === 'approved') {
+        const { data: application, error } = await supabase.from('vendor_applications').select('*').eq('id', applicationId).maybeSingle();
+        if (error) {
+          console.error('[Admin vendor application] Gagal membaca pengajuan:', error.code, error.message);
+          fail(503, 'Pengajuan gagal dibaca dari database. Coba lagi.');
+        }
+        if (!application) fail(404, 'Pengajuan vendor tidak ditemukan.');
+        if (application.status !== 'pending_approval') fail(409, 'Pengajuan ini sudah pernah diproses.');
+        const details = approvedVendorDetails(application);
+        expectedBasePrice = Number(application.base_price);
+        expectedCategory = application.category;
+        priceMax = details.priceMax;
+      }
+
+      const { data, error } = await supabase.rpc('process_vendor_application_decision', {
+        p_application_id: applicationId,
+        p_status: d.status,
+        p_expected_base_price: expectedBasePrice,
+        p_expected_category: expectedCategory,
+        p_price_max: priceMax
+      });
+      if (error) {
+        console.error('[Admin vendor application] Transaksi keputusan gagal:', error.code, error.message);
+        if (error.code === 'P0002') fail(404, 'Pengajuan vendor tidak ditemukan.');
+        if (error.code === 'P0001' || error.code === '23505') fail(409, 'Pengajuan sudah diproses atau sudah tertaut ke katalog. Muat ulang daftar.');
+        if (error.code === '22023' || error.code === '23514') fail(400, 'Data pengajuan tidak memenuhi syarat katalog. Periksa kota, kategori, dan harga dasar.');
+        fail(503, 'Keputusan pengajuan gagal disimpan. Pengajuan tetap menunggu dan katalog tidak berubah.');
+      }
+      if (!data?.ok || data.application?.status !== d.status || (d.status === 'approved' && !data.vendor?.id))
+        fail(503, 'Database tidak mengonfirmasi seluruh perubahan pengajuan dan katalog.');
+      return send(res, 200, data);
+    }
+
+    const application = localVendorApplications.find(item => item.id === applicationId);
+    if (!application) fail(404, 'Pengajuan vendor tidak ditemukan.');
+    if (application.status !== 'pending_approval') fail(409, 'Pengajuan ini sudah pernah diproses.');
+    if (d.status === 'rejected') {
+      application.status = 'rejected';
+      return send(res, 200, { ok: true, application, vendor: null });
+    }
+
+    const details = approvedVendorDetails(application);
+    if (localVendorApplicationVendorIds.has(applicationId)) fail(409, 'Pengajuan sudah tertaut ke katalog.');
+    const vendor = {
+      id: randomUUID(), owner_id: DEMO_VENDOR_OWNER_ID, name: application.name,
+      category: details.category, city: details.city, instagram: details.instagram || null,
+      whatsapp: details.whatsapp, price: details.price, price_max: details.priceMax,
+      price_type: 'listed', deposit: 0, rating: 0, completed: 0, verified: true,
+      color: details.color, description: details.description || null
+    };
+    DEMO_VENDORS.push(vendor);
+    localVendorApplicationVendorIds.set(applicationId, vendor.id);
+    application.status = 'approved';
+    return send(res, 200, { ok: true, application, vendor });
   }
 
   // ── Bookings list ──

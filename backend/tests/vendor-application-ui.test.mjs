@@ -5,18 +5,19 @@ import vm from 'node:vm';
 
 async function makeUi(apiRequest) {
   const html = await readFile('frontend/public/index.html', 'utf8');
-  const start = html.indexOf('var vendorApplicationSending=false;');
+  const start = html.indexOf('function parseVendorBasePrice(value){');
   const end = html.indexOf('function validHttpUrl', start);
   assert.ok(start >= 0 && end > start, 'Handler pendaftaran aktif harus ditemukan');
-  const fields = { vn: 'Usaha Uji', vo: 'Pemilik Uji', vk: 'MUA', ve: 'uji@example.id', vw: '081234567890', vi: '@usaha.uji', vp: 'https://example.id', vpr: 'Mulai Rp100.000', vd: 'Deskripsi uji' };
+  const fields = { vn: 'Usaha Uji', vo: 'Pemilik Uji', vk: 'MUA', vcity: 'Malang', ve: 'uji@example.id', vw: '081234567890', vi: '@usaha.uji', vp: 'https://example.id', vbp: '250000', vd: 'Deskripsi uji' };
   const elements = {};
-  for (const id of [...Object.keys(fields), 'vreg-form', 'vreg-success', 'vreg-step1', 'vreg-step2', 'vreg-step-badge', 'vreg-message', 'vreg-submit']) {
+  for (const id of [...Object.keys(fields), 'vbp-preview', 'vreg-form', 'vreg-success', 'vreg-step1', 'vreg-step2', 'vreg-step-badge', 'vreg-message', 'vreg-submit']) {
     elements[id] = { value: fields[id] ?? '', textContent: '', style: {}, disabled: false, selectedIndex: 0 };
   }
   const idText = { textContent: '' };
   elements['vreg-success-id'] = { style: {}, querySelector: () => idText };
   const context = {
-    URL, document: { getElementById: id => elements[id] }, apiRequest, toast: () => {}
+    URL, document: { getElementById: id => elements[id] }, apiRequest, toast: () => {},
+    vendorApplicationBasePrice: amount => 'Rp'+amount.toLocaleString('id-ID',{minimumFractionDigits:Number.isInteger(amount)?0:2,maximumFractionDigits:2})
   };
   vm.runInNewContext(html.slice(start, html.indexOf('// Bank-Style', end)), context);
   return { context, elements, fields, idText, html };
@@ -44,7 +45,8 @@ test('vendor application UI shows confirmation after server success, prevents du
   assert.equal(ui.elements['vreg-step1'].style.display, 'block');
   assert.equal(ui.elements['vreg-step2'].style.display, 'none');
   assert.equal(ui.elements['vreg-step-badge'].textContent, 'Tahap 1 dari 2');
-  for (const id of ['vn', 'vo', 've', 'vw', 'vi', 'vp', 'vpr', 'vd']) assert.equal(ui.elements[id].value, '');
+  for (const id of ['vn', 'vo', 've', 'vw', 'vi', 'vp', 'vbp', 'vd']) assert.equal(ui.elements[id].value, '');
+  assert.equal(ui.elements.vcity.selectedIndex, 0);
   assert.equal(ui.elements.vk.selectedIndex, 0);
 });
 
@@ -58,4 +60,28 @@ test('vendor application UI keeps form data and shows a readable error after req
   assert.match(ui.elements['vreg-message'].textContent, /gagal menyimpan/i);
   assert.equal(ui.elements['vreg-message'].style.color, 'var(--badt)');
   assert.equal(ui.elements['vreg-message'].style.background, 'var(--bad)');
+});
+
+test('vendor base price preview formats rupiah and rejects non-positive input', async () => {
+  const html = await readFile('frontend/public/index.html', 'utf8');
+  const start = html.indexOf('function parseVendorBasePrice(value){');
+  const end = html.indexOf('var vendorApplicationSending=false;', start);
+  assert.ok(start >= 0 && end > start);
+  const input = { value: '250000' }, preview = { textContent: '' };
+  const context = {
+    document: { getElementById: id => id === 'vbp' ? input : preview },
+    vendorApplicationBasePrice: amount => 'Rp'+amount.toLocaleString('id-ID',{minimumFractionDigits:Number.isInteger(amount)?0:2,maximumFractionDigits:2})
+  };
+  vm.runInNewContext(html.slice(start, end), context);
+  context.updateVendorBasePricePreview();
+  assert.equal(preview.textContent, 'Format harga: Rp250.000');
+  input.value = '250000.50';
+  context.updateVendorBasePricePreview();
+  assert.equal(preview.textContent, 'Format harga: Rp250.000,50');
+  input.value = '0';
+  context.updateVendorBasePricePreview();
+  assert.match(preview.textContent, /lebih dari Rp0/);
+  input.value = '250000.555';
+  context.updateVendorBasePricePreview();
+  assert.match(preview.textContent, /dua angka desimal/);
 });

@@ -91,7 +91,7 @@ test('vendor application list is admin-only and ordered newest-first', async () 
   assert.equal((await request('/api/admin/vendor-applications', { cookie: customer.cookie })).status, 403);
   assert.equal((await request('/api/admin/vendor-applications', { cookie: vendor.cookie })).status, 403);
 
-  const payload = name => ({ brandName: name, ownerName: 'Pemilik Uji', email: 'uji@example.id', whatsapp: '081234567890', category: 'MUA', instagram: '@usaha.uji', portfolioUrl: 'https://example.id/portfolio', priceRange: 'Mulai Rp100.000', description: 'Deskripsi lengkap uji.' });
+  const payload = name => ({ brandName: name, ownerName: 'Pemilik Uji', email: 'uji@example.id', whatsapp: '081234567890', category: 'MUA', city: 'Surabaya', basePrice: 150000, instagram: '@usaha.uji', portfolioUrl: 'https://example.id/portfolio', description: 'Deskripsi lengkap uji.' });
   const older = await request('/api/vendor-applications', { method: 'POST', body: payload('Usaha Lama') });
   await new Promise(resolve => setTimeout(resolve, 10));
   const newer = await request('/api/vendor-applications', { method: 'POST', body: payload('Usaha Baru') });
@@ -102,6 +102,8 @@ test('vendor application list is admin-only and ordered newest-first', async () 
   assert.equal(listed.status, 200);
   assert.deepEqual(listed.data.map(application => application.id), [newer.data.application.id, older.data.application.id]);
   assert.equal(listed.data[0].status, 'pending_approval');
+  assert.equal(listed.data[0].city, 'Surabaya');
+  assert.equal(listed.data[0].base_price, 150000);
   assert.equal(listed.data[0].portfolio_url, 'https://example.id/portfolio');
   assert.equal(listed.data[0].description, 'Deskripsi lengkap uji.');
 });
@@ -150,7 +152,7 @@ test('vendor application UI escapes text and only creates links for valid HTTP(S
   assert.ok(helperStart >= 0 && helperEnd > helperStart && rendererEnd > rendererStart);
   const hostileApplication = {
     id: 'VAPP-TEST', name: '<img src=x onerror=alert(1)>', owner_name: '<script>alert(1)</script>',
-    email: 'x"><svg onload=alert(1)>', whatsapp: '<b>123</b>', category: '<i>MUA</i>',
+    email: 'x"><svg onload=alert(1)>', whatsapp: '<b>123</b>', category: '<i>MUA</i>', city: '<script>alert(2)</script>', base_price: 250000.5,
     instagram: 'javascript:alert(1)', portfolio_url: 'https://example.id/?q="<script>',
     price_range: '<strong>murah</strong>', description: '<img src=x onerror=alert(1)>',
     created_at: '2026-11-20T10:00:00.000Z', status: 'pending_approval'
@@ -158,7 +160,7 @@ test('vendor application UI escapes text and only creates links for valid HTTP(S
   const context = {
     URL, Date, Intl,
     S: { adminSummary: { totalBookings: 1, activeBookings: 1, openDisputes: 0, smartContractFunds: { label: 'Belum tersedia' } }, adminApplications: [hostileApplication], adminApplicationsFilter: 'all', adminApplicationDetail: 'VAPP-TEST' },
-    escapeUi: undefined
+    rp: amount => 'Rp'+Math.round(amount).toLocaleString('id-ID')
   };
   const executable = html.slice(helperStart, helperEnd)+'\nvar pages={'+html.slice(rendererStart, rendererEnd)+'\n}; pages.admin();';
   const { runInNewContext } = await import('node:vm');
@@ -169,6 +171,27 @@ test('vendor application UI escapes text and only creates links for valid HTTP(S
   assert.doesNotMatch(modalHtml, /href="javascript:/);
   assert.match(modalHtml, /href="https:\/\/example\.id\//);
   assert.match(modalHtml, /&lt;script&gt;alert\(1\)&lt;\/script&gt;/);
+  assert.match(modalHtml, /Kota Layanan Utama/);
+  assert.match(modalHtml, /Harga Dasar Layanan/);
+  assert.match(modalHtml, /Rp250\.000,50/);
+  assert.match(modalHtml, /Tolak Pengajuan/);
+  assert.match(modalHtml, /Setujui Pengajuan/);
+  context.S.adminApplicationConfirmStatus='approved';
+  const approveConfirmation = runInNewContext(html.slice(helperStart, helperEnd)+'\n'+html.slice(html.indexOf('function renderAdminApplicationModal', helperEnd), html.indexOf('function nav()', helperEnd))+'\nrenderAdminApplicationModal("VAPP-TEST");', context);
+  assert.match(approveConfirmation, /Setujui pengajuan ini\? Usaha akan langsung dipublikasikan ke katalog LockIn\./);
+  assert.match(approveConfirmation, /Ya, Setujui/);
+  context.S.adminApplicationConfirmStatus='rejected';
+  const rejectConfirmation = runInNewContext(html.slice(helperStart, helperEnd)+'\n'+html.slice(html.indexOf('function renderAdminApplicationModal', helperEnd), html.indexOf('function nav()', helperEnd))+'\nrenderAdminApplicationModal("VAPP-TEST");', context);
+  assert.match(rejectConfirmation, /Tolak pengajuan ini\? Usaha tidak akan ditampilkan di katalog\./);
+  assert.match(rejectConfirmation, /Ya, Tolak/);
+  context.S.adminApplicationConfirmStatus='';
+  context.S.adminApplications[0].status='approved';
+  const processedModal = runInNewContext(html.slice(helperStart, helperEnd)+'\n'+html.slice(html.indexOf('function renderAdminApplicationModal', helperEnd), html.indexOf('function nav()', helperEnd))+'\nrenderAdminApplicationModal("VAPP-TEST");', context);
+  assert.doesNotMatch(processedModal, /Tolak Pengajuan|Setujui Pengajuan|Ya, Setujui|Ya, Tolak/);
+  context.S.adminApplications[0].city=null;
+  context.S.adminApplications[0].base_price=null;
+  const legacyModal = runInNewContext(html.slice(helperStart, helperEnd)+'\n'+html.slice(html.indexOf('function renderAdminApplicationModal', helperEnd), html.indexOf('function nav()', helperEnd))+'\nrenderAdminApplicationModal("VAPP-TEST");', context);
+  assert.match(legacyModal, /Belum diisi/);
 });
 
 test.after(() => server.kill());

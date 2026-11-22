@@ -39,7 +39,7 @@ h2{margin:0 0 14px;font-size:22px;letter-spacing:-.4px}
 .chip b{display:block;color:var(--t);font-size:14px}
 .sch{margin:-40px auto 0;position:relative;background:var(--c);border-radius:20px;padding:20px;box-shadow:0 18px 40px rgba(15,23,42,.12);display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px;align-items:end}
 label{display:block;font-size:12px;font-weight:700;color:var(--m);margin-bottom:6px}
-select,input[type=text],input[type=date],input[type=email],input[type=password],textarea{width:100%;border:1px solid var(--b);border-radius:12px;padding:12px;font:500 14px 'Plus Jakarta Sans',sans-serif;background:var(--c);color:var(--t);transition:border-color .2s,box-shadow .2s}
+select,input[type=text],input[type=number],input[type=date],input[type=email],input[type=password],textarea{width:100%;border:1px solid var(--b);border-radius:12px;padding:12px;font:500 14px 'Plus Jakarta Sans',sans-serif;background:var(--c);color:var(--t);transition:border-color .2s,box-shadow .2s}
 select:focus,input:focus,textarea:focus{border-color:var(--p);box-shadow:0 0 0 3px rgba(29,78,216,.15);outline:none}
 .sec{padding:44px 0 0}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:20px}
@@ -70,6 +70,10 @@ select:focus,input:focus,textarea:focus{border-color:var(--p);box-shadow:0 0 0 3
 .admin-application-detail label{margin:0 0 4px}
 .admin-application-detail div{font-size:13px;color:var(--t);overflow-wrap:anywhere;white-space:pre-wrap}
 .admin-application-detail a{color:var(--p);text-decoration:underline;overflow-wrap:anywhere}
+.admin-application-actions{display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap;padding:0 20px 20px}
+.admin-decision-confirm{margin:0 20px 20px;padding:16px;border:1px solid var(--b);border-radius:14px;background:var(--bg)}
+.admin-decision-confirm p{margin:0 0 14px;color:var(--t);font-size:14px;font-weight:600}
+.admin-decision-confirm>div{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap}
 @media(max-width:560px){.admin-application-detail-grid{grid-template-columns:minmax(0,1fr)}.admin-applications-tools{width:100%}.admin-applications-tools select{flex:1;min-width:0}}
 @media(max-width:900px){.admin-kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:560px){.admin-kpi-grid{grid-template-columns:minmax(0,1fr)}.admin-kpi-card{min-height:128px}}
@@ -188,6 +192,7 @@ var S={
   bookingsList:[],backendError:'',vendorError:'',finalCheckoutBooking:null,finalCheckoutLoading:false,finalCheckoutError:'',
   adminSummary:null,adminSummaryLoading:false,adminSummaryError:'',
   adminApplications:[],adminApplicationsLoading:false,adminApplicationsError:'',adminApplicationsFilter:'all',adminApplicationDetail:'',
+  adminApplicationConfirmStatus:'',adminApplicationActionLoading:false,adminApplicationActionError:'',adminApplicationActionSuccess:'',
   vendorBookings:[],vendorDashboardLoading:false,vendorDashboardError:'',activeVendorBid:'',
   vendorDetail:null,vendorDetailLoading:false,vendorDetailError:'',
   vendorVerifyLoading:false,vendorVerifyError:'',vendorVerifySuccess:'',vendorOtpInput:''
@@ -635,6 +640,7 @@ var pages={
       +'<label for="vn">Nama Usaha / Brand Jasa</label><input type="text" id="vn" placeholder="Contoh: Ratu Kebaya Wisuda" style="margin-bottom:10px">'
       +'<label for="vo">Nama Pemilik Usaha</label><input type="text" id="vo" placeholder="Nama lengkap pemilik" style="margin-bottom:10px">'
       +'<label for="vk">Kategori Layanan Utama</label><select id="vk" style="margin-bottom:10px"><option>PA Wisuda</option><option>Graduation Content Creator</option><option>Hijab &amp; Hair Stylist</option><option>MUA</option><option>Acrylic Standing Sign</option></select>'
+      +'<label for="vcity">Kota Layanan Utama</label><select id="vcity" required style="margin-bottom:10px"><option value="">Pilih kota layanan</option>'+CITIES.map(function(city){return '<option value="'+escapeUi(city)+'">'+escapeUi(city)+'</option>'}).join('')+'</select>'
       +'<label for="ve">Alamat Email Aktif</label><input type="email" id="ve" placeholder="email@usaha.com" required style="margin-bottom:10px">'
       +'<label for="vw">Nomor WhatsApp Aktif</label><input type="tel" id="vw" placeholder="08xxxxxxxxxx" required style="margin-bottom:16px">'
       +'<button type="button" class="btn blk" onclick="nextVregStep(2)">Lanjut ke Tahap 2: Detail Portofolio &rarr;</button>'
@@ -643,7 +649,8 @@ var pages={
       +'<div id="vreg-step2" style="display:none">'
       +'<label for="vi">Akun Instagram Usaha</label><input type="text" id="vi" placeholder="@nama_instagram" style="margin-bottom:10px">'
       +'<label for="vp">Tautan Portofolio / Google Drive / Web</label><input type="text" id="vp" placeholder="https://drive.google.com/..." style="margin-bottom:10px">'
-      +'<label for="vpr">Kisaran Tarif Layanan</label><input type="text" id="vpr" placeholder="Contoh: Mulai 250.000 s/d 500.000" style="margin-bottom:10px">'
+      +'<label for="vbp">Harga Dasar Layanan (Rp)</label><input type="number" id="vbp" inputmode="decimal" min="0.01" max="9999999999.99" step="0.01" required placeholder="Contoh: 250000" oninput="updateVendorBasePricePreview()" style="margin-bottom:4px">'
+      +'<div id="vbp-preview" class="mut" aria-live="polite" style="font-size:12px;margin-bottom:10px">Masukkan nominal tanpa mengetik awalan Rp, contoh 250000.</div>'
       +'<label for="vd">Deskripsi Singkat Keahlian</label><textarea id="vd" rows="2" placeholder="Ceritakan pengalaman dan keunggulan jasamu..." style="margin-bottom:16px"></textarea>'
       +'<div style="display:flex;gap:8px">'
       +'<button type="button" class="btn o" style="flex:1" onclick="nextVregStep(1)">&larr; Kembali</button>'
@@ -853,6 +860,8 @@ var pages={
       var status=escapeUi(vendorApplicationStatusLabel(app.status));
       return '<article class="card pad admin-application-card"><h4>'+escapeUi(app.name||'—')+'</h4>'
         +'<div class="admin-application-meta"><div><span>Kategori</span><b>'+escapeUi(app.category||'—')+'</b></div>'
+        +'<div><span>Kota</span><b>'+escapeUi(app.city||'Belum diisi')+'</b></div>'
+        +'<div><span>Harga Dasar</span><b>'+escapeUi(vendorApplicationBasePrice(app.base_price))+'</b></div>'
         +'<div><span>Pemilik</span><b>'+escapeUi(app.owner_name||'—')+'</b></div>'
         +'<div><span>Tanggal</span><b>'+vendorApplicationDate(app.created_at)+'</b></div></div>'
         +'<div style="display:flex;align-items:center;justify-content:space-between;gap:10px"><span class="tag">'+status+'</span><button type="button" class="btn o" data-a="view-admin-application" data-v="'+escapeUi(app.id)+'" style="padding:8px 12px;font-size:12px">Lihat Detail</button></div></article>';
@@ -896,6 +905,10 @@ function vendorApplicationDate(value){
 function vendorApplicationStatusLabel(value){
   return value==='pending_approval'?'Menunggu Persetujuan':String(value||'—').replace(/_/g,' ');
 }
+function vendorApplicationBasePrice(value){
+  var amount=Number(value);
+  return value==null||value===''||!Number.isFinite(amount)||amount<=0?'Belum diisi':'Rp'+amount.toLocaleString('id-ID',{minimumFractionDigits:Number.isInteger(amount)?0:2,maximumFractionDigits:2});
+}
 function vendorApplicationUrlValue(value,linkLabel){
   var text=String(value||'').trim();
   if(!text)return '—';
@@ -907,21 +920,32 @@ function renderAdminApplicationModal(applicationId){
   var app=(S.adminApplications||[]).find(function(item){return String(item.id)===String(applicationId)});
   if(!app)return '';
   var detail=function(label,value){return '<div class="admin-application-detail"><label>'+label+'</label><div>'+value+'</div></div>'};
+  var isPending=app.status==='pending_approval';
+  var actionFeedback=S.adminApplicationActionError?'<div class="msg" role="alert" style="margin:0 20px 16px;background:var(--bad);color:var(--badt)">'+escapeUi(S.adminApplicationActionError)+'</div>':S.adminApplicationActionSuccess?'<div class="msg" role="status" style="margin:0 20px 16px;background:var(--ok);color:var(--okt)">'+escapeUi(S.adminApplicationActionSuccess)+'</div>':'';
+  var actions='';
+  if(isPending&&S.adminApplicationConfirmStatus){
+    var approving=S.adminApplicationConfirmStatus==='approved';
+    var confirmation=approving?'Setujui pengajuan ini? Usaha akan langsung dipublikasikan ke katalog LockIn.':'Tolak pengajuan ini? Usaha tidak akan ditampilkan di katalog.';
+    actions='<div class="admin-decision-confirm" role="alertdialog" aria-modal="true"><p>'+confirmation+'</p><div><button type="button" class="btn o" data-a="cancel-admin-application-confirm" '+(S.adminApplicationActionLoading?'disabled':'')+'>Kembali</button><button type="button" class="btn" data-a="execute-admin-application-decision" data-v="'+escapeUi(app.id)+'" data-status="'+(approving?'approved':'rejected')+'" '+(S.adminApplicationActionLoading?'disabled':'')+'>'+(S.adminApplicationActionLoading?'Memproses...':approving?'Ya, Setujui':'Ya, Tolak')+'</button></div></div>';
+  }else if(isPending){
+    actions='<div class="admin-application-actions"><button type="button" class="btn o" data-a="request-admin-application-decision" data-v="'+escapeUi(app.id)+'" data-status="rejected" '+(S.adminApplicationActionLoading?'disabled':'')+' style="color:var(--badt);border-color:var(--badt)">Tolak Pengajuan</button><button type="button" class="btn" data-a="request-admin-application-decision" data-v="'+escapeUi(app.id)+'" data-status="approved" '+(S.adminApplicationActionLoading?'disabled':'')+'>Setujui Pengajuan</button></div>';
+  }
   return '<div class="admin-modal-backdrop" id="admin-application-modal-backdrop"><section class="admin-application-modal" role="dialog" aria-modal="true" aria-labelledby="admin-application-modal-title">'
     +'<header style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:18px 20px;border-bottom:1px solid var(--b)"><div><h3 id="admin-application-modal-title" style="margin:0;color:var(--t)">Detail Pengajuan Vendor Jasa</h3><p class="mut" style="font-size:12px;margin:3px 0 0">Informasi read-only</p></div><button type="button" class="btn o" data-a="close-admin-application" aria-label="Tutup detail" style="padding:7px 11px">Tutup</button></header>'
     +'<div class="admin-application-detail-grid" style="padding:18px 20px">'
     +detail('ID Pengajuan',escapeUi(app.id||'—'))
     +detail('Nama Usaha',escapeUi(app.name||'—'))
     +detail('Nama Pemilik',escapeUi(app.owner_name||'—'))
+    +detail('Kota Layanan Utama',escapeUi(app.city||'Belum diisi'))
+    +detail('Harga Dasar Layanan',escapeUi(vendorApplicationBasePrice(app.base_price)))
     +detail('Email',escapeUi(app.email||'—'))
     +detail('WhatsApp',escapeUi(app.whatsapp||'—'))
     +detail('Instagram',vendorApplicationUrlValue(app.instagram))
     +detail('Portofolio',vendorApplicationUrlValue(app.portfolio_url))
-    +detail('Kisaran Tarif',escapeUi(app.price_range||'—'))
     +detail('Deskripsi',escapeUi(app.description||'—'))
     +detail('Tanggal Pengajuan',vendorApplicationDate(app.created_at))
     +detail('Status',escapeUi(vendorApplicationStatusLabel(app.status)))
-    +'</div></section></div>';
+    +'</div>'+actionFeedback+actions+'</section></div>';
 }
 function nav(){
   var r=S.role,l='',a='';
@@ -993,7 +1017,7 @@ function refreshAdminDashboard(){
   return Promise.all([refreshAdminSummary(true),refreshAdminApplications(true)]);
 }
 
-async function refreshAdminApplications(skipInitialRender){
+async function refreshAdminApplications(skipInitialRender,preserveOnError){
   if(S.role!=='admin')return;
   S.adminApplicationsLoading=true;S.adminApplicationsError='';
   if(!skipInitialRender&&(location.hash||'').slice(1)==='admin')render();
@@ -1001,8 +1025,24 @@ async function refreshAdminApplications(skipInitialRender){
     var rows=await apiRequest('/api/admin/vendor-applications');
     if(!Array.isArray(rows))throw new Error('Format daftar pengajuan vendor tidak valid.');
     S.adminApplications=rows;
-  }catch(err){S.adminApplications=[];S.adminApplicationsError=err.message||'Gagal memuat pengajuan vendor jasa.';S.adminApplicationDetail='';}
+  }catch(err){if(!preserveOnError)S.adminApplications=[];S.adminApplicationsError=err.message||'Gagal memuat pengajuan vendor jasa.';if(!preserveOnError)S.adminApplicationDetail='';}
   finally{S.adminApplicationsLoading=false;if((location.hash||'').slice(1)==='admin')render();}
+}
+
+async function submitAdminApplicationDecision(applicationId,status){
+  if(S.role!=='admin'||S.adminApplicationActionLoading||!['approved','rejected'].includes(status))return;
+  var application=(S.adminApplications||[]).find(function(item){return String(item.id)===String(applicationId)});
+  if(!application||application.status!=='pending_approval')return;
+  S.adminApplicationActionLoading=true;S.adminApplicationConfirmStatus='';S.adminApplicationActionError='';S.adminApplicationActionSuccess='';
+  render();
+  try{
+    var result=await apiRequest('/api/admin/vendor-applications/'+encodeURIComponent(applicationId)+'/status','PATCH',{status:status});
+    if(!result.ok||!result.application||result.application.status!==status||(status==='approved'&&!result.vendor?.id))throw new Error('Server belum mengonfirmasi seluruh perubahan pengajuan.');
+    S.adminApplications=(S.adminApplications||[]).map(function(item){return String(item.id)===String(applicationId)?result.application:item});
+    S.adminApplicationActionSuccess=status==='approved'?'Pengajuan disetujui dan usaha berhasil dipublikasikan ke katalog LockIn.':'Pengajuan ditolak. Usaha tidak dimasukkan ke katalog.';
+    await refreshAdminApplications(true,true);
+  }catch(err){S.adminApplicationActionError=err.message||'Pengajuan gagal diproses.';}
+  finally{S.adminApplicationActionLoading=false;if((location.hash||'').slice(1)==='admin')render();}
 }
 
 function normalizeBooking(b){
@@ -1265,9 +1305,10 @@ function nextVregStep(step){
     var vn=document.getElementById('vn').value.trim();
     var vo=document.getElementById('vo').value.trim();
     var vk=document.getElementById('vk').value.trim();
+    var city=document.getElementById('vcity').value.trim();
     var ve=document.getElementById('ve').value.trim();
     var vw=document.getElementById('vw').value.trim();
-    if(!vn||!vo||!vk||!ve||!vw){toast('Lengkapi nama usaha, pemilik, kategori, email, dan WhatsApp.');return;}
+    if(!vn||!vo||!vk||!city||!ve||!vw){toast('Lengkapi nama usaha, pemilik, kategori, kota layanan, email, dan WhatsApp.');return;}
     if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(ve)){toast('Format email tidak valid.');return;}
     document.getElementById('vreg-step1').style.display='none';
     document.getElementById('vreg-step2').style.display='block';
@@ -1279,14 +1320,29 @@ function nextVregStep(step){
   }
 }
 
+function parseVendorBasePrice(value){
+  var raw=String(value==null?'':value).trim();
+  if(!/^\d+(?:\.\d{1,2})?$/.test(raw))return null;
+  var amount=Number(raw);
+  return Number.isFinite(amount)&&amount>0&&amount<=9999999999.99?amount:null;
+}
+function updateVendorBasePricePreview(){
+  var input=document.getElementById('vbp'),preview=document.getElementById('vbp-preview'),raw=input.value.trim();
+  if(!raw){preview.textContent='Masukkan nominal tanpa mengetik awalan Rp, contoh 250000.';return;}
+  var amount=parseVendorBasePrice(raw);
+  preview.textContent=amount!==null?'Format harga: '+vendorApplicationBasePrice(amount):'Harga harus lebih dari Rp0, maksimal Rp9.999.999.999,99, dan paling banyak dua angka desimal.';
+}
+
 var vendorApplicationSending=false;
 async function submitVendorApplication(){
   if(vendorApplicationSending)return;
   var value=function(id){return document.getElementById(id).value.trim()};
   var message=document.getElementById('vreg-message'),button=document.getElementById('vreg-submit');
   var showMessage=function(text,error){message.textContent=text;message.style.display='block';message.style.background=error?'var(--bad)':'var(--ok)';message.style.color=error?'var(--badt)':'var(--okt)'};
-  var data={brandName:value('vn'),ownerName:value('vo'),category:value('vk'),email:value('ve'),whatsapp:value('vw'),instagram:value('vi'),portfolioUrl:value('vp'),priceRange:value('vpr'),description:value('vd')};
-  if(!data.brandName||!data.ownerName||!data.category||!data.email||!data.whatsapp){showMessage('Lengkapi semua data wajib pada Tahap 1.',true);return;}
+  var basePrice=parseVendorBasePrice(value('vbp'));
+  var data={brandName:value('vn'),ownerName:value('vo'),category:value('vk'),city:value('vcity'),email:value('ve'),whatsapp:value('vw'),basePrice:basePrice,instagram:value('vi'),portfolioUrl:value('vp'),description:value('vd')};
+  if(!data.brandName||!data.ownerName||!data.category||!data.city||!data.email||!data.whatsapp){showMessage('Lengkapi semua data wajib pada Tahap 1.',true);return;}
+  if(data.basePrice===null){showMessage('Harga dasar harus lebih dari Rp0, maksimal Rp9.999.999.999,99, dan paling banyak dua angka desimal.',true);return;}
   if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email)){showMessage('Format email tidak valid.',true);return;}
   if(data.instagram&&!/^@[\w.]{1,30}$/.test(data.instagram)&&!validHttpUrl(data.instagram)){showMessage('Instagram harus berupa @username atau URL HTTP/HTTPS yang valid.',true);return;}
   if(data.portfolioUrl&&!validHttpUrl(data.portfolioUrl)){showMessage('URL portofolio harus menggunakan HTTP/HTTPS yang valid.',true);return;}
@@ -1309,8 +1365,10 @@ function showVendorApplicationSuccess(applicationId){
 }
 
 function resetVendorApplicationForm(){
-  ['vn','vo','ve','vw','vi','vp','vpr','vd'].forEach(function(id){document.getElementById(id).value=''});
+  ['vn','vo','ve','vw','vi','vp','vbp','vd'].forEach(function(id){document.getElementById(id).value=''});
+  document.getElementById('vcity').selectedIndex=0;
   document.getElementById('vk').selectedIndex=0;
+  updateVendorBasePricePreview();
   document.getElementById('vreg-step1').style.display='block';
   document.getElementById('vreg-step2').style.display='none';
   document.getElementById('vreg-step-badge').textContent='Tahap 1 dari 2';
@@ -1572,7 +1630,7 @@ function closeSnapModalAndSync(bookingId) {
 
 // Global Click Delegation
 document.addEventListener('click',function(e){
-  if(e.target.id==='admin-application-modal-backdrop'&&S.role==='admin'){S.adminApplicationDetail='';render();return}
+  if(e.target.id==='admin-application-modal-backdrop'&&S.role==='admin'){S.adminApplicationDetail='';S.adminApplicationConfirmStatus='';render();return}
   var a=e.target.closest('[data-a]');
   if(!a) return;
   var k=a.dataset.a,v=a.dataset.v;
@@ -1594,12 +1652,27 @@ document.addEventListener('click',function(e){
   }
 
   if(k==='view-admin-application'){
-    if(S.role==='admin'&&(S.adminApplications||[]).some(function(app){return String(app.id)===String(v)})){S.adminApplicationDetail=v;render()}
+    if(S.role==='admin'&&(S.adminApplications||[]).some(function(app){return String(app.id)===String(v)})){S.adminApplicationDetail=v;S.adminApplicationConfirmStatus='';S.adminApplicationActionError='';S.adminApplicationActionSuccess='';render()}
     return;
   }
 
   if(k==='close-admin-application'){
-    S.adminApplicationDetail='';render();
+    S.adminApplicationDetail='';S.adminApplicationConfirmStatus='';render();
+    return;
+  }
+
+  if(k==='request-admin-application-decision'){
+    if(S.role==='admin'&&!S.adminApplicationActionLoading&&['approved','rejected'].includes(a.dataset.status)){S.adminApplicationDetail=v;S.adminApplicationConfirmStatus=a.dataset.status;S.adminApplicationActionError='';S.adminApplicationActionSuccess='';render()}
+    return;
+  }
+
+  if(k==='cancel-admin-application-confirm'){
+    if(!S.adminApplicationActionLoading){S.adminApplicationConfirmStatus='';render()}
+    return;
+  }
+
+  if(k==='execute-admin-application-decision'){
+    submitAdminApplicationDecision(v,a.dataset.status);
     return;
   }
 
