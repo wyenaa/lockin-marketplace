@@ -118,10 +118,21 @@ test('simulated release requires settled funds and OTP, releases service price o
     cookie: customer.cookie, method: 'POST', body: { reason: 'Refund test', evidence: 'Bukti untuk uji status refund.' }
   });
   assert.equal(refundDispute.status, 201);
-  const resolvedRefund = await request(`/api/disputes/${refundDispute.data.id}/resolve`, {
-    cookie: admin.cookie, method: 'POST', body: { decision: 'penuh', reason: 'Uji refund penuh' }
+  const resolvePath = `/api/disputes/${refundDispute.data.id}/resolve`;
+  const fullDecision = { decision: 'full', reason: 'Uji keputusan pengembalian penuh' };
+  assert.equal((await request(resolvePath, {
+    cookie: admin.cookie, method: 'POST', body: fullDecision
+  })).status, 409, 'admin harus menunggu tanggapan vendor atau tenggat');
+  assert.equal((await request(`/api/disputes/${refundDispute.data.id}/response`, {
+    cookie: vendor.cookie, method: 'POST', body: { response: 'Tanggapan vendor atas sengketa pengujian.' }
+  })).status, 200);
+  const recordedDecision = await request(resolvePath, {
+    cookie: admin.cookie, method: 'POST', body: fullDecision
   });
-  assert.equal(resolvedRefund.status, 200);
+  assert.equal(recordedDecision.status, 200);
+  assert.equal(recordedDecision.data.pendingExecution, true);
+  assert.equal(recordedDecision.data.dispute.decision, 'full');
+  assert.equal(recordedDecision.data.dispute.refund_percent, 100);
   assert.equal((await complete(refundedPaid)).status, 409);
   assert.equal((await request(`/api/bookings/${refundedPaid.id}`, { cookie: customer.cookie })).data.release.status, 'ON_HOLD');
 

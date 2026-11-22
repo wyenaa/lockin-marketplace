@@ -1,0 +1,511 @@
+diff --git a/backend/src/index.js b/backend/src/index.js
+index 2a7a061..4324366 100644
+--- a/backend/src/index.js
++++ b/backend/src/index.js
+@@ -432,7 +432,7 @@ async function getBooking(id, user) {
+   return b;
+ }
+ 
+-const DISPUTE_SELECT = 'id,booking_id,reason,evidence,evidence_url,response,vendor_evidence_url,decision,decision_reason,refund,vendor_response_due,created_at,decided_at';
++const DISPUTE_SELECT = 'id,booking_id,reason,evidence,evidence_url,response,vendor_evidence_url,decision,decision_reason,refund,refund_percent,vendor_response_due,created_at,decided_at';
+ 
+ async function getDisputeForBooking(bookingId) {
+   if (!supabase) return localDisputes.get(bookingId) || null;
+@@ -1690,18 +1690,47 @@ async function api(req, res, url) {
+       return send(res, 200, { ok: true, dispute, reviewStatus: 'Menunggu Peninjauan Admin' });
+     }
+     if (user.role !== 'admin') fail(403, 'Hanya admin yang dapat memutuskan sengketa.');
+-    if (!['vendor', 'sebagian', 'penuh', 'release', 'partial', 'full'].includes(d.decision)) fail(400, 'Keputusan tidak valid.');
+-    const reason = validateText(d.reason || 'Keputusan mediasi admin berdasarkan bukti', 'Alasan keputusan', 1000);
+-    const percent = (d.decision === 'penuh' || d.decision === 'full') ? 100 : (d.decision === 'vendor' || d.decision === 'release') ? 0 : Number(d.percent || 50);
+-    const refund = Math.round((b.paid || 0) * percent / 100);
+-    dispute.decision = d.decision;
++    // Tahap 1C HANYA mencatat keputusan mediasi. Dana tetap ditahan sampai
++    // tahap 1D mengeksekusi keputusan secara atomik bersama ledger.
++    const decision = String(d.decision || '');
++    if (!['release', 'full', 'partial'].includes(decision)) fail(400, 'Pilihan keputusan tidak valid.');
++    const reason = validateText(d.reason, 'Alasan keputusan', 1000);
++    if (reason.length < 10) fail(400, 'Alasan keputusan minimal 10 karakter.');
++    const percent = decision === 'full' ? 100 : decision === 'release' ? 0 : Number(d.percent);
++    if (!Number.isInteger(percent) || (decision === 'partial' && (percent < 1 || percent > 99)))
++      fail(400, 'Persentase pengembalian sebagian harus bilangan bulat 1–99.');
++    if (b.state !== 'Disputed') fail(409, 'Booking tidak dalam sengketa aktif.');
++    if (!String(dispute.response || '').trim() &&
++        (!dispute.vendor_response_due || Date.parse(dispute.vendor_response_due) > Date.now()))
++      fail(409, 'Tunggu tanggapan vendor atau batas waktunya sebelum memutuskan sengketa.');
++    const decidedAt = now();
++    if (supabase) {
++      const { data: recorded, error } = await supabase.rpc('record_dispute_admin_decision', {
++        p_dispute_id: dispute.id,
++        p_decision: decision,
++        p_decision_reason: reason,
++        p_refund_percent: percent,
++        p_decided_at: decidedAt
++      });
++      if (error) {
++        console.error('[Admin dispute decision]', { code: error.code });
++        if (error.code === 'P0001' || error.code === '23505')
++          fail(409, 'Keputusan tidak bisa dicatat karena status sengketa sudah berubah. Muat ulang.');
++        fail(503, 'Keputusan admin gagal disimpan secara persisten. Dana tidak berubah.');
++      }
++      if (!recorded?.ok || recorded.dispute?.id !== dispute.id || recorded.dispute?.decision !== decision ||
++          recorded.dispute?.refund_percent !== percent) fail(503, 'Database belum mengonfirmasi keputusan sengketa.');
++      localDisputes.set(dispute.booking_id, recorded.dispute);
++      return send(res, 200, { ok: true, dispute: recorded.dispute, pendingExecution: true });
++    }
++    dispute.decision = decision;
+     dispute.decision_reason = reason;
+-    dispute.refund = refund;
+-    dispute.decided_at = now();
+-    b.state = percent === 100 ? 'Refunded' : 'Resolved';
+-    b.updated_at = now();
+-    localAudit.push({ booking_id: b.id, state: `Resolved:${d.decision}:refund=${refund}`, created_at: now() });
+-    return send(res, 200, { ok: true, refund, dispute });
++    dispute.refund_percent = percent;
++    dispute.decided_at = decidedAt;
++    // Jangan ubah state booking atau mengisi refund; tidak ada release/refund saat 1C.
++    localDisputes.set(dispute.booking_id, dispute);
++    localAudit.push({ booking_id: b.id, state: `DisputeDecisionRecorded:${decision}:${percent}`, created_at: decidedAt });
++    return send(res, 200, { ok: true, dispute, pendingExecution: true });
+   }
+ 
+   fail(404, 'Endpoint tidak ditemukan.');
+diff --git a/backend/tests/admin-dispute-schema.test.mjs b/backend/tests/admin-dispute-schema.test.mjs
+new file mode 100644
+index 0000000..66f6ce6
+--- /dev/null
++++ b/backend/tests/admin-dispute-schema.test.mjs
+@@ -0,0 +1,14 @@
++import test from 'node:test';
++import assert from 'node:assert/strict';
++import { readFile } from 'node:fs/promises';
++
++test('admin decision migration records only a decision under ordered locks, no funds moved', async () => {
++  const sql = await readFile('database/migrations/20261123_admin_dispute_decision_record.sql', 'utf8');
++  assert.match(sql, /FROM public\.bookings WHERE id = booking_id_value FOR UPDATE/);
++  assert.match(sql, /FROM public\.disputes WHERE id = p_dispute_id FOR UPDATE/);
++  assert.match(sql, /decision IS NOT NULL/);
++  assert.match(sql, /vendor_response_due/);
++  assert.match(sql, /refund_percent/);
++  assert.match(sql, /GRANT EXECUTE.*TO service_role/);
++  assert.doesNotMatch(sql, /INSERT INTO public\.ledger_entries|UPDATE public\.ledger_entries|UPDATE public\.bookings|refund\s*=\s*/);
++});
+diff --git a/backend/tests/admin-disputes.test.mjs b/backend/tests/admin-disputes.test.mjs
+new file mode 100644
+index 0000000..716bd2e
+--- /dev/null
++++ b/backend/tests/admin-disputes.test.mjs
+@@ -0,0 +1,112 @@
++import test from 'node:test';
++import assert from 'node:assert/strict';
++import { spawn } from 'node:child_process';
++import { readFile } from 'node:fs/promises';
++import { runInNewContext } from 'node:vm';
++
++const server = spawn(process.execPath, ['backend/src/index.js'], {
++  cwd: process.cwd(),
++  env: {
++    ...process.env, PORT: '0', HOST: '127.0.0.1', SUPABASE_URL: '', SUPABASE_SERVICE_ROLE_KEY: '',
++    MIDTRANS_SERVER_KEY: '', SEPOLIA_RPC_URL: '', SEPOLIA_WRITER_PRIVATE_KEY: ''
++  }, stdio: ['ignore', 'pipe', 'pipe']
++});
++let baseUrl;
++let output = '';
++const ready = new Promise((resolve, reject) => {
++  const timeout = setTimeout(() => reject(new Error(`Server tidak siap: ${output}`)), 10000);
++  server.stdout.on('data', bytes => {
++    output += bytes;
++    const match = /http:\/\/127\.0\.0\.1:(\d+)/.exec(output);
++    if (match) { clearTimeout(timeout); baseUrl = `http://127.0.0.1:${match[1]}`; resolve(); }
++  });
++  server.once('error', reject);
++});
++
++async function request(path, { cookie, method = 'GET', body } = {}) {
++  const res = await fetch(baseUrl + path, {
++    method, headers: { ...(cookie ? { cookie } : {}), ...(body ? { 'content-type': 'application/json' } : {}) },
++    body: body ? JSON.stringify(body) : undefined
++  });
++  return { status: res.status, data: await res.json(), cookie: res.headers.get('set-cookie')?.split(';')[0] };
++}
++function eventDate() {
++  const p = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jakarta', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date());
++  return new Date(Date.UTC(Number(p.find(x => x.type === 'year').value), Number(p.find(x => x.type === 'month').value) - 1, Number(p.find(x => x.type === 'day').value) + 20)).toISOString().slice(0, 10);
++}
++
++test('admin can read and record a one-time decision; no money or booking status moves at 1C', async t => {
++  t.after(() => server.kill());
++  await ready;
++  const login = async email => (await request('/api/auth/login', { method: 'POST', body: { email, password: 'LockInDemo123!' } })).cookie;
++  const customer = await login('user@lockin.demo');
++  const vendor = await login('vendor@lockin.demo');
++  const otherVendor = await login('vendor2@lockin.demo');
++  const admin = await login('admin@lockin.demo');
++  const catalog = await request('/api/vendors');
++  const booked = await request('/api/bookings', { cookie: customer, method: 'POST', body: {
++    vendorId: catalog.data[0].id, packageId: '1', date: eventDate(), location: 'Malang', startTime: '08:00', agreed: true
++  } });
++  assert.equal(booked.status, 201);
++  const id = booked.data.id;
++  assert.equal((await request(`/api/bookings/${id}/payment`, { cookie: customer, method: 'POST', body: {
++    method: 'QRIS', outcome: 'success', expectedState: booked.data.state, paymentType: 'DP'
++  } })).status, 200);
++  const filed = await request(`/api/bookings/${id}/dispute`, { cookie: customer, method: 'POST', body: {
++    reason: 'Vendor tidak sesuai kesepakatan', evidence: 'Bukti tertulis dari pelanggan'
++  } });
++  assert.equal(filed.status, 201);
++  const before = await request(`/api/bookings/${id}`, { cookie: admin });
++  const disputeId = before.data.dispute.id;
++  const path = `/api/disputes/${disputeId}/resolve`;
++  const decision = { decision: 'partial', reason: 'Bukti pihak pelanggan dan vendor sudah ditimbang', percent: 35 };
++  assert.equal((await request(path, { cookie: customer, method: 'POST', body: decision })).status, 403);
++  assert.equal((await request(path, { cookie: otherVendor, method: 'POST', body: decision })).status, 403);
++  assert.equal((await request(path, { cookie: admin, method: 'POST', body: decision })).status, 409,
++    'admin must wait for a vendor response or expiry');
++  assert.equal((await request(`/api/disputes/${disputeId}/response`, { cookie: vendor, method: 'POST', body: {
++    response: 'Tanggapan vendor dan bukti pendukungnya'
++  } })).status, 200);
++  assert.equal((await request(path, { cookie: admin, method: 'POST', body: { ...decision, percent: 100 } })).status, 400);
++  const saved = await request(path, { cookie: admin, method: 'POST', body: decision });
++  assert.equal(saved.status, 200);
++  assert.equal(saved.data.pendingExecution, true);
++  assert.equal(saved.data.dispute.decision, 'partial');
++  assert.equal(saved.data.dispute.refund_percent, 35);
++  assert.equal(saved.data.dispute.refund, undefined, 'no refund should be executed or populated by 1C');
++  assert.equal((await request(path, { cookie: admin, method: 'POST', body: decision })).status, 409);
++  const detail = await request(`/api/bookings/${id}`, { cookie: admin });
++  assert.equal(detail.data.state, 'Disputed');
++  assert.equal(detail.data.release.status, 'ON_HOLD');
++  const list = await request('/api/disputes', { cookie: admin });
++  assert.equal(list.status, 200);
++  assert.equal(list.data.find(row => row.id === disputeId).refund_percent, 35);
++});
++
++test('admin dispute UI escapes untrusted text and shows evidence, not fake transfer', async () => {
++  const html = await readFile('frontend/public/index.html', 'utf8');
++  const start = html.indexOf('function renderAdminDisputeModal()');
++  const end = html.indexOf('function nav(){', start);
++  assert.ok(start > 0 && end > start);
++  const context = {
++    S: { role: 'admin', adminDisputeDetailId: 'DSP-1', adminDisputeDecision: { decision: 'release', percent: '50', reason: '' },
++      adminDisputeDecisionError: '', adminDisputeDecisionLoading: false, adminDisputeConfirm: false,
++      adminDisputeDetail: { id: 'BK-1', vendor_name: 'Vendor', event_date: '2026-11-22', paid: 100000,
++        vendor_arrived: false, execution_state: 'NOT_STARTED', agreement: '{}', hash: '0x12',
++        dispute: { id: 'DSP-1', reason: '<script>boom()</script>', evidence: 'teks bukti',
++          response: 'Tanggapan vendor', decision: null } }
++    },
++    rp: value => `Rp${value}`,
++    escapeUi: value => String(value ?? '').replace(/[&<>"']/g, ch => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[ch])),
++    safeVendorApplicationUrl: value => value?.startsWith('https://') ? value : ''
++  };
++  runInNewContext(html.slice(start, end), context);
++  const rendered = context.renderAdminDisputeModal();
++  assert.match(rendered, /Peninjauan Sengketa/);
++  assert.match(rendered, /Bukti Tertulis Pelanggan/);
++  assert.match(rendered, /&lt;script&gt;boom\(\)&lt;\/script&gt;/);
++  assert.match(rendered, /Tinjau dan Konfirmasi/);
++  assert.doesNotMatch(rendered, /<script>boom\(\)<\/script>/);
++  assert.match(html, /data-a="view-admin-dispute"/);
++  assert.match(html, /refreshAdminDisputes\(true\)/);
++});
+diff --git a/database/migrations/20261123_admin_dispute_decision_record.sql b/database/migrations/20261123_admin_dispute_decision_record.sql
+new file mode 100644
+index 0000000..b1b59c7
+--- /dev/null
++++ b/database/migrations/20261123_admin_dispute_decision_record.sql
+@@ -0,0 +1,67 @@
++-- LockIn Sengketa 1C: ONLY records the administrator's mediation decision.
++-- No ledger entry, refund, release, blockchain update, or booking state transition.
++-- Apply in Supabase SQL Editor before using the admin decision form.
++BEGIN;
++ALTER TABLE public.disputes ADD COLUMN IF NOT EXISTS refund_percent SMALLINT;
++
++CREATE OR REPLACE FUNCTION public.record_dispute_admin_decision(
++  p_dispute_id TEXT, p_decision TEXT, p_decision_reason TEXT,
++  p_refund_percent INTEGER, p_decided_at TIMESTAMPTZ
++) RETURNS JSONB
++LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public
++AS $$
++DECLARE
++  booking_id_value TEXT;
++  booking_row public.bookings%ROWTYPE;
++  dispute_row public.disputes%ROWTYPE;
++BEGIN
++  SELECT booking_id INTO booking_id_value FROM public.disputes WHERE id = p_dispute_id;
++  IF NOT FOUND THEN RAISE EXCEPTION 'Sengketa tidak ditemukan.' USING ERRCODE = 'P0002'; END IF;
++
++  -- Match lock ordering of booking completion/dispute creation: booking first.
++  SELECT * INTO booking_row FROM public.bookings WHERE id = booking_id_value FOR UPDATE;
++  IF NOT FOUND OR booking_row.state <> 'Disputed' THEN
++    RAISE EXCEPTION 'Booking tidak dalam sengketa aktif.' USING ERRCODE = 'P0001';
++  END IF;
++  SELECT * INTO dispute_row FROM public.disputes WHERE id = p_dispute_id FOR UPDATE;
++  IF NOT FOUND OR dispute_row.booking_id <> booking_id_value OR dispute_row.decision IS NOT NULL THEN
++    RAISE EXCEPTION 'Sengketa sudah berubah atau diputuskan.' USING ERRCODE = 'P0001';
++  END IF;
++  IF p_decision IS NULL OR p_decision NOT IN ('release', 'full', 'partial') OR p_refund_percent IS NULL OR
++     (p_decision = 'release' AND p_refund_percent <> 0) OR
++     (p_decision = 'full' AND p_refund_percent <> 100) OR
++     (p_decision = 'partial' AND p_refund_percent NOT BETWEEN 1 AND 99) THEN
++    RAISE EXCEPTION 'Pilihan keputusan atau persentase tidak valid.' USING ERRCODE = 'P0001';
++  END IF;
++  IF p_decision_reason IS NULL OR length(btrim(p_decision_reason)) NOT BETWEEN 10 AND 1000 THEN
++    RAISE EXCEPTION 'Alasan keputusan tidak valid.' USING ERRCODE = 'P0001';
++  END IF;
++  IF p_decided_at IS NULL OR p_decided_at > clock_timestamp() + INTERVAL '5 minutes' THEN
++    RAISE EXCEPTION 'Waktu keputusan tidak valid.' USING ERRCODE = 'P0001';
++  END IF;
++  IF COALESCE(btrim(dispute_row.response), '') = '' AND
++     (dispute_row.vendor_response_due IS NULL OR dispute_row.vendor_response_due > clock_timestamp()) THEN
++    RAISE EXCEPTION 'Tanggapan vendor belum tersedia dan tenggat belum lewat.' USING ERRCODE = 'P0001';
++  END IF;
++  IF EXISTS (SELECT 1 FROM public.ledger_entries
++             WHERE booking_id = booking_id_value AND entry_type = 'SIMULATED_RELEASE') THEN
++    RAISE EXCEPTION 'Dana sudah dicairkan; sengketa memerlukan pemeriksaan manual.' USING ERRCODE = 'P0001';
++  END IF;
++
++  UPDATE public.disputes SET decision = p_decision,
++    decision_reason = btrim(p_decision_reason), refund_percent = p_refund_percent,
++    decided_at = p_decided_at
++    WHERE id = p_dispute_id AND decision IS NULL
++    RETURNING * INTO dispute_row;
++  IF NOT FOUND THEN RAISE EXCEPTION 'Keputusan sudah tercatat.' USING ERRCODE = 'P0001'; END IF;
++  INSERT INTO public.audit (booking_id, state, created_at)
++    VALUES (booking_id_value, 'DisputeDecisionRecorded:' || p_decision || ':' || p_refund_percent, p_decided_at);
++  RETURN jsonb_build_object('ok', TRUE, 'dispute', to_jsonb(dispute_row), 'pendingExecution', TRUE);
++END;
++$$;
++
++REVOKE ALL ON FUNCTION public.record_dispute_admin_decision(TEXT, TEXT, TEXT, INTEGER, TIMESTAMPTZ) FROM PUBLIC;
++REVOKE ALL ON FUNCTION public.record_dispute_admin_decision(TEXT, TEXT, TEXT, INTEGER, TIMESTAMPTZ) FROM anon, authenticated;
++GRANT EXECUTE ON FUNCTION public.record_dispute_admin_decision(TEXT, TEXT, TEXT, INTEGER, TIMESTAMPTZ) TO service_role;
++COMMIT;
++NOTIFY pgrst, 'reload schema';
+diff --git a/frontend/public/index.html b/frontend/public/index.html
+index 5506325..262783d 100644
+--- a/frontend/public/index.html
++++ b/frontend/public/index.html
+@@ -71,6 +71,11 @@ select:focus,input:focus,textarea:focus{border-color:var(--p);box-shadow:0 0 0 3
+ .admin-application-detail div{font-size:13px;color:var(--t);overflow-wrap:anywhere;white-space:pre-wrap}
+ .admin-application-detail a{color:var(--p);text-decoration:underline;overflow-wrap:anywhere}
+ .admin-application-actions{display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap;padding:0 20px 20px}
++.admin-dispute-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr));gap:14px}
++.admin-dispute-card{min-width:0}
++.admin-dispute-content{display:grid;gap:14px;padding:18px 20px}
++.admin-dispute-data{padding:12px;border:1px solid var(--b);background:var(--bg);border-radius:12px;overflow-wrap:anywhere;white-space:pre-wrap;font-size:13px;color:var(--t)}
++.admin-dispute-modal{width:min(100%,750px)}
+ .admin-decision-confirm{margin:0 20px 20px;padding:16px;border:1px solid var(--b);border-radius:14px;background:var(--bg)}
+ .admin-decision-confirm p{margin:0 0 14px;color:var(--t);font-size:14px;font-weight:600}
+ .admin-decision-confirm>div{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap}
+@@ -200,6 +205,7 @@ var S={
+   adminSummary:null,adminSummaryLoading:false,adminSummaryError:'',
+   adminApplications:[],adminApplicationsLoading:false,adminApplicationsError:'',adminApplicationsFilter:'all',adminApplicationDetail:'',
+   adminApplicationConfirmStatus:'',adminApplicationActionLoading:false,adminApplicationActionError:'',adminApplicationActionSuccess:'',
++  adminDisputes:[],adminDisputesLoading:false,adminDisputesError:'',adminDisputesFilter:'open',adminDisputeDetailId:'',adminDisputeDetail:null,adminDisputeDetailLoading:false,adminDisputeDetailError:'',adminDisputeDecision:{decision:'',percent:'50',reason:''},adminDisputeDecisionLoading:false,adminDisputeDecisionError:'',adminDisputeConfirm:false,adminDisputePreviousFocus:null,
+   vendorBookings:[],vendorDashboardLoading:false,vendorDashboardError:'',activeVendorBid:'',
+   vendorDetail:null,vendorDetailLoading:false,vendorDetailError:'',
+   vendorVerifyLoading:false,vendorVerifyError:'',vendorVerifySuccess:'',vendorOtpInput:'',
+@@ -973,6 +979,20 @@ var pages={
+       :!filteredApps.length?'<div class="msg" style="background:var(--pl);color:var(--m)" role="status">Tidak ada pengajuan dengan status tersebut.</div>'
+       :'<div class="admin-application-grid">'+appCards+'</div>';
+     var statusOptions='<option value="all">Semua status</option>'+statuses.map(function(status){return '<option value="'+escapeUi(status)+'" '+(S.adminApplicationsFilter===status?'selected':'')+'>'+escapeUi(vendorApplicationStatusLabel(status))+'</option>'}).join('');
++    var disputeRows=Array.isArray(S.adminDisputes)?S.adminDisputes:[];
++    var shownDisputes=disputeRows.filter(function(item){return S.adminDisputesFilter==='all'||(S.adminDisputesFilter==='open'?!item.decision:!!item.decision)});
++    var disputeCards=shownDisputes.map(function(item){
++      var status=item.decision?'Keputusan tercatat · Belum dieksekusi':item.response?'Siap ditinjau':'Menunggu vendor';
++      return '<article class="card pad admin-dispute-card"><div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap"><h4 style="margin:0;overflow-wrap:anywhere">'+escapeUi(item.vendor_name||'Vendor')+'</h4><span class="tag '+(item.decision?'':'bad')+'">'+escapeUi(status)+'</span></div>'
++        +'<p class="mut" style="font-size:12px;margin:8px 0">Booking '+escapeUi(item.booking_id)+' · '+escapeUi(item.event_date||'Tanggal belum tersedia')+'</p>'
++        +'<p style="margin:10px 0;overflow-wrap:anywhere"><b>'+escapeUi(item.reason||'Keluhan tanpa judul')+'</b></p>'
++        +'<button class="btn o" type="button" data-a="view-admin-dispute" data-v="'+escapeUi(item.id)+'" style="padding:8px 12px;font-size:12px">Tinjau Kasus</button></article>';
++    }).join('');
++    var disputeState=S.adminDisputesLoading?'<div class="msg" role="status">Memuat sengketa...</div>'
++      :S.adminDisputesError?'<div class="msg" role="alert" style="background:var(--bad);color:var(--badt)">'+escapeUi(S.adminDisputesError)+' <button type="button" class="btn o" data-a="refresh-admin-disputes">Coba lagi</button></div>'
++      :!shownDisputes.length?'<p class="mut">Belum ada sengketa pada filter ini.</p>'
++      :'<div class="admin-dispute-grid">'+disputeCards+'</div>';
++    var disputeFilter='<select id="admin-dispute-status-filter" aria-label="Filter sengketa"><option value="open" '+(S.adminDisputesFilter==='open'?'selected':'')+'>Belum diputuskan</option><option value="decided" '+(S.adminDisputesFilter==='decided'?'selected':'')+'>Keputusan tercatat</option><option value="all" '+(S.adminDisputesFilter==='all'?'selected':'')+'>Semua sengketa</option></select>';
+     return '<div class="w sec admin-dashboard"><header class="admin-dashboard-header" style="display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:20px">'
+       +'<div><h2 style="margin:0 0 4px">Dashboard Admin</h2><p class="mut" style="margin:0">Pantau operasional marketplace LockIn</p></div>'
+       +'<button class="btn o" data-a="refresh-admin-summary" '+(loading?'disabled':'')+' style="padding:10px 16px;min-width:124px">Muat ulang</button></header>'
+@@ -985,7 +1005,8 @@ var pages={
+       +'<article class="card pad admin-kpi-card"><div class="admin-kpi-top"><span class="admin-kpi-label">Dana Escrow (Simulasi)</span><span class="admin-kpi-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 20h18M5 20V9m14 11V9M3 9h18L12 4 3 9Zm4 3h2m3 0h2m3 0h1"/><path d="M8 16h1m3 0h2m3 0h1"/></svg></span></div><h3 class="admin-kpi-value">'+escapeUi(funds)+'</h3><p class="admin-kpi-note">Total dana jasa tertahan dari ledger terverifikasi; tidak termasuk deposit vendor.</p></article>'
+       +'</div></section>'+emptyState
+       +'<section class="card pad admin-applications-section" aria-label="Pengajuan Vendor Jasa"><div class="admin-applications-header"><div><h3 style="margin:0 0 4px">Pengajuan Vendor Jasa</h3><p class="mut" style="margin:0;font-size:13px">Daftar pengajuan untuk ditinjau.</p></div><div class="admin-applications-tools"><select id="admin-application-status-filter" aria-label="Filter status pengajuan">'+statusOptions+'</select><button type="button" class="btn o" data-a="refresh-admin-applications" '+(S.adminApplicationsLoading?'disabled':'')+' style="padding:10px 14px">Muat ulang</button></div></div>'+appState+'</section>'
+-      +'</div>'+renderAdminApplicationModal(S.adminApplicationDetail)+'</div>';
++      +'<section class="card pad" aria-label="Manajemen Sengketa"><div class="admin-applications-header"><div><h3 style="margin:0 0 4px">Manajemen Sengketa</h3><p class="mut" style="margin:0;font-size:13px">Tinjau bukti pelanggan, tanggapan vendor, dan catat keputusan mediasi.</p></div><div class="admin-applications-tools">'+disputeFilter+'<button type="button" class="btn o" data-a="refresh-admin-disputes" '+(S.adminDisputesLoading?'disabled':'')+'>Muat ulang</button></div></div>'+disputeState+'</section>'
++      +'</div>'+renderAdminApplicationModal(S.adminApplicationDetail)+renderAdminDisputeModal()+'</div>';
+   }
+ };
+ 
+@@ -998,7 +1019,7 @@ function renderVendorDisputeSection(booking){
+   var dispute=booking&&booking.dispute;
+   if(!dispute)return '';
+   var response=String(dispute.response||'').trim(),hasDecision=!!dispute.decision;
+-  var status=hasDecision?'Telah Diputuskan Admin':response?'Menunggu Peninjauan Admin':'Menunggu Tanggapan Vendor';
++  var status=hasDecision?'Keputusan Tercatat · Dana Masih Ditahan':response?'Menunggu Peninjauan Admin':'Menunggu Tanggapan Vendor';
+   var urlBlock=function(label,value){
+     if(!value)return '';
+     var safe=safeVendorApplicationUrl(value);
+@@ -1118,6 +1139,44 @@ function renderAdminApplicationModal(applicationId){
+     +detail('Status',escapeUi(vendorApplicationStatusLabel(app.status)))
+     +'</div>'+actionFeedback+actions+'</section></div>';
+ }
++function renderAdminDisputeModal(){
++  if(!S.adminDisputeDetailId||S.role!=='admin')return '';
++  var d=S.adminDisputeDetail,record=d&&d.dispute,err=S.adminDisputeDecisionError||'',form=S.adminDisputeDecision||{};
++  var fmtUrl=function(label,value){var safe=value&&safeVendorApplicationUrl(value);return safe?'<div><label>'+label+'</label><a href="'+escapeUi(safe)+'" target="_blank" rel="noopener noreferrer" style="color:var(--p);text-decoration:underline">Lihat bukti pendukung</a></div>':''};
++  var details='';
++  if(d&&record){
++    var agreement={};try{agreement=JSON.parse(d.agreement||'{}')}catch(_){agreement={}};
++    var locked=!!record.decision,waiting=!record.response&&(!record.vendor_response_due||new Date(record.vendor_response_due).getTime()>Date.now());
++    details='<div class="admin-dispute-content">'
++      +'<div class="admin-application-detail-grid"><div class="admin-application-detail"><label>Vendor / Booking</label><div>'+escapeUi(d.vendor_name||'Vendor')+' · '+escapeUi(d.id)+'</div></div><div class="admin-application-detail"><label>Jadwal / Pembayaran</label><div>'+escapeUi(d.event_date||'—')+' · '+rp(Number(d.paid)||0)+' tercatat</div></div></div>'
++      +'<div><label>Judul Keluhan Pelanggan</label><div class="admin-dispute-data">'+escapeUi(record.reason||'—')+'</div></div>'
++      +'<div><label>Bukti Tertulis Pelanggan</label><div class="admin-dispute-data">'+escapeUi(record.evidence||'—')+'</div></div>'+fmtUrl('Tautan Bukti Pelanggan',record.evidence_url)
++      +'<div><label>Tanggapan Vendor</label><div class="admin-dispute-data">'+escapeUi(record.response||'Belum ada tanggapan.')+'</div></div>'+fmtUrl('Tautan Bukti Vendor',record.vendor_evidence_url)
++      +'<div class="admin-application-detail-grid"><div class="admin-application-detail"><label>Perjanjian Digital</label><div>'+escapeUi(agreement.scope||agreement.packageName||'Tercatat pada booking')+'</div><div style="font-size:11px;color:var(--m);margin-top:4px">Hash: '+escapeUi(d.hash||'Tidak tersedia')+'</div></div><div class="admin-application-detail"><label>Verifikasi Kehadiran</label><div>'+(d.vendor_arrived?'Vendor terverifikasi hadir':'Belum terverifikasi')+' · '+escapeUi(d.execution_state||'Belum mulai')+'</div></div></div>'
++      +'<p class="mut" style="font-size:12px;margin:0">Dana yang belum dicairkan tetap ditahan. Keputusan di tahap ini tidak mengirim refund atau release.</p>';
++    if(locked){
++      var names={release:'Dana jasa ke vendor',full:'Pengembalian penuh',partial:'Pengembalian sebagian'};
++      details+='<div class="msg" role="status" style="background:var(--pl);color:var(--t)"><b>Keputusan sudah dicatat — menunggu pelaksanaan simulasi.</b><p style="margin:8px 0 0">'+escapeUi(names[record.decision]||record.decision)+' ('+escapeUi(record.refund_percent)+'% dikembalikan)</p><p style="margin:8px 0 0">'+escapeUi(record.decision_reason||'—')+'</p></div>';
++    }else if(waiting){
++      details+='<div class="msg" role="status">Menunggu tanggapan vendor atau batas waktu tanggapan sebelum keputusan dicatat.</div>';
++    }else{
++      details+='<form id="admin-dispute-decision-form" novalidate>'
++        +'<div style="margin-bottom:12px"><label for="admin-dispute-decision">Keputusan Mediasi *</label><select id="admin-dispute-decision"><option value="" '+(!form.decision?'selected':'')+'>Pilih keputusan...</option><option value="release" '+(form.decision==='release'?'selected':'')+'>Dana jasa kepada vendor (0% refund)</option><option value="full" '+(form.decision==='full'?'selected':'')+'>Pengembalian penuh (100%)</option><option value="partial" '+(form.decision==='partial'?'selected':'')+'>Pengembalian sebagian</option></select></div>'
++        +(form.decision==='partial'?'<div style="margin-bottom:12px"><label for="admin-dispute-percent">Persentase refund (1–99%)</label><input id="admin-dispute-percent" type="number" min="1" max="99" step="1" value="'+escapeUi(form.percent)+'"></div>':'')
++        +'<div><label for="admin-dispute-reason">Alasan Keputusan *</label><textarea id="admin-dispute-reason" minlength="10" maxlength="1000" rows="3" placeholder="Jelaskan pertimbangan berdasarkan bukti pelanggan dan vendor...">'+escapeUi(form.reason||'')+'</textarea></div>'
++        +(err?'<p class="dispute-field-error" role="alert">'+escapeUi(err)+'</p>':'')
++        +'<div class="msg" style="margin:12px 0;background:var(--pl);color:var(--t);font-size:12px">Keputusan ini akan tersimpan permanen dan tidak bisa diedit melalui antarmuka. Dana tetap ditahan sampai tahap penyelesaian 1D.</div>'
++        +(S.adminDisputeConfirm?'<div class="admin-decision-confirm" role="group" aria-label="Konfirmasi keputusan sengketa" style="margin:12px 0"><p>Yakin catat keputusan ini? Keputusan tidak bisa diedit melalui antarmuka, tetapi belum memindahkan dana.</p><div><button class="btn o" type="button" data-a="cancel-admin-dispute-confirm" '+(S.adminDisputeDecisionLoading?'disabled':'')+'>Kembali</button><button class="btn" type="button" data-a="execute-admin-dispute-decision" '+(S.adminDisputeDecisionLoading?'disabled':'')+'>'+(S.adminDisputeDecisionLoading?'Menyimpan...':'Ya, Catat Keputusan')+'</button></div></div>':'<div style="display:flex;justify-content:flex-end"><button class="btn" type="submit">Tinjau dan Konfirmasi</button></div>')
++        +'</form>';
++    }
++    details+='</div>';
++  } else if(S.adminDisputeDetailLoading)details='<div class="pad mut" role="status">Memuat detail sengketa...</div>';
++  else details='<div class="pad" role="alert">'+escapeUi(S.adminDisputeDetailError||'Detail sengketa tidak tersedia.')+'</div>';
++  return '<div class="admin-modal-backdrop" id="admin-dispute-modal-backdrop"><section class="admin-application-modal admin-dispute-modal" role="dialog" aria-modal="true" aria-labelledby="admin-dispute-title">'
++    +'<header style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:18px 20px;border-bottom:1px solid var(--b)"><div><h3 id="admin-dispute-title" style="margin:0">Peninjauan Sengketa</h3><p class="mut" style="font-size:12px;margin:4px 0 0">Bukti pelanggan, tanggapan vendor, dan keputusan admin</p></div><button type="button" class="btn o" data-a="close-admin-dispute" '+(S.adminDisputeDecisionLoading?'disabled':'')+'>Tutup</button></header>'
++    +details+'</section></div>';
++}
++
+ function nav(){
+   var r=S.role,l='',a='';
+   if(!r||r=='customer') l='<a href="#beranda">Beranda</a><a href="#daftar">Cari Vendor</a><a href="#cara">FAQ</a>'+(r?'<a href="#status">Booking Saya</a>':'');
+@@ -1235,6 +1294,8 @@ document.addEventListener('change',function(e){
+   if(t=='loc'){S.cc=e.target.value;render()}
+   if(t=='evt-date'){S.eventDate=e.target.value;}
+   if(t==='admin-application-status-filter'&&S.role==='admin'){S.adminApplicationsFilter=e.target.value;render()}
++  if(t==='admin-dispute-status-filter'&&S.role==='admin'){S.adminDisputesFilter=e.target.value;render()}
++  if(t==='admin-dispute-decision'&&S.role==='admin'){S.adminDisputeDecision.decision=e.target.value;S.adminDisputeConfirm=false;render();var f=document.getElementById('admin-dispute-reason');if(f)f.focus();}
+ });
+ 
+ function go(n){location.hash='#'+n;render()}
+@@ -1258,12 +1319,54 @@ async function refreshAdminSummary(skipInitialRender){
+   finally{S.adminSummaryLoading=false;if((location.hash||'').slice(1)==='admin')render();}
+ }
+ 
++async function refreshAdminDisputes(skipInitialRender){
++  if(S.role!=='admin')return;
++  S.adminDisputesLoading=true;S.adminDisputesError='';
++  if(!skipInitialRender&&(location.hash||'').slice(1)==='admin')render();
++  try{var rows=await apiRequest('/api/disputes');if(!Array.isArray(rows))throw new Error('Format sengketa tidak valid.');S.adminDisputes=rows;}
++  catch(err){S.adminDisputesError=err.message||'Gagal memuat daftar sengketa.';}
++  finally{S.adminDisputesLoading=false;if((location.hash||'').slice(1)==='admin')render();}
++}
++async function openAdminDispute(disputeId){
++  if(S.role!=='admin'||S.adminDisputeDecisionLoading)return;
++  var item=(S.adminDisputes||[]).find(function(row){return String(row.id)===String(disputeId)});
++  if(!item)return;
++  S.adminDisputePreviousFocus=document.activeElement;S.adminDisputeDetailId=String(item.id);S.adminDisputeDetail=null;S.adminDisputeDetailLoading=true;S.adminDisputeDetailError='';S.adminDisputeDecisionError='';S.adminDisputeDecision={decision:'',percent:'50',reason:''};S.adminDisputeConfirm=false;render();
++  try{var detail=await apiRequest('/api/bookings/'+encodeURIComponent(item.booking_id));
++    if(String(detail.id)!==String(item.booking_id)||String(detail.dispute&&detail.dispute.id)!==String(item.id))throw new Error('Detail sengketa tidak cocok.');
++    if(S.adminDisputeDetailId===String(item.id))S.adminDisputeDetail=detail;
++  }catch(err){S.adminDisputeDetailError=err.message||'Gagal memuat detail sengketa.';}
++  finally{S.adminDisputeDetailLoading=false;if(S.adminDisputeDetailId===String(item.id)){render();var dialog=document.querySelector('#admin-dispute-modal-backdrop button');if(dialog)dialog.focus();}}
++}
++function closeAdminDispute(){
++  if(S.adminDisputeDecisionLoading)return;
++  var previous=S.adminDisputePreviousFocus;S.adminDisputeDetailId='';S.adminDisputeDetail=null;S.adminDisputeDetailError='';S.adminDisputeDecisionError='';S.adminDisputeConfirm=false;S.adminDisputePreviousFocus=null;render();
++  if(previous&&document.contains(previous))previous.focus();
++}
++async function submitAdminDisputeDecision(){
++  if(S.role!=='admin'||S.adminDisputeDecisionLoading||!S.adminDisputeDetail||!S.adminDisputeDetail.dispute)return;
++  var d=S.adminDisputeDetail,form=S.adminDisputeDecision,decision=form.decision,reason=String(form.reason||'').trim(),percent=Number(form.percent);
++  if(!['release','full','partial'].includes(decision)){S.adminDisputeDecisionError='Pilih keputusan mediasi.';render();return;}
++  if(reason.length<10||reason.length>1000){S.adminDisputeDecisionError='Alasan keputusan harus 10–1.000 karakter.';render();return;}
++  if(decision==='partial'&&(!Number.isInteger(percent)||percent<1||percent>99)){S.adminDisputeDecisionError='Persentase refund harus 1–99%.';render();return;}
++  if(!S.adminDisputeConfirm){S.adminDisputeConfirm=true;S.adminDisputeDecisionError='';render();return;}
++  var disputeId=d.dispute.id;
++  S.adminDisputeDecisionLoading=true;S.adminDisputeDecisionError='';render();
++  try{var result=await apiRequest('/api/disputes/'+encodeURIComponent(disputeId)+'/resolve','POST',{decision:decision,reason:reason,percent:decision==='partial'?percent:undefined});
++    if(!result.ok||!result.pendingExecution||result.dispute?.decision!==decision)throw new Error('Database belum mengonfirmasi keputusan admin.');
++    if(S.adminDisputeDetail&&S.adminDisputeDetail.dispute?.id===disputeId)S.adminDisputeDetail=Object.assign({},S.adminDisputeDetail,{dispute:result.dispute});
++    await Promise.all([refreshAdminDisputes(true),refreshAdminSummary(true)]);
++    toast('Keputusan tercatat. Dana tetap ditahan sampai pelaksanaan simulasi.');
++  }catch(err){S.adminDisputeDecisionError=err.message||'Gagal mencatat keputusan admin.';}
++  finally{S.adminDisputeDecisionLoading=false;render();}
++}
++
+ function refreshAdminDashboard(){
+   if(S.role!=='admin')return;
+-  S.adminSummaryLoading=true;S.adminApplicationsLoading=true;
+-  S.adminSummaryError='';S.adminApplicationsError='';
++  S.adminSummaryLoading=true;S.adminApplicationsLoading=true;S.adminDisputesLoading=true;
++  S.adminSummaryError='';S.adminApplicationsError='';S.adminDisputesError='';
+   if((location.hash||'').slice(1)==='admin')render();
+-  return Promise.all([refreshAdminSummary(true),refreshAdminApplications(true)]);
++  return Promise.all([refreshAdminSummary(true),refreshAdminApplications(true),refreshAdminDisputes(true)]);
+ }
+ 
+ async function refreshAdminApplications(skipInitialRender,preserveOnError){
+@@ -1880,6 +1983,7 @@ function closeSnapModalAndSync(bookingId) {
+ // Global Click Delegation
+ document.addEventListener('click',function(e){
+   if(e.target.id==='admin-application-modal-backdrop'&&S.role==='admin'){S.adminApplicationDetail='';S.adminApplicationConfirmStatus='';render();return}
++  if(e.target.id==='admin-dispute-modal-backdrop'&&S.role==='admin'){closeAdminDispute();return}
+   if(e.target.id==='dispute-modal-backdrop'){closeDisputeModal();return}
+   if(e.target.id==='vendor-dispute-modal-backdrop'){closeVendorDisputeModal();return}
+   var a=e.target.closest('[data-a]');
+@@ -1897,6 +2001,12 @@ document.addEventListener('click',function(e){
+     return;
+   }
+ 
++  if(k==='refresh-admin-disputes'){refreshAdminDisputes();return;}
++  if(k==='view-admin-dispute'){openAdminDispute(v);return;}
++  if(k==='close-admin-dispute'){closeAdminDispute();return;}
++  if(k==='cancel-admin-dispute-confirm'){if(!S.adminDisputeDecisionLoading){S.adminDisputeConfirm=false;render();}return;}
++  if(k==='execute-admin-dispute-decision'){submitAdminDisputeDecision();return;}
++
+   if(k==='refresh-admin-applications'){
+     refreshAdminApplications();
+     return;
+@@ -2058,6 +2168,8 @@ document.addEventListener('input', function(e){
+   if(e.target&&e.target.id==='dispute-title')S.disputeForm.title=e.target.value;
+   if(e.target&&e.target.id==='dispute-evidence')S.disputeForm.evidence=e.target.value;
+   if(e.target&&e.target.id==='dispute-evidence-url')S.disputeForm.evidenceUrl=e.target.value;
++  if(e.target&&e.target.id==='admin-dispute-reason'){S.adminDisputeDecision.reason=e.target.value;S.adminDisputeConfirm=false;}
++  if(e.target&&e.target.id==='admin-dispute-percent'){S.adminDisputeDecision.percent=e.target.value;S.adminDisputeConfirm=false;}
+   if(e.target&&e.target.id==='vendor-dispute-response')S.vendorDisputeForm.response=e.target.value;
+   if(e.target&&e.target.id==='vendor-dispute-evidence-url')S.vendorDisputeForm.evidenceUrl=e.target.value;
+   if(e.target && e.target.id === 'vendor-otp-input'){
+@@ -2067,6 +2179,13 @@ document.addEventListener('input', function(e){
+ });
+ 
+ document.addEventListener('keydown', function(e){
++  if(S.adminDisputeDetailId&&S.role==='admin'){
++    var dlg=document.querySelector('#admin-dispute-modal-backdrop .admin-dispute-modal');
++    if(e.key==='Escape'){e.preventDefault();closeAdminDispute();return;}
++    if(e.key==='Tab'&&dlg){var focus=Array.from(dlg.querySelectorAll('button:not([disabled]),input:not([disabled]),textarea:not([disabled]),select:not([disabled]),a[href]'));
++      if(focus.length){var first=focus[0],last=focus[focus.length-1];if(!dlg.contains(document.activeElement)){e.preventDefault();first.focus();}else if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus();}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus();}}
++    }
++  }
+   if(S.disputeModalBookingId||S.vendorDisputeBookingId){
+     var vendorModal=!!S.vendorDisputeBookingId,activeDialog=document.querySelector(vendorModal?'.dispute-modal':'#dispute-modal-backdrop .dispute-modal');
+     if(e.key==='Escape'){e.preventDefault();if(vendorModal)closeVendorDisputeModal();else closeDisputeModal();return;}
+@@ -2082,6 +2201,7 @@ document.addEventListener('keydown', function(e){
+ });
+ 
+ document.addEventListener('submit',function(e){
++  if(e.target&&e.target.id==='admin-dispute-decision-form'){e.preventDefault();submitAdminDisputeDecision();return;}
+   if(e.target&&e.target.id==='dispute-form'){e.preventDefault();submitBookingDispute();}
+   if(e.target&&e.target.id==='vendor-dispute-form'){e.preventDefault();submitVendorDisputeResponse();}
+ });

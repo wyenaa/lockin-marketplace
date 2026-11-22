@@ -432,7 +432,7 @@ async function getBooking(id, user) {
   return b;
 }
 
-const DISPUTE_SELECT = 'id,booking_id,reason,evidence,evidence_url,response,vendor_evidence_url,decision,decision_reason,refund,vendor_response_due,created_at,decided_at';
+const DISPUTE_SELECT = 'id,booking_id,reason,evidence,evidence_url,response,vendor_evidence_url,decision,decision_reason,refund,refund_percent,vendor_response_due,created_at,decided_at';
 
 async function getDisputeForBooking(bookingId) {
   if (!supabase) return localDisputes.get(bookingId) || null;
@@ -1690,18 +1690,47 @@ async function api(req, res, url) {
       return send(res, 200, { ok: true, dispute, reviewStatus: 'Menunggu Peninjauan Admin' });
     }
     if (user.role !== 'admin') fail(403, 'Hanya admin yang dapat memutuskan sengketa.');
-    if (!['vendor', 'sebagian', 'penuh', 'release', 'partial', 'full'].includes(d.decision)) fail(400, 'Keputusan tidak valid.');
-    const reason = validateText(d.reason || 'Keputusan mediasi admin berdasarkan bukti', 'Alasan keputusan', 1000);
-    const percent = (d.decision === 'penuh' || d.decision === 'full') ? 100 : (d.decision === 'vendor' || d.decision === 'release') ? 0 : Number(d.percent || 50);
-    const refund = Math.round((b.paid || 0) * percent / 100);
-    dispute.decision = d.decision;
+    // Tahap 1C HANYA mencatat keputusan mediasi. Dana tetap ditahan sampai
+    // tahap 1D mengeksekusi keputusan secara atomik bersama ledger.
+    const decision = String(d.decision || '');
+    if (!['release', 'full', 'partial'].includes(decision)) fail(400, 'Pilihan keputusan tidak valid.');
+    const reason = validateText(d.reason, 'Alasan keputusan', 1000);
+    if (reason.length < 10) fail(400, 'Alasan keputusan minimal 10 karakter.');
+    const percent = decision === 'full' ? 100 : decision === 'release' ? 0 : Number(d.percent);
+    if (!Number.isInteger(percent) || (decision === 'partial' && (percent < 1 || percent > 99)))
+      fail(400, 'Persentase pengembalian sebagian harus bilangan bulat 1–99.');
+    if (b.state !== 'Disputed') fail(409, 'Booking tidak dalam sengketa aktif.');
+    if (!String(dispute.response || '').trim() &&
+        (!dispute.vendor_response_due || Date.parse(dispute.vendor_response_due) > Date.now()))
+      fail(409, 'Tunggu tanggapan vendor atau batas waktunya sebelum memutuskan sengketa.');
+    const decidedAt = now();
+    if (supabase) {
+      const { data: recorded, error } = await supabase.rpc('record_dispute_admin_decision', {
+        p_dispute_id: dispute.id,
+        p_decision: decision,
+        p_decision_reason: reason,
+        p_refund_percent: percent,
+        p_decided_at: decidedAt
+      });
+      if (error) {
+        console.error('[Admin dispute decision]', { code: error.code });
+        if (error.code === 'P0001' || error.code === '23505')
+          fail(409, 'Keputusan tidak bisa dicatat karena status sengketa sudah berubah. Muat ulang.');
+        fail(503, 'Keputusan admin gagal disimpan secara persisten. Dana tidak berubah.');
+      }
+      if (!recorded?.ok || recorded.dispute?.id !== dispute.id || recorded.dispute?.decision !== decision ||
+          recorded.dispute?.refund_percent !== percent) fail(503, 'Database belum mengonfirmasi keputusan sengketa.');
+      localDisputes.set(dispute.booking_id, recorded.dispute);
+      return send(res, 200, { ok: true, dispute: recorded.dispute, pendingExecution: true });
+    }
+    dispute.decision = decision;
     dispute.decision_reason = reason;
-    dispute.refund = refund;
-    dispute.decided_at = now();
-    b.state = percent === 100 ? 'Refunded' : 'Resolved';
-    b.updated_at = now();
-    localAudit.push({ booking_id: b.id, state: `Resolved:${d.decision}:refund=${refund}`, created_at: now() });
-    return send(res, 200, { ok: true, refund, dispute });
+    dispute.refund_percent = percent;
+    dispute.decided_at = decidedAt;
+    // Jangan ubah state booking atau mengisi refund; tidak ada release/refund saat 1C.
+    localDisputes.set(dispute.booking_id, dispute);
+    localAudit.push({ booking_id: b.id, state: `DisputeDecisionRecorded:${decision}:${percent}`, created_at: decidedAt });
+    return send(res, 200, { ok: true, dispute, pendingExecution: true });
   }
 
   fail(404, 'Endpoint tidak ditemukan.');
