@@ -1,0 +1,683 @@
+diff --git a/backend/src/index.js b/backend/src/index.js
+--- a/backend/src/index.js
++++ b/backend/src/index.js
+@@ -201,11 +201,12 @@
+   }
+ }
+ async function getReleaseStatus(booking) {
+-  let ledgerRows = [], activeDispute = Boolean(localDisputes.get(booking.id) && !localDisputes.get(booking.id).decision);
++  let ledgerRows = [], dispute = localDisputes.get(booking.id) || null;
++  let activeDispute = Boolean(dispute && !dispute.decision);
+   if (supabase) {
+-    const [{ data: entries, error: ledgerError }, { data: dispute, error: disputeError }] = await Promise.all([
+-      supabase.from('ledger_entries').select('entry_type,amount,created_at').eq('booking_id', booking.id).in('entry_type', ['SIMULATED_HELD', 'SIMULATED_RELEASE']),
+-      supabase.from('disputes').select('id,decision').eq('booking_id', booking.id).maybeSingle()
++    const [{ data: entries, error: ledgerError }, { data: storedDispute, error: disputeError }] = await Promise.all([
++      supabase.from('ledger_entries').select('entry_type,amount,created_at').eq('booking_id', booking.id).in('entry_type', ['SIMULATED_HELD', 'SIMULATED_RELEASE', 'SIMULATED_REFUND']),
++      supabase.from('disputes').select('id,decision,refund,refund_percent,settled_at').eq('booking_id', booking.id).maybeSingle()
+     ]);
+     if (ledgerError) {
+       console.error('[Supabase release ledger]', { code: ledgerError.code, message: ledgerError.message });
+@@ -216,7 +217,8 @@
+       fail(503, 'Status sengketa untuk pencairan gagal diverifikasi.');
+     }
+     ledgerRows = entries || [];
+-    activeDispute = activeDispute || Boolean(dispute && !dispute.decision);
++    dispute = storedDispute || null;
++    activeDispute = Boolean(dispute && !dispute.decision);
+   } else {
+     ledgerRows = localLedgerEntries.filter(entry => entry.booking_id === booking.id);
+   }
+@@ -227,6 +229,21 @@
+     Math.max(0, Number(booking.price) || 0),
+     Math.max(0, heldAmount - Math.max(0, Number(booking.deposit) || 0))
+   );
++  const refundEntries = ledgerRows.filter(entry => entry.entry_type === 'SIMULATED_REFUND');
++  const releaseEntries = ledgerRows.filter(entry => entry.entry_type === 'SIMULATED_RELEASE');
++  if (dispute?.settled_at) {
++    const refunded = refundEntries.reduce((sum, entry) => sum + Number(entry.amount), 0);
++    const vendorAmount = releaseEntries.reduce((sum, entry) => sum + Number(entry.amount), 0);
++    if (booking.state !== 'Resolved' || refundEntries.length > 1 || releaseEntries.length > 1 ||
++        refunded + vendorAmount !== serviceHeldAmount || refunded !== Number(dispute.refund) ||
++        (refunded > 0 && !refundEntries.length) || (vendorAmount > 0 && !releaseEntries.length))
++      fail(503, 'Penyelesaian sengketa belum cocok dengan catatan ledger.');
++    return { simulated: true, status: 'SETTLED', amount: 0, releasedAt: null,
++      settlement: { simulated: true, status: 'SETTLED', serviceAmount: serviceHeldAmount,
++        refundAmount: refunded, vendorAmount, refundPercent: Number(dispute.refund_percent),
++        settledAt: dispute.settled_at } };
++  }
++  if (refundEntries.length) fail(503, 'Catatan refund tidak memiliki penyelesaian sengketa yang terverifikasi.');
+   if (releaseEntry) {
+     return { simulated: true, status: 'RELEASED', amount: Number(releaseEntry.amount) || 0, releasedAt: releaseEntry.created_at || null };
+   }
+@@ -238,7 +255,7 @@
+   const bookingById = new Map(bookings.map(booking => [booking.id, booking]));
+   const successfulPayments = payments.filter(payment => payment.outcome === 'success');
+   const successfulById = new Map(successfulPayments.map(payment => [payment.id, payment]));
+-  const heldByBooking = new Map(), releaseByBooking = new Map(), paymentsByBooking = new Map(), heldPaymentIds = new Set();
++  const heldByBooking = new Map(), releaseByBooking = new Map(), refundByBooking = new Map(), paymentsByBooking = new Map(), heldPaymentIds = new Set();
+   for (const payment of successfulPayments) {
+     if (!payment.id || !bookingById.has(payment.booking_id) || !Number.isSafeInteger(Number(payment.amount)) || Number(payment.amount) <= 0) return null;
+     const rows = paymentsByBooking.get(payment.booking_id) || [];
+@@ -259,6 +276,11 @@
+       const rows = releaseByBooking.get(entry.booking_id) || [];
+       rows.push(entry);
+       releaseByBooking.set(entry.booking_id, rows);
++    } else if (entry.entry_type === 'SIMULATED_REFUND') {
++      if (entry.payment_id != null) return null;
++      const rows = refundByBooking.get(entry.booking_id) || [];
++      rows.push(entry);
++      refundByBooking.set(entry.booking_id, rows);
+     } else return null;
+   }
+   let total = 0;
+@@ -266,20 +288,29 @@
+     const successful = paymentsByBooking.get(booking.id) || [];
+     const held = heldByBooking.get(booking.id) || [];
+     const releases = releaseByBooking.get(booking.id) || [];
++    const refunds = refundByBooking.get(booking.id) || [];
+     const paid = Number(booking.paid) || 0;
+     const successfulTotal = successful.reduce((sum, payment) => sum + Number(payment.amount), 0);
+     if (!Number.isSafeInteger(successfulTotal) || paid !== successfulTotal || held.length !== successful.length) return null;
+-    if (!successful.length && (held.length || releases.length)) return null;
+-    if (releases.length > 1) return null;
++    if (!successful.length && (held.length || releases.length || refunds.length)) return null;
++    if (releases.length > 1 || refunds.length > 1) return null;
+     if (!successful.length) continue;
+     const price = Number(booking.price), deposit = Number(booking.deposit) || 0;
+     const heldTotal = held.reduce((sum, entry) => sum + Number(entry.amount), 0);
+-    if (!Number.isSafeInteger(price) || price <= 0 || !Number.isSafeInteger(deposit) || deposit < 0 || heldTotal !== successfulTotal) return null;
++    if (!Number.isSafeInteger(price) || price <= 0 || !Number.isSafeInteger(deposit) || deposit < 0 ||
++        heldTotal !== successfulTotal || heldTotal > price + deposit) return null;
++    const serviceFunds = Math.min(price, Math.max(0, heldTotal - Math.min(deposit, heldTotal)));
++    if (booking.state === 'Resolved') {
++      const allocated = (releases[0] ? Number(releases[0].amount) : 0) + (refunds[0] ? Number(refunds[0].amount) : 0);
++      if (allocated !== serviceFunds || allocated <= 0) return null;
++      continue;
++    }
++    if (refunds.length) return null;
+     if (releases.length) {
+       if (Number(releases[0].amount) !== price) return null;
+       continue;
+     }
+-    total += Math.min(price, Math.max(0, heldTotal - deposit));
++    total += serviceFunds;
+     if (!Number.isSafeInteger(total)) return null;
+   }
+   return total;
+@@ -432,7 +463,7 @@
+   return b;
+ }
+ 
+-const DISPUTE_SELECT = 'id,booking_id,reason,evidence,evidence_url,response,vendor_evidence_url,decision,decision_reason,refund,refund_percent,vendor_response_due,created_at,decided_at';
++const DISPUTE_SELECT = 'id,booking_id,reason,evidence,evidence_url,response,vendor_evidence_url,decision,decision_reason,refund,refund_percent,vendor_response_due,created_at,decided_at,settled_at';
+ 
+ async function getDisputeForBooking(bookingId) {
+   if (!supabase) return localDisputes.get(bookingId) || null;
+@@ -794,9 +825,9 @@
+       let bookings, successfulPayments, ledgerRows;
+       if (supabase) {
+         const results = await Promise.all([
+-          supabase.from('bookings').select('id,price,deposit,paid'),
++          supabase.from('bookings').select('id,price,deposit,paid,state'),
+           supabase.from('payments').select('id,booking_id,amount,outcome').eq('outcome', 'success'),
+-          supabase.from('ledger_entries').select('booking_id,payment_id,entry_type,amount').in('entry_type', ['SIMULATED_HELD', 'SIMULATED_RELEASE'])
++          supabase.from('ledger_entries').select('booking_id,payment_id,entry_type,amount').in('entry_type', ['SIMULATED_HELD', 'SIMULATED_RELEASE', 'SIMULATED_REFUND'])
+         ]);
+         const queryError = results.find(result => result.error || !Array.isArray(result.data));
+         if (queryError) throw queryError.error || new Error('Ledger escrow tidak tersedia.');
+@@ -804,7 +835,7 @@
+       } else {
+         bookings = Array.from(localBookings.values());
+         successfulPayments = Array.from(localPayments.values()).filter(payment => payment.outcome === 'success');
+-        ledgerRows = localLedgerEntries.filter(entry => ['SIMULATED_HELD', 'SIMULATED_RELEASE'].includes(entry.entry_type));
++        ledgerRows = localLedgerEntries.filter(entry => ['SIMULATED_HELD', 'SIMULATED_RELEASE', 'SIMULATED_REFUND'].includes(entry.entry_type));
+       }
+       const amount = verifiedSimulatedEscrowTotal(bookings, successfulPayments, ledgerRows);
+       if (amount !== null) simulatedEscrowFunds = { available: true, amount };
+@@ -1658,13 +1689,56 @@
+     return send(res, 200, rows.filter(d => user.role === 'admin' || d.owner_id === user.id));
+   }
+ 
+-  const disputeMatch = /^\/api\/disputes\/([^/]+)\/(resolve|response)$/.exec(path);
++  const disputeMatch = /^\/api\/disputes\/([^/]+)\/(resolve|response|execute)$/.exec(path);
+   if (disputeMatch && method === 'POST') {
+     const d = await body(req);
+     const disputeId = disputeMatch[1];
+     const dispute = await getDisputeById(disputeId);
+     if (!dispute) fail(404, 'Sengketa tidak ditemukan.');
+     const b = await getBooking(dispute.booking_id, user);
++    if (disputeMatch[2] === 'execute') {
++      if (user.role !== 'admin') fail(403, 'Hanya admin yang dapat melaksanakan keputusan sengketa.');
++      if (!dispute.decision || !Number.isInteger(Number(dispute.refund_percent)))
++        fail(409, 'Keputusan admin belum tercatat.');
++      if (dispute.settled_at || b.state !== 'Disputed') fail(409, 'Penyelesaian sengketa sudah dicatat atau status booking berubah.');
++      const executedAt = now();
++      if (supabase) {
++        const { data: result, error } = await supabase.rpc('execute_dispute_simulated_settlement', {
++          p_dispute_id: dispute.id, p_executed_at: executedAt
++        });
++        if (error) {
++          console.error('[Admin simulated dispute settlement]', { code: error.code });
++          if (['P0001', '23505', 'P0002', '23514'].includes(error.code))
++            fail(409, 'Penyelesaian tidak dapat dilakukan: data dana atau status sudah berubah. Muat ulang.');
++          fail(503, 'Penyelesaian simulasi gagal dicatat secara atomik. Tidak ada dana yang dianggap terselesaikan.');
++        }
++        if (!result?.ok || result.booking?.state !== 'Resolved' || result.dispute?.id !== dispute.id ||
++            !result.dispute?.settled_at || result.settlement?.status !== 'SETTLED')
++          fail(503, 'Database belum mengonfirmasi penyelesaian sengketa. Periksa status sebelum mengulang.');
++        return send(res, 200, result);
++      }
++      const successful = [...localPayments.values()].filter(row => row.booking_id === b.id && row.outcome === 'success');
++      const held = localLedgerEntries.filter(row => row.booking_id === b.id && row.entry_type === 'SIMULATED_HELD');
++      if (!successful.length || held.length !== successful.length || held.some(row => !successful.some(p => p.id === row.payment_id && p.amount === row.amount)) ||
++          held.reduce((sum, row) => sum + row.amount, 0) !== successful.reduce((sum, row) => sum + row.amount, 0) ||
++          b.paid !== successful.reduce((sum, row) => sum + row.amount, 0) || b.paid > b.price + (b.deposit || 0) ||
++          localLedgerEntries.some(row => row.booking_id === b.id && ['SIMULATED_RELEASE','SIMULATED_REFUND'].includes(row.entry_type)))
++        fail(409, 'Dana belum konsisten atau sudah dialokasikan.');
++      const heldAmount = held.reduce((sum, row) => sum + row.amount, 0);
++      const serviceAmount = Math.min(b.price, Math.max(0, heldAmount - Math.min(b.deposit || 0, heldAmount)));
++      if (!Number.isSafeInteger(serviceAmount) || serviceAmount <= 0) fail(409, 'Tidak ada dana jasa untuk diselesaikan.');
++      const refundAmount = Math.floor((serviceAmount * dispute.refund_percent + 50) / 100);
++      const vendorAmount = serviceAmount - refundAmount;
++      if (refundAmount) localLedgerEntries.push({ booking_id: b.id, payment_id: null, entry_type: 'SIMULATED_REFUND', amount: refundAmount, created_at: executedAt });
++      if (vendorAmount) localLedgerEntries.push({ booking_id: b.id, payment_id: null, entry_type: 'SIMULATED_RELEASE', amount: vendorAmount, created_at: executedAt });
++      dispute.refund = refundAmount; dispute.settled_at = executedAt;
++      b.state = 'Resolved'; b.updated_at = executedAt;
++      localDisputes.set(b.id, dispute);
++      localAudit.push({ booking_id: b.id, state: `DisputeSettlementSimulated:REFUND=${refundAmount}:VENDOR=${vendorAmount}`, created_at: executedAt });
++      return send(res, 200, { ok: true, dispute, booking: withBookingStatuses(b),
++        settlement: { simulated: true, status: 'SETTLED', serviceAmount, refundAmount, vendorAmount,
++          refundPercent: dispute.refund_percent, settledAt: executedAt } });
++    }
+     if (dispute.decision) fail(409, 'Sengketa telah diputuskan.');
+     if (disputeMatch[2] === 'response') {
+       if (user.role !== 'vendor' || b.owner_id !== user.id) fail(403, 'Hanya vendor terkait yang dapat menanggapi.');
+diff --git a/frontend/public/index.html b/frontend/public/index.html
+--- a/frontend/public/index.html
++++ b/frontend/public/index.html
+@@ -205,7 +205,7 @@
+   adminSummary:null,adminSummaryLoading:false,adminSummaryError:'',
+   adminApplications:[],adminApplicationsLoading:false,adminApplicationsError:'',adminApplicationsFilter:'all',adminApplicationDetail:'',
+   adminApplicationConfirmStatus:'',adminApplicationActionLoading:false,adminApplicationActionError:'',adminApplicationActionSuccess:'',
+-  adminDisputes:[],adminDisputesLoading:false,adminDisputesError:'',adminDisputesFilter:'open',adminDisputeDetailId:'',adminDisputeDetail:null,adminDisputeDetailLoading:false,adminDisputeDetailError:'',adminDisputeDecision:{decision:'',percent:'50',reason:''},adminDisputeDecisionLoading:false,adminDisputeDecisionError:'',adminDisputeConfirm:false,adminDisputePreviousFocus:null,
++  adminDisputes:[],adminDisputesLoading:false,adminDisputesError:'',adminDisputesFilter:'open',adminDisputeDetailId:'',adminDisputeDetail:null,adminDisputeDetailLoading:false,adminDisputeDetailError:'',adminDisputeDecision:{decision:'',percent:'50',reason:''},adminDisputeDecisionLoading:false,adminDisputeDecisionError:'',adminDisputeConfirm:false,adminDisputeExecuteConfirm:false,adminDisputeExecuteLoading:false,adminDisputePreviousFocus:null,
+   vendorBookings:[],vendorDashboardLoading:false,vendorDashboardError:'',activeVendorBid:'',
+   vendorDetail:null,vendorDetailLoading:false,vendorDetailError:'',
+   vendorVerifyLoading:false,vendorVerifyError:'',vendorVerifySuccess:'',vendorOtpInput:'',
+@@ -233,6 +233,12 @@
+   var hasAmount=typeof rawAmount==='number'&&Number.isFinite(amount)&&amount>=0;
+   var paid=Number(booking&&booking.paid)||0;
+   var paidState=booking&&['DPPaid','Paid','Completed','Disputed','Resolved','Refunded'].includes(booking.state);
++  if(release&&release.simulated===true&&release.status==='SETTLED'&&release.settlement&&release.settlement.status==='SETTLED'){
++    var settlement=release.settlement;
++    return {status:'SETTLED',label:'Sengketa Selesai (Simulasi)',amountText:'',timeText:'',
++      note:'Refund pelanggan '+rp(settlement.refundAmount)+'; bagian vendor '+rp(settlement.vendorAmount)+'. Hanya catatan simulasi, bukan transfer nyata.',
++      settlement:settlement};
++  }
+   if(release&&release.simulated===true&&release.status==='RELEASED'&&hasAmount){
+     var releaseDate=release.releasedAt?new Date(release.releasedAt):null;
+     var releaseTime=releaseDate&&Number.isFinite(releaseDate.getTime())?new Intl.DateTimeFormat('id-ID',{dateStyle:'medium',timeStyle:'short',timeZone:'Asia/Jakarta'}).format(releaseDate)+' WIB':'Waktu pencairan belum tersedia';
+@@ -251,7 +257,7 @@
+ }
+ function releaseStatusCard(booking){
+   var view=releaseDisplay(booking);
+-  var tone=view.status==='RELEASED'?'ok':view.status==='ON_HOLD'?'bad':'';
++  var tone=['RELEASED','SETTLED'].includes(view.status)?'ok':view.status==='ON_HOLD'?'bad':'';
+   var hasPaid=Number(booking&&booking.paid)>0||booking&&['DPPaid','Paid','Completed','Disputed','Resolved','Refunded'].includes(booking.state);
+   var deposit=Number(booking&&booking.deposit)||0;
+   var depositRow=hasPaid&&deposit>0?'<div class="row"><span>Deposit vendor (terpisah dari dana jasa)</span><b>'+rp(deposit)+'</b></div>':'';
+@@ -259,6 +265,9 @@
+     +'<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px"><h3 style="font-size:16px;margin:0;color:var(--t)">Status Dana (Simulasi)</h3><span class="tag '+tone+'">'+escapeUi(view.label)+'</span></div>'
+     +(view.amountText?'<div class="row"><span>Dana jasa</span><b>'+escapeUi(view.amountText)+'</b></div>':'')
+     +(view.timeText?'<div class="row"><span>Waktu pencairan</span><b>'+escapeUi(view.timeText)+'</b></div>':'')
++    +(view.status==='SETTLED'?'<div class="row"><span>Dana jasa yang diselesaikan</span><b>'+rp(view.settlement.serviceAmount)+'</b></div>'
++      +'<div class="row"><span>Refund pelanggan (simulasi)</span><b>'+rp(view.settlement.refundAmount)+'</b></div>'
++      +'<div class="row"><span>Bagian vendor (simulasi)</span><b>'+rp(view.settlement.vendorAmount)+'</b></div>':'')
+     +depositRow
+     +(view.note?'<p class="mut" style="font-size:12px;line-height:1.5;margin:10px 0 0">'+escapeUi(view.note)+'</p>':'')
+     +'</div>';
+@@ -640,7 +649,8 @@
+       +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">'
+       +'<div><h3 style="margin:0;font-size:17px">'+curBid+' &middot; '+vName+'</h3><span class="mut" style="font-size:13px">'+vCat+' &middot; Tanggal Acara: '+bItem.date+'</span></div>'
+       +'<span class="tag '+(isCancelled?'':'ok')+'" style="font-size:13px">'+statusLabel+'</span></div>'
+-      +(isDisputed?'<div class="msg" style="background:#FEF2F2;border:1px solid #FCA5A5;color:#991B1B"><b>⚠️ Keluhan diajukan. Pencairan dana ditahan sampai admin memutuskan.</b><p style="margin:4px 0 0;font-size:13px">Tim mediator LockIn sedang meninjau bukti yang telah diunggah.</p></div>':'')
++      +(isDisputed?'<div class="msg" style="background:#FEF2F2;border:1px solid #FCA5A5;color:#991B1B"><b>⚠️ '+(bItem.dispute?.decision?'Keputusan admin sudah ditetapkan; penyelesaian dana simulasi belum diproses.':'Keluhan diajukan. Dana tetap ditahan sampai penyelesaian sengketa.')+'</b><p style="margin:4px 0 0;font-size:13px">'+escapeUi(bItem.dispute?.decision_reason||'Tim mediator LockIn meninjau bukti yang telah dikirim.')+'</p></div>':'')
++      +(bItem.state==='Resolved'&&bItem.dispute?.settled_at?'<div class="msg" style="background:var(--pl);color:var(--t)"><b>Sengketa selesai melalui keputusan admin.</b><p style="margin:6px 0 0">'+escapeUi(bItem.dispute.decision_reason||'')+'</p><p style="margin:6px 0 0">Pembagian dana dicatat secara simulasi, bukan refund atau transfer uang nyata.</p></div>':'')
+       +(isCancelled?'<div class="msg" style="margin:12px 0;background:#FFF7ED;border:1px solid #FDBA74"><b>Booking dibatalkan</b><br>Aturan: '+(bItem.cancellation_refund_description||'Refund sesuai kebijakan booking.')+'<br>Dikembalikan: <b>'+rp(bItem.cancellation_refund||0)+'</b><br>Tidak dikembalikan: <b>'+rp(bItem.cancellation_not_refunded||0)+'</b></div>':'')
+       +(!isCancelled?T(1,'Perjanjian Digital Disetujui','Kesepakatan tersimpan pada booking'):'')
+       +(!isCancelled?T(bItem.dpPaid>0,'DP Dibayar ('+rp(bItem.dpPaid)+')',bItem.dpPaid>0?'Status pembayaran dari backend':'Menunggu pembayaran DP'):'')
+@@ -765,10 +775,14 @@
+     if(S.role!=='vendor') return '<div class="w sec"><div class="card pad"><h2>Akses dashboard vendor tidak tersedia.</h2><p class="mut">Masuk menggunakan akun vendor untuk melihat pesanan.</p></div></div>';
+     var rows=S.vendorBookings||[],fundsReady=rows.every(function(b){return b.paymentBreakdown&&b.paymentBreakdownVerified!==false});
+     var verifiedTotal=fundsReady?rows.reduce(function(sum,b){return sum+(Number(b.paymentBreakdown.dpAmount)||0)+(Number(b.paymentBreakdown.finalAmount)||0)},0):null;
+-    var releaseStatsReady=rows.length>0&&rows.every(function(b){var release=b.release;if(release)return release.simulated===true&&['HELD','RELEASED','ON_HOLD'].includes(release.status)&&typeof release.amount==='number'&&Number.isFinite(release.amount)&&release.amount>=0;return !(Number(b.paid)>0||['DPPaid','Paid','Completed','Disputed','Resolved','Refunded'].includes(b.state))});
+-    var releaseTotals={held:0,released:0};
+-    if(releaseStatsReady)rows.forEach(function(b){if(!b.release)return;var amount=b.release.amount;if(b.release.status==='HELD'||b.release.status==='ON_HOLD')releaseTotals.held+=amount;else if(b.release.status==='RELEASED')releaseTotals.released+=amount});
+-    var hasRecordedReleaseFunds=rows.some(function(b){return Number(b.paid)>0||b.release&&b.release.status==='RELEASED'});
++    var releaseStatsReady=rows.length>0&&rows.every(function(b){var release=b.release;if(release)return release.simulated===true&&['HELD','RELEASED','ON_HOLD','SETTLED'].includes(release.status)&&typeof release.amount==='number'&&Number.isFinite(release.amount)&&release.amount>=0&&(release.status!=='SETTLED'||(release.settlement&&Number.isSafeInteger(release.settlement.refundAmount)&&Number.isSafeInteger(release.settlement.vendorAmount)));return !(Number(b.paid)>0||['DPPaid','Paid','Completed','Disputed','Resolved','Refunded'].includes(b.state))});
++    var releaseTotals={held:0,released:0,refunded:0};
++    if(releaseStatsReady)rows.forEach(function(b){if(!b.release)return;var amount=b.release.amount;
++      if(b.release.status==='HELD'||b.release.status==='ON_HOLD')releaseTotals.held+=amount;
++      else if(b.release.status==='RELEASED')releaseTotals.released+=amount;
++      else if(b.release.status==='SETTLED'){releaseTotals.released+=b.release.settlement.vendorAmount;releaseTotals.refunded+=b.release.settlement.refundAmount;}
++    });
++    var hasRecordedReleaseFunds=rows.some(function(b){return Number(b.paid)>0||b.release&&['RELEASED','SETTLED'].includes(b.release.status)});
+     var releaseStatsHtml=S.vendorDashboardLoading
+       ?'<span class="mut">Memuat status dana...</span>'
+       :S.vendorDashboardError
+@@ -779,7 +793,7 @@
+             ?'<span class="mut">Belum dapat diverifikasi dari backend</span>'
+             :!hasRecordedReleaseFunds
+               ?'<span class="mut">Belum ada dana tercatat</span>'
+-              :'<div style="display:grid;gap:6px;margin-top:8px;font-size:13px"><div class="row"><span>Dana Ditahan (Simulasi)</span><b>'+rp(releaseTotals.held)+'</b></div><div class="row"><span>Dicairkan (Simulasi)</span><b>'+rp(releaseTotals.released)+'</b></div></div>';
++              :'<div style="display:grid;gap:6px;margin-top:8px;font-size:13px"><div class="row"><span>Dana Ditahan (Simulasi)</span><b>'+rp(releaseTotals.held)+'</b></div><div class="row"><span>Dicairkan (Simulasi)</span><b>'+rp(releaseTotals.released)+'</b></div><div class="row"><span>Refund Sengketa (Simulasi)</span><b>'+rp(releaseTotals.refunded)+'</b></div></div>';
+     var contents=S.vendorDashboardLoading
+       ?'<div class="msg">Memuat booking vendor dari server...</div>'
+       :S.vendorDashboardError
+@@ -864,12 +878,12 @@
+           +'<span class="tag ok" style="font-size:13px;padding:6px 14px">Kehadiran Terverifikasi</span>'
+           +'</div>'
+           +'</div>';
+-      } else if(d.state === 'Disputed'){
++      } else if(d.state === 'Disputed' || d.state === 'Resolved'){
+         arrivalSectionHtml = '<div class="card pad" style="margin-top:16px">'
+           +'<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">'
+           +'<div><h3 style="margin:0 0 4px;font-size:16px;color:var(--t)">📍 Verifikasi Kehadiran</h3>'
+-          +'<p style="margin:0;font-size:13px;color:var(--m)">'+(isFinalPaid?'Pembayaran booking sudah lunas. ':'')+'Verifikasi kehadiran ditunda karena booking sedang dalam sengketa dan menunggu keputusan admin.</p></div>'
+-          +'<span class="tag" style="font-size:12px;padding:6px 12px;background:var(--bad);color:var(--badt)">Ditunda karena sengketa</span>'
++          +'<p style="margin:0;font-size:13px;color:var(--m)">'+(isFinalPaid?'Pembayaran booking sudah lunas. ':'')+(d.state==='Resolved'?'Sengketa selesai melalui keputusan admin; verifikasi kehadiran tidak dilanjutkan.':d.dispute?.decision?'Keputusan admin sudah ditetapkan; menunggu penyelesaian dana simulasi.':'Verifikasi kehadiran ditunda karena booking sedang dalam sengketa dan menunggu keputusan admin.')+'</p></div>'
++          +'<span class="tag" style="font-size:12px;padding:6px 12px;background:var(--bad);color:var(--badt)">'+(d.state==='Resolved'?'Sengketa selesai':'Ditunda karena sengketa')+'</span>'
+           +'</div>'
+           +'</div>';
+       } else if(!isFullyPaid){
+@@ -935,7 +949,7 @@
+         +'<div class="row"><span>Status Pembayaran</span><b><span class="tag '+(isFinalPaid?'ok':'')+'">'+escapeUi(payStatusLabel)+'</span></b></div>'
+         +'<div class="row"><span>Dana Masuk (Tercatat)</span><b style="color:var(--p)">'+rp(Number(d.paid)||0)+'</b></div>'
+         +'<div style="margin-top:16px;padding:12px;border-radius:12px;background:rgba(29,78,216,.08);border:1px solid var(--b);font-size:12px;color:var(--t);line-height:1.5">'
+-        +'🔒 <b>Proteksi Escrow LockIn:</b> Dana ditahan di rekening penampung resmi sampai pelaksanaan acara wisuda selesai.'
++        +'🔒 <b>Proteksi Escrow LockIn:</b> Status penahanan dan pencairan dana dicatat secara simulasi di sistem LockIn. Tidak menggunakan rekening penampung atau transfer dana nyata.'
+         +'</div>'
+         +'</div></div>'
+         +releaseStatusCard(releaseBooking)
+@@ -982,7 +996,7 @@
+     var disputeRows=Array.isArray(S.adminDisputes)?S.adminDisputes:[];
+     var shownDisputes=disputeRows.filter(function(item){return S.adminDisputesFilter==='all'||(S.adminDisputesFilter==='open'?!item.decision:!!item.decision)});
+     var disputeCards=shownDisputes.map(function(item){
+-      var status=item.decision?'Keputusan tercatat · Belum dieksekusi':item.response?'Siap ditinjau':'Menunggu vendor';
++      var status=item.settled_at?'Selesai diproses (Simulasi)':item.decision?'Keputusan tercatat · Belum dieksekusi':item.response?'Siap ditinjau':'Menunggu vendor';
+       return '<article class="card pad admin-dispute-card"><div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap"><h4 style="margin:0;overflow-wrap:anywhere">'+escapeUi(item.vendor_name||'Vendor')+'</h4><span class="tag '+(item.decision?'':'bad')+'">'+escapeUi(status)+'</span></div>'
+         +'<p class="mut" style="font-size:12px;margin:8px 0">Booking '+escapeUi(item.booking_id)+' · '+escapeUi(item.event_date||'Tanggal belum tersedia')+'</p>'
+         +'<p style="margin:10px 0;overflow-wrap:anywhere"><b>'+escapeUi(item.reason||'Keluhan tanpa judul')+'</b></p>'
+@@ -1019,7 +1033,7 @@
+   var dispute=booking&&booking.dispute;
+   if(!dispute)return '';
+   var response=String(dispute.response||'').trim(),hasDecision=!!dispute.decision;
+-  var status=hasDecision?'Keputusan Tercatat · Dana Masih Ditahan':response?'Menunggu Peninjauan Admin':'Menunggu Tanggapan Vendor';
++  var status=dispute.settled_at?'Sengketa Selesai · Simulasi':hasDecision?'Keputusan Tercatat · Dana Masih Ditahan':response?'Menunggu Peninjauan Admin':'Menunggu Tanggapan Vendor';
+   var urlBlock=function(label,value){
+     if(!value)return '';
+     var safe=safeVendorApplicationUrl(value);
+@@ -1031,6 +1045,7 @@
+     +'<div style="margin-top:10px"><label>Bukti pendukung tertulis</label><div style="padding:12px;border:1px solid var(--b);border-radius:12px;background:var(--bg);color:var(--t);font-size:13px;white-space:pre-wrap;overflow-wrap:anywhere">'+escapeUi(dispute.evidence||'Belum tersedia')+'</div></div>'
+     +urlBlock('Tautan bukti pelanggan',dispute.evidence_url)
+     +(response?'<div style="margin-top:12px"><label>Tanggapan vendor</label><div style="padding:12px;border:1px solid var(--b);border-radius:12px;background:var(--bg);color:var(--t);font-size:13px;white-space:pre-wrap;overflow-wrap:anywhere">'+escapeUi(response)+'</div>'+urlBlock('Tautan bukti tambahan',dispute.vendor_evidence_url)+'</div>':'')
++    +(hasDecision?'<div class="msg" style="margin-top:12px;background:var(--pl);color:var(--t)"><b>Keputusan admin: '+escapeUi(dispute.refund_percent)+'% untuk refund pelanggan</b><p style="margin:6px 0 0">'+escapeUi(dispute.decision_reason||'—')+'</p><p style="margin:6px 0 0">'+(dispute.settled_at?'Pembagian dana sudah dicatat secara simulasi.':'Menunggu pelaksanaan pembagian dana secara simulasi.')+'</p></div>':'')
+     +(!hasDecision&&!response?'<p class="mut" style="font-size:12px;margin:10px 0">Dana yang belum dicairkan tetap ditahan secara simulasi selama sengketa aktif.</p><button type="button" class="btn" data-a="respond-dispute" data-v="'+escapeUi(booking.id)+'">Tanggapi Sengketa</button>':'')
+     +'</section>';
+ }
+@@ -1156,7 +1171,19 @@
+       +'<p class="mut" style="font-size:12px;margin:0">Dana yang belum dicairkan tetap ditahan. Keputusan di tahap ini tidak mengirim refund atau release.</p>';
+     if(locked){
+       var names={release:'Dana jasa ke vendor',full:'Pengembalian penuh',partial:'Pengembalian sebagian'};
+-      details+='<div class="msg" role="status" style="background:var(--pl);color:var(--t)"><b>Keputusan Admin Telah Ditetapkan</b><p style="margin:8px 0 0">'+escapeUi(names[record.decision]||record.decision)+' ('+escapeUi(record.refund_percent)+'% dikembalikan)</p><p style="margin:8px 0 0">'+escapeUi(record.decision_reason||'—')+'</p></div>';
++      var settlement=d.release&&d.release.settlement, serviceFunds=d.release&&d.release.status==='ON_HOLD'?Number(d.release.amount):null;
++      var projectedRefund=Number.isSafeInteger(serviceFunds)&&serviceFunds>0?Math.floor((serviceFunds*Number(record.refund_percent)+50)/100):null;
++      details+='<div class="msg" role="status" style="background:var(--pl);color:var(--t)"><b>'+(record.settled_at?'Penyelesaian Sengketa Sudah Dicatat (Simulasi)':'Keputusan Admin Telah Ditetapkan')+'</b><p style="margin:8px 0 0">'+escapeUi(names[record.decision]||record.decision)+' ('+escapeUi(record.refund_percent)+'% untuk pelanggan)</p><p style="margin:8px 0 0">'+escapeUi(record.decision_reason||'—')+'</p>'
++        +(record.settled_at&&settlement?'<p style="margin:8px 0 0">Refund (simulasi): <b>'+rp(settlement.refundAmount)+'</b> · Bagian vendor (simulasi): <b>'+rp(settlement.vendorAmount)+'</b></p>'
++          :projectedRefund!==null?'<p style="margin:8px 0 0">Rencana dari dana jasa tertahan: refund '+rp(projectedRefund)+' · vendor '+rp(serviceFunds-projectedRefund)+'. Belum diproses.</p>':'')
++        +'</div>';
++      if(!record.settled_at){
++        details+='<div class="msg" style="margin:12px 0;background:var(--pl);color:var(--t);font-size:12px">Pelaksanaan hanya mencatat pembagian dana simulasi di ledger Supabase, tanpa transfer bank, Midtrans, atau blockchain.</div>';
++        if(S.adminDisputeExecuteConfirm){
++          details+='<div class="admin-decision-confirm" role="group" aria-label="Konfirmasi penyelesaian sengketa" style="margin:12px 0"><p>Konfirmasi pembagian dana simulasi sesuai keputusan final admin? Proses ini hanya dapat dilakukan satu kali.</p><div><button type="button" class="btn o" data-a="cancel-admin-settlement" '+(S.adminDisputeExecuteLoading?'disabled':'')+'>Kembali</button><button type="button" class="btn" data-a="execute-admin-settlement" '+(S.adminDisputeExecuteLoading?'disabled':'')+'>'+(S.adminDisputeExecuteLoading?'Memproses...':'Ya, Proses Simulasi')+'</button></div></div>';
++        } else details+='<button type="button" class="btn" data-a="execute-admin-settlement" '+(S.adminDisputeExecuteLoading?'disabled':'')+'>Proses Penyelesaian Dana (Simulasi)</button>';
++        if(err)details+='<p class="dispute-field-error" role="alert">'+escapeUi(err)+'</p>';
++      }
+     }else if(waiting){
+       details+='<div class="msg" role="status">Menunggu tanggapan vendor atau batas waktu tanggapan sebelum keputusan dicatat.</div>';
+     }else{
+@@ -1331,7 +1358,7 @@
+   if(S.role!=='admin'||S.adminDisputeDecisionLoading)return;
+   var item=(S.adminDisputes||[]).find(function(row){return String(row.id)===String(disputeId)});
+   if(!item)return;
+-  S.adminDisputePreviousFocus=document.activeElement;S.adminDisputeDetailId=String(item.id);S.adminDisputeDetail=null;S.adminDisputeDetailLoading=true;S.adminDisputeDetailError='';S.adminDisputeDecisionError='';S.adminDisputeDecision={decision:'',percent:'50',reason:''};S.adminDisputeConfirm=false;render();
++  S.adminDisputePreviousFocus=document.activeElement;S.adminDisputeDetailId=String(item.id);S.adminDisputeDetail=null;S.adminDisputeDetailLoading=true;S.adminDisputeDetailError='';S.adminDisputeDecisionError='';S.adminDisputeDecision={decision:'',percent:'50',reason:''};S.adminDisputeConfirm=false;S.adminDisputeExecuteConfirm=false;render();
+   try{var detail=await apiRequest('/api/bookings/'+encodeURIComponent(item.booking_id));
+     if(String(detail.id)!==String(item.booking_id)||String(detail.dispute&&detail.dispute.id)!==String(item.id))throw new Error('Detail sengketa tidak cocok.');
+     if(S.adminDisputeDetailId===String(item.id))S.adminDisputeDetail=detail;
+@@ -1339,8 +1366,8 @@
+   finally{S.adminDisputeDetailLoading=false;if(S.adminDisputeDetailId===String(item.id)){render();var dialog=document.querySelector('#admin-dispute-modal-backdrop button');if(dialog)dialog.focus();}}
+ }
+ function closeAdminDispute(){
+-  if(S.adminDisputeDecisionLoading)return;
+-  var previous=S.adminDisputePreviousFocus;S.adminDisputeDetailId='';S.adminDisputeDetail=null;S.adminDisputeDetailError='';S.adminDisputeDecisionError='';S.adminDisputeConfirm=false;S.adminDisputePreviousFocus=null;render();
++  if(S.adminDisputeDecisionLoading||S.adminDisputeExecuteLoading)return;
++  var previous=S.adminDisputePreviousFocus;S.adminDisputeDetailId='';S.adminDisputeDetail=null;S.adminDisputeDetailError='';S.adminDisputeDecisionError='';S.adminDisputeConfirm=false;S.adminDisputeExecuteConfirm=false;S.adminDisputePreviousFocus=null;render();
+   if(previous&&document.contains(previous))previous.focus();
+ }
+ async function submitAdminDisputeDecision(){
+@@ -1359,6 +1386,25 @@
+     toast('Keputusan tercatat. Dana tetap ditahan sampai pelaksanaan simulasi.');
+   }catch(err){S.adminDisputeDecisionError=err.message||'Gagal mencatat keputusan admin.';}
+   finally{S.adminDisputeDecisionLoading=false;render();}
++}
++
++async function submitAdminDisputeSettlement(){
++  if(S.role!=='admin'||S.adminDisputeExecuteLoading||!S.adminDisputeDetail?.dispute)return;
++  var d=S.adminDisputeDetail,dispute=d.dispute;
++  if(!dispute.decision||dispute.settled_at)return;
++  if(!S.adminDisputeExecuteConfirm){S.adminDisputeExecuteConfirm=true;S.adminDisputeDecisionError='';render();return;}
++  S.adminDisputeExecuteLoading=true;S.adminDisputeDecisionError='';render();
++  try{
++    var result=await apiRequest('/api/disputes/'+encodeURIComponent(dispute.id)+'/execute','POST',{});
++    if(!result.ok||result.booking?.state!=='Resolved'||result.settlement?.status!=='SETTLED'||!result.dispute?.settled_at)
++      throw new Error('Database belum mengonfirmasi pembagian dana. Periksa status sebelum mengulang.');
++    S.adminDisputeDetail=Object.assign({},d,{state:'Resolved',dispute:result.dispute,
++      release:{simulated:true,status:'SETTLED',amount:0,releasedAt:null,settlement:result.settlement}});
++    S.adminDisputeExecuteConfirm=false;
++    await Promise.all([refreshAdminDisputes(true),refreshAdminSummary(true)]);
++    toast('Penyelesaian dana tercatat di ledger (simulasi). Tidak ada transfer uang nyata.');
++  }catch(error){S.adminDisputeDecisionError=error.message||'Penyelesaian sengketa gagal diproses.';}
++  finally{S.adminDisputeExecuteLoading=false;render();}
+ }
+ 
+ function refreshAdminDashboard(){
+@@ -2006,6 +2052,8 @@
+   if(k==='close-admin-dispute'){closeAdminDispute();return;}
+   if(k==='cancel-admin-dispute-confirm'){if(!S.adminDisputeDecisionLoading){S.adminDisputeConfirm=false;render();}return;}
+   if(k==='execute-admin-dispute-decision'){submitAdminDisputeDecision();return;}
++  if(k==='execute-admin-settlement'){submitAdminDisputeSettlement();return;}
++  if(k==='cancel-admin-settlement'){if(!S.adminDisputeExecuteLoading){S.adminDisputeExecuteConfirm=false;render();}return;}
+ 
+   if(k==='refresh-admin-applications'){
+     refreshAdminApplications();
+diff --git a/database/migrations/20261123_dispute_simulated_settlement.sql b/database/migrations/20261123_dispute_simulated_settlement.sql
+new file mode 100644
+--- /dev/null
++++ b/database/migrations/20261123_dispute_simulated_settlement.sql
+@@ -0,0 +1,124 @@
++-- LockIn Sengketa 1D: execute an existing admin decision in the simulated ledger.
++-- No Midtrans refund, bank transfer, token transfer, or Sepolia transaction.
++-- PRECONDITION: Sengketa 1A/1B/1C migrations were applied.
++-- Run this migration in Supabase SQL Editor before enabling 1D on the website.
++-- Read-only preflight (must return zero rows):
++-- SELECT booking_id, COUNT(*) FROM public.ledger_entries
++-- WHERE entry_type = 'SIMULATED_REFUND' GROUP BY booking_id HAVING COUNT(*) > 1;
++BEGIN;
++ALTER TABLE public.disputes ADD COLUMN IF NOT EXISTS settled_at TIMESTAMPTZ;
++CREATE UNIQUE INDEX IF NOT EXISTS ledger_simulated_refund_booking_uidx
++  ON public.ledger_entries(booking_id) WHERE entry_type = 'SIMULATED_REFUND';
++
++CREATE OR REPLACE FUNCTION public.execute_dispute_simulated_settlement(
++  p_dispute_id TEXT, p_executed_at TIMESTAMPTZ
++) RETURNS JSONB
++LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public
++AS $$
++DECLARE
++  booking_id_value TEXT;
++  booking_row public.bookings%ROWTYPE;
++  dispute_row public.disputes%ROWTYPE;
++  successful_amount BIGINT;
++  held_amount BIGINT;
++  incomplete_count BIGINT;
++  invalid_count BIGINT;
++  service_funds BIGINT;
++  refund_amount BIGINT;
++  vendor_amount BIGINT;
++BEGIN
++  SELECT booking_id INTO booking_id_value FROM public.disputes WHERE id = p_dispute_id;
++  IF NOT FOUND THEN RAISE EXCEPTION 'Sengketa tidak ditemukan.' USING ERRCODE = 'P0002'; END IF;
++
++  -- Same lock ordering as dispute creation, decision recording, and normal release.
++  SELECT * INTO booking_row FROM public.bookings WHERE id = booking_id_value FOR UPDATE;
++  IF NOT FOUND OR booking_row.state <> 'Disputed' THEN
++    RAISE EXCEPTION 'Booking tidak lagi dalam sengketa aktif.' USING ERRCODE = 'P0001';
++  END IF;
++  SELECT * INTO dispute_row FROM public.disputes WHERE id = p_dispute_id FOR UPDATE;
++  IF NOT FOUND OR dispute_row.booking_id <> booking_id_value OR dispute_row.settled_at IS NOT NULL THEN
++    RAISE EXCEPTION 'Penyelesaian sudah tercatat atau sengketa berubah.' USING ERRCODE = 'P0001';
++  END IF;
++  IF dispute_row.decision IS NULL OR dispute_row.decided_at IS NULL OR dispute_row.refund_percent IS NULL OR
++     dispute_row.decision NOT IN ('full','partial','release') OR
++     (dispute_row.decision = 'full' AND dispute_row.refund_percent <> 100) OR
++     (dispute_row.decision = 'release' AND dispute_row.refund_percent <> 0) OR
++     (dispute_row.decision = 'partial' AND dispute_row.refund_percent NOT BETWEEN 1 AND 99) THEN
++    RAISE EXCEPTION 'Keputusan admin belum valid atau belum tercatat.' USING ERRCODE = 'P0001';
++  END IF;
++  IF p_executed_at IS NULL OR p_executed_at < dispute_row.decided_at OR
++     p_executed_at > clock_timestamp() + INTERVAL '5 minutes' THEN
++    RAISE EXCEPTION 'Waktu pelaksanaan tidak valid.' USING ERRCODE = 'P0001';
++  END IF;
++  IF booking_row.price IS NULL OR booking_row.price <= 0 OR
++     COALESCE(booking_row.deposit,0) < 0 OR COALESCE(booking_row.paid,0) <= 0 THEN
++    RAISE EXCEPTION 'Nominal booking tidak valid.' USING ERRCODE = 'P0001';
++  END IF;
++  IF EXISTS (SELECT 1 FROM public.ledger_entries WHERE booking_id = booking_id_value
++             AND entry_type IN ('SIMULATED_RELEASE','SIMULATED_REFUND')) THEN
++    RAISE EXCEPTION 'Dana sudah dialokasikan; diperlukan pemeriksaan manual.' USING ERRCODE = 'P0001';
++  END IF;
++
++  SELECT COALESCE(SUM(amount),0)::BIGINT INTO successful_amount
++    FROM public.payments WHERE booking_id = booking_id_value AND outcome = 'success';
++  SELECT COALESCE(SUM(amount),0)::BIGINT INTO held_amount
++    FROM public.ledger_entries WHERE booking_id = booking_id_value AND entry_type = 'SIMULATED_HELD';
++  SELECT COUNT(*)::BIGINT INTO incomplete_count FROM (
++    SELECT p.id FROM public.payments p
++      LEFT JOIN public.ledger_entries le ON le.payment_id = p.id AND le.booking_id = p.booking_id
++        AND le.entry_type = 'SIMULATED_HELD'
++    WHERE p.booking_id = booking_id_value AND p.outcome = 'success'
++    GROUP BY p.id,p.amount
++    HAVING COUNT(le.id) <> 1 OR COALESCE(SUM(le.amount),0) <> p.amount
++  ) bad;
++  SELECT COUNT(*)::BIGINT INTO invalid_count
++    FROM public.ledger_entries le
++    LEFT JOIN public.payments p ON p.id = le.payment_id AND p.booking_id = le.booking_id AND p.outcome = 'success'
++    WHERE le.booking_id = booking_id_value AND le.entry_type = 'SIMULATED_HELD'
++      AND (p.id IS NULL OR p.amount <> le.amount OR le.amount <= 0);
++  IF successful_amount <> booking_row.paid::BIGINT OR held_amount <> successful_amount OR
++     held_amount > booking_row.price::BIGINT + COALESCE(booking_row.deposit,0)::BIGINT OR
++     incomplete_count <> 0 OR invalid_count <> 0 THEN
++    RAISE EXCEPTION 'Dana jasa dan pembayaran terverifikasi belum konsisten.' USING ERRCODE = 'P0001';
++  END IF;
++
++  -- Settle only service funds ACTUALLY collected; an unpaid remainder is not refundable.
++  -- Vendor deposit remains outside this settlement and is not released here.
++  service_funds := LEAST(booking_row.price::BIGINT,
++    GREATEST(0::BIGINT, held_amount - LEAST(COALESCE(booking_row.deposit,0)::BIGINT,held_amount)));
++  IF service_funds <= 0 THEN
++    RAISE EXCEPTION 'Belum ada dana jasa yang dapat diselesaikan.' USING ERRCODE = 'P0001';
++  END IF;
++  refund_amount := (service_funds * dispute_row.refund_percent + 50) / 100;
++  vendor_amount := service_funds - refund_amount;
++  IF refund_amount < 0 OR vendor_amount < 0 OR refund_amount > 2147483647 OR vendor_amount > 2147483647 THEN
++    RAISE EXCEPTION 'Jumlah pembagian tidak valid.' USING ERRCODE = '22023';
++  END IF;
++
++  IF refund_amount > 0 THEN
++    INSERT INTO public.ledger_entries(booking_id,payment_id,entry_type,amount,created_at)
++      VALUES(booking_id_value,NULL,'SIMULATED_REFUND',refund_amount::INTEGER,p_executed_at);
++  END IF;
++  IF vendor_amount > 0 THEN
++    INSERT INTO public.ledger_entries(booking_id,payment_id,entry_type,amount,created_at)
++      VALUES(booking_id_value,NULL,'SIMULATED_RELEASE',vendor_amount::INTEGER,p_executed_at);
++  END IF;
++
++  UPDATE public.disputes SET refund = refund_amount::INTEGER, settled_at = p_executed_at
++    WHERE id = p_dispute_id AND settled_at IS NULL RETURNING * INTO dispute_row;
++  IF NOT FOUND THEN RAISE EXCEPTION 'Penyelesaian sudah tercatat.' USING ERRCODE = 'P0001'; END IF;
++  UPDATE public.bookings SET state = 'Resolved', updated_at = p_executed_at
++    WHERE id = booking_id_value RETURNING * INTO booking_row;
++  INSERT INTO public.audit(booking_id,state,created_at)
++    VALUES(booking_id_value,'DisputeSettlementSimulated:REFUND=' || refund_amount || ':VENDOR=' || vendor_amount,p_executed_at);
++  RETURN jsonb_build_object('ok',TRUE,'booking',to_jsonb(booking_row),'dispute',to_jsonb(dispute_row),
++    'settlement',jsonb_build_object('simulated',TRUE,'status','SETTLED',
++      'serviceAmount',service_funds,'refundAmount',refund_amount,'vendorAmount',vendor_amount,
++      'refundPercent',dispute_row.refund_percent,'settledAt',p_executed_at));
++END;
++$$;
++REVOKE ALL ON FUNCTION public.execute_dispute_simulated_settlement(TEXT,TIMESTAMPTZ) FROM PUBLIC;
++REVOKE ALL ON FUNCTION public.execute_dispute_simulated_settlement(TEXT,TIMESTAMPTZ) FROM anon,authenticated;
++GRANT EXECUTE ON FUNCTION public.execute_dispute_simulated_settlement(TEXT,TIMESTAMPTZ) TO service_role;
++COMMIT;
++NOTIFY pgrst, 'reload schema';
+diff --git a/backend/tests/dispute-settlement.test.mjs b/backend/tests/dispute-settlement.test.mjs
+new file mode 100644
+--- /dev/null
++++ b/backend/tests/dispute-settlement.test.mjs
+@@ -0,0 +1,145 @@
++import test from 'node:test';
++import assert from 'node:assert/strict';
++import { readFile } from 'node:fs/promises';
++import vm from 'node:vm';
++
++const migrationFile = 'database/migrations/20261123_dispute_simulated_settlement.sql';
++const sourceFile = 'backend/src/index.js';
++const frontFile = 'frontend/public/index.html';
++
++test('Sengketa 1D RPC is atomic, privileged, idempotent, and keeps vendor deposit separate', async () => {
++  const sql = await readFile(migrationFile, 'utf8');
++  assert.match(sql, /CREATE OR REPLACE FUNCTION public\.execute_dispute_simulated_settlement/);
++  assert.match(sql, /SECURITY DEFINER SET search_path = pg_catalog, public/);
++  assert.match(sql, /FROM public\.bookings WHERE id = booking_id_value FOR UPDATE/);
++  assert.match(sql, /FROM public\.disputes WHERE id = p_dispute_id FOR UPDATE/);
++  assert.match(sql, /dispute_row\.settled_at IS NOT NULL/);
++  assert.match(sql, /entry_type IN \('SIMULATED_RELEASE','SIMULATED_REFUND'\)/);
++  assert.match(sql, /HAVING COUNT\(le\.id\) <> 1 OR COALESCE\(SUM\(le\.amount\),0\) <> p\.amount/);
++  assert.match(sql, /INSERT INTO public\.ledger_entries[\s\S]+?'SIMULATED_REFUND'/);
++  assert.match(sql, /INSERT INTO public\.ledger_entries[\s\S]+?'SIMULATED_RELEASE'/);
++  assert.match(sql, /SET state = 'Resolved'/);
++  assert.match(sql, /service_funds \* dispute_row\.refund_percent \+ 50\) \/ 100/);
++  assert.match(sql, /held_amount - LEAST\(COALESCE\(booking_row\.deposit,0\)::BIGINT,held_amount\)/);
++  assert.match(sql, /GRANT EXECUTE ON FUNCTION public\.execute_dispute_simulated_settlement\(TEXT,TIMESTAMPTZ\) TO service_role/);
++  assert.match(sql, /REVOKE ALL ON FUNCTION public\.execute_dispute_simulated_settlement\(TEXT,TIMESTAMPTZ\) FROM anon,authenticated/);
++  assert.doesNotMatch(sql, /UPDATE public\.payments|UPDATE public\.blockchain_jobs|pg_sleep\(/i);
++});
++
++test('Admin-only settlement endpoint calls the RPC and blocks repeat execution', async () => {
++  const source = await readFile(sourceFile, 'utf8');
++  const begin = source.indexOf("if (disputeMatch[2] === 'execute') {");
++  const end = source.indexOf("if (dispute.decision) fail(409", begin);
++  assert.ok(begin >= 0 && end > begin);
++  const section = source.slice(begin, end);
++  assert.match(section, /user\.role !== 'admin'/);
++  assert.match(section, /dispute\.settled_at \|\| b\.state !== 'Disputed'/);
++  assert.match(section, /supabase\.rpc\('execute_dispute_simulated_settlement'/);
++  assert.match(section, /result\.settlement\?\.status !== 'SETTLED'/);
++  assert.doesNotMatch(section, /createSnapPayment|syncBlockchainJobs|\.rpc\('complete_booking_with_simulated_release'/);
++});
++
++// Run actual backend helper source with an isolated in-memory ledger (no Supabase credentials).
++async function isolatedReleaseHelpers() {
++  const source = await readFile(sourceFile, 'utf8');
++  const start = source.indexOf('async function getReleaseStatus(');
++  const end = source.indexOf('function vendorPackages(', start);
++  assert.ok(start > 0 && end > start);
++  const context = vm.createContext({
++    Number, Math, Array, Map, Boolean,
++    supabase: null,
++    localDisputes: new Map(),
++    localLedgerEntries: [],
++    fail: (status, message) => { throw new Error(`${status}: ${message}`); }
++  });
++  vm.runInContext(source.slice(start, end), context);
++  return context;
++}
++
++test('Refund partial/full/vendor-only is reported as SETTLED, never as a normal payout', async () => {
++  const c = await isolatedReleaseHelpers();
++  const booking = { id:'TEST-SETTLE', price:100000, deposit:0, paid:100000, state:'Resolved' };
++  const held = [{ booking_id:booking.id, entry_type:'SIMULATED_HELD', amount:100000 }];
++  for (const [percent, refund, vendor] of [[70,70000,30000],[100,100000,0],[0,0,100000]]) {
++    c.localLedgerEntries.length = 0;
++    c.localLedgerEntries.push(...held);
++    if (refund) c.localLedgerEntries.push({ booking_id:booking.id, entry_type:'SIMULATED_REFUND', amount:refund });
++    if (vendor) c.localLedgerEntries.push({ booking_id:booking.id, entry_type:'SIMULATED_RELEASE', amount:vendor });
++    c.localDisputes.set(booking.id, { decision: percent===100?'full':percent===0?'release':'partial',
++      refund_percent:percent,refund,settled_at:'2026-11-22T16:00:00Z' });
++    const result = await c.getReleaseStatus(booking);
++    assert.equal(result.status,'SETTLED');
++    assert.equal(result.settlement.refundAmount,refund);
++    assert.equal(result.settlement.vendorAmount,vendor);
++    assert.equal(result.amount,0);
++  }
++});
++
++test('Incomplete disputed ledger is unavailable rather than falsely marked settled', async () => {
++  const c = await isolatedReleaseHelpers();
++  const booking = { id:'TEST-MISMATCH',price:100000,deposit:0,paid:100000,state:'Resolved' };
++  c.localLedgerEntries.push({booking_id:booking.id,entry_type:'SIMULATED_HELD',amount:100000},
++    {booking_id:booking.id,entry_type:'SIMULATED_REFUND',amount:70000});
++  c.localDisputes.set(booking.id,{decision:'partial',refund_percent:70,refund:70000,settled_at:'2026-11-22T16:00:00Z'});
++  await assert.rejects(()=>c.getReleaseStatus(booking),/belum cocok dengan catatan ledger/);
++});
++
++test('Verified admin escrow totals exclude allocated refunds and vendor portions', async () => {
++  const c = await isolatedReleaseHelpers();
++  const bookings = [
++    {id:'held',price:100000,deposit:0,paid:100000,state:'Disputed'},
++    {id:'settled',price:100000,deposit:0,paid:100000,state:'Resolved'},
++    {id:'normal',price:625000,deposit:0,paid:625000,state:'Completed'}
++  ];
++  const payments = bookings.map((b,i)=>({id:`payment-${i}`,booking_id:b.id,amount:b.paid,outcome:'success'}));
++  const ledger = bookings.map((b,i)=>({booking_id:b.id,payment_id:`payment-${i}`,entry_type:'SIMULATED_HELD',amount:b.paid}));
++  ledger.push({booking_id:'settled',payment_id:null,entry_type:'SIMULATED_REFUND',amount:70000},
++    {booking_id:'settled',payment_id:null,entry_type:'SIMULATED_RELEASE',amount:30000},
++    {booking_id:'normal',payment_id:null,entry_type:'SIMULATED_RELEASE',amount:625000});
++  assert.equal(c.verifiedSimulatedEscrowTotal(bookings,payments,ledger),100000);
++  ledger.find(e=>e.booking_id==='settled'&&e.entry_type==='SIMULATED_REFUND').amount=70001;
++  assert.equal(c.verifiedSimulatedEscrowTotal(bookings,payments,ledger),null);
++});
++
++test('Customer, vendor and admin UI distinguish decision from executed settlement', async () => {
++  const html = await readFile(frontFile, 'utf8');
++  const script=html.match(/<script>([\s\S]*?)<\/script>/)?.[1];
++  assert.ok(script);
++  const code = script.replace(/\ninitializeLockIn\(\);\s*$/, '');
++  const dummyEl={style:{},innerHTML:'',classList:{toggle:()=>{}}};
++  const sandbox={console,Math,Date,Intl,URL,String,Number,Boolean,Array,Object,JSON,RegExp,
++    location:{hash:'#status'}, document:{addEventListener:()=>{},getElementById:()=>dummyEl,querySelectorAll:()=>[]},
++    history:{pushState:()=>{},replaceState:()=>{}},addEventListener:()=>{},scrollTo:()=>{},fetch:async()=>({ok:true,json:async()=>({})})};
++  sandbox.window=sandbox;
++  const c=vm.createContext(sandbox);
++  vm.runInContext(code,c);
++  const booking = {id:'LI-TEST-1D',state:'Resolved',price:100000,paid:100000,deposit:0,
++    event_date:'2026-11-22',date:'2026-11-22',location:'Malang',vendor_name:'MUA Test',
++    execution_state:'NOT_STARTED',executionStatus:'NOT_STARTED',paymentStatus:'PAID',
++    dpPaid:30000,finalPaid:70000,rest:70000,arrived:false,vendor_arrived:false,
++    paymentBreakdown:{dpAmount:30000,finalAmount:70000},paymentBreakdownVerified:true,
++    dispute:{id:'DSP-TEST',decision:'partial',refund_percent:70,decision_reason:'Keputusan setelah bukti diperiksa.',
++      settled_at:'2026-11-22T16:00:00Z',reason:'Keluhan',evidence:'Bukti tes'},
++    release:{simulated:true,status:'SETTLED',amount:0,releasedAt:null,
++      settlement:{simulated:true,status:'SETTLED',serviceAmount:100000,refundAmount:70000,
++        vendorAmount:30000,refundPercent:70,settledAt:'2026-11-22T16:00:00Z'}}};
++  const statusCard=c.releaseStatusCard(booking);
++  assert.match(statusCard,/Sengketa Selesai \(Simulasi\)/);
++  assert.match(statusCard,/Rp70\.000/);
++  assert.match(statusCard,/Rp30\.000/);
++  assert.doesNotMatch(statusCard,/Dana Ditahan \(Simulasi\)/);
++  c.S.role='customer';c.S.activeBid=booking.id;c.S.bookingsList=[booking];
++  assert.match(c.pages.status(),/Sengketa selesai melalui keputusan admin/);
++  c.S.role='vendor';c.S.activeVendorBid=booking.id;c.S.vendorDetail=booking;c.S.vendorBookings=[booking];
++  c.S.vendorDashboardLoading=false;c.S.vendorDashboardError='';
++  const vendor=c.pages.dashboard();
++  assert.match(vendor,/Refund Sengketa \(Simulasi\)/);
++  assert.match(vendor,/Rp70\.000/);
++  assert.match(vendor,/Rp30\.000/);
++  assert.match(vendor,/Sengketa Selesai/);
++  c.S.role='admin';c.S.adminDisputeDetailId=booking.dispute.id;c.S.adminDisputeDetail=booking;
++  c.S.adminDisputeDetailLoading=false;c.S.adminDisputeDecisionError='';
++  const admin=c.renderAdminDisputeModal();
++  assert.match(admin,/Penyelesaian Sengketa Sudah Dicatat/);
++  assert.doesNotMatch(admin,/data-a="execute-admin-settlement"/);
++});

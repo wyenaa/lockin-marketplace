@@ -201,11 +201,12 @@ async function getBookingBlockchainEvidence(bookingId) {
   }
 }
 async function getReleaseStatus(booking) {
-  let ledgerRows = [], activeDispute = Boolean(localDisputes.get(booking.id) && !localDisputes.get(booking.id).decision);
+  let ledgerRows = [], dispute = localDisputes.get(booking.id) || null;
+  let activeDispute = Boolean(dispute && !dispute.decision);
   if (supabase) {
-    const [{ data: entries, error: ledgerError }, { data: dispute, error: disputeError }] = await Promise.all([
-      supabase.from('ledger_entries').select('entry_type,amount,created_at').eq('booking_id', booking.id).in('entry_type', ['SIMULATED_HELD', 'SIMULATED_RELEASE']),
-      supabase.from('disputes').select('id,decision').eq('booking_id', booking.id).maybeSingle()
+    const [{ data: entries, error: ledgerError }, { data: storedDispute, error: disputeError }] = await Promise.all([
+      supabase.from('ledger_entries').select('entry_type,amount,created_at').eq('booking_id', booking.id).in('entry_type', ['SIMULATED_HELD', 'SIMULATED_RELEASE', 'SIMULATED_REFUND']),
+      supabase.from('disputes').select('id,decision,refund,refund_percent,settled_at').eq('booking_id', booking.id).maybeSingle()
     ]);
     if (ledgerError) {
       console.error('[Supabase release ledger]', { code: ledgerError.code, message: ledgerError.message });
@@ -216,7 +217,8 @@ async function getReleaseStatus(booking) {
       fail(503, 'Status sengketa untuk pencairan gagal diverifikasi.');
     }
     ledgerRows = entries || [];
-    activeDispute = activeDispute || Boolean(dispute && !dispute.decision);
+    dispute = storedDispute || null;
+    activeDispute = Boolean(dispute && !dispute.decision);
   } else {
     ledgerRows = localLedgerEntries.filter(entry => entry.booking_id === booking.id);
   }
@@ -227,6 +229,21 @@ async function getReleaseStatus(booking) {
     Math.max(0, Number(booking.price) || 0),
     Math.max(0, heldAmount - Math.max(0, Number(booking.deposit) || 0))
   );
+  const refundEntries = ledgerRows.filter(entry => entry.entry_type === 'SIMULATED_REFUND');
+  const releaseEntries = ledgerRows.filter(entry => entry.entry_type === 'SIMULATED_RELEASE');
+  if (dispute?.settled_at) {
+    const refunded = refundEntries.reduce((sum, entry) => sum + Number(entry.amount), 0);
+    const vendorAmount = releaseEntries.reduce((sum, entry) => sum + Number(entry.amount), 0);
+    if (booking.state !== 'Resolved' || refundEntries.length > 1 || releaseEntries.length > 1 ||
+        refunded + vendorAmount !== serviceHeldAmount || refunded !== Number(dispute.refund) ||
+        (refunded > 0 && !refundEntries.length) || (vendorAmount > 0 && !releaseEntries.length))
+      fail(503, 'Penyelesaian sengketa belum cocok dengan catatan ledger.');
+    return { simulated: true, status: 'SETTLED', amount: 0, releasedAt: null,
+      settlement: { simulated: true, status: 'SETTLED', serviceAmount: serviceHeldAmount,
+        refundAmount: refunded, vendorAmount, refundPercent: Number(dispute.refund_percent),
+        settledAt: dispute.settled_at } };
+  }
+  if (refundEntries.length) fail(503, 'Catatan refund tidak memiliki penyelesaian sengketa yang terverifikasi.');
   if (releaseEntry) {
     return { simulated: true, status: 'RELEASED', amount: Number(releaseEntry.amount) || 0, releasedAt: releaseEntry.created_at || null };
   }
@@ -238,7 +255,7 @@ function verifiedSimulatedEscrowTotal(bookings, payments, ledgerRows) {
   const bookingById = new Map(bookings.map(booking => [booking.id, booking]));
   const successfulPayments = payments.filter(payment => payment.outcome === 'success');
   const successfulById = new Map(successfulPayments.map(payment => [payment.id, payment]));
-  const heldByBooking = new Map(), releaseByBooking = new Map(), paymentsByBooking = new Map(), heldPaymentIds = new Set();
+  const heldByBooking = new Map(), releaseByBooking = new Map(), refundByBooking = new Map(), paymentsByBooking = new Map(), heldPaymentIds = new Set();
   for (const payment of successfulPayments) {
     if (!payment.id || !bookingById.has(payment.booking_id) || !Number.isSafeInteger(Number(payment.amount)) || Number(payment.amount) <= 0) return null;
     const rows = paymentsByBooking.get(payment.booking_id) || [];
@@ -259,6 +276,11 @@ function verifiedSimulatedEscrowTotal(bookings, payments, ledgerRows) {
       const rows = releaseByBooking.get(entry.booking_id) || [];
       rows.push(entry);
       releaseByBooking.set(entry.booking_id, rows);
+    } else if (entry.entry_type === 'SIMULATED_REFUND') {
+      if (entry.payment_id != null) return null;
+      const rows = refundByBooking.get(entry.booking_id) || [];
+      rows.push(entry);
+      refundByBooking.set(entry.booking_id, rows);
     } else return null;
   }
   let total = 0;
@@ -266,20 +288,29 @@ function verifiedSimulatedEscrowTotal(bookings, payments, ledgerRows) {
     const successful = paymentsByBooking.get(booking.id) || [];
     const held = heldByBooking.get(booking.id) || [];
     const releases = releaseByBooking.get(booking.id) || [];
+    const refunds = refundByBooking.get(booking.id) || [];
     const paid = Number(booking.paid) || 0;
     const successfulTotal = successful.reduce((sum, payment) => sum + Number(payment.amount), 0);
     if (!Number.isSafeInteger(successfulTotal) || paid !== successfulTotal || held.length !== successful.length) return null;
-    if (!successful.length && (held.length || releases.length)) return null;
-    if (releases.length > 1) return null;
+    if (!successful.length && (held.length || releases.length || refunds.length)) return null;
+    if (releases.length > 1 || refunds.length > 1) return null;
     if (!successful.length) continue;
     const price = Number(booking.price), deposit = Number(booking.deposit) || 0;
     const heldTotal = held.reduce((sum, entry) => sum + Number(entry.amount), 0);
-    if (!Number.isSafeInteger(price) || price <= 0 || !Number.isSafeInteger(deposit) || deposit < 0 || heldTotal !== successfulTotal) return null;
+    if (!Number.isSafeInteger(price) || price <= 0 || !Number.isSafeInteger(deposit) || deposit < 0 ||
+        heldTotal !== successfulTotal || heldTotal > price + deposit) return null;
+    const serviceFunds = Math.min(price, Math.max(0, heldTotal - Math.min(deposit, heldTotal)));
+    if (booking.state === 'Resolved') {
+      const allocated = (releases[0] ? Number(releases[0].amount) : 0) + (refunds[0] ? Number(refunds[0].amount) : 0);
+      if (allocated !== serviceFunds || allocated <= 0) return null;
+      continue;
+    }
+    if (refunds.length) return null;
     if (releases.length) {
       if (Number(releases[0].amount) !== price) return null;
       continue;
     }
-    total += Math.min(price, Math.max(0, heldTotal - deposit));
+    total += serviceFunds;
     if (!Number.isSafeInteger(total)) return null;
   }
   return total;
@@ -432,7 +463,7 @@ async function getBooking(id, user) {
   return b;
 }
 
-const DISPUTE_SELECT = 'id,booking_id,reason,evidence,evidence_url,response,vendor_evidence_url,decision,decision_reason,refund,refund_percent,vendor_response_due,created_at,decided_at';
+const DISPUTE_SELECT = 'id,booking_id,reason,evidence,evidence_url,response,vendor_evidence_url,decision,decision_reason,refund,refund_percent,vendor_response_due,created_at,decided_at,settled_at';
 
 async function getDisputeForBooking(bookingId) {
   if (!supabase) return localDisputes.get(bookingId) || null;
@@ -794,9 +825,9 @@ async function api(req, res, url) {
       let bookings, successfulPayments, ledgerRows;
       if (supabase) {
         const results = await Promise.all([
-          supabase.from('bookings').select('id,price,deposit,paid'),
+          supabase.from('bookings').select('id,price,deposit,paid,state'),
           supabase.from('payments').select('id,booking_id,amount,outcome').eq('outcome', 'success'),
-          supabase.from('ledger_entries').select('booking_id,payment_id,entry_type,amount').in('entry_type', ['SIMULATED_HELD', 'SIMULATED_RELEASE'])
+          supabase.from('ledger_entries').select('booking_id,payment_id,entry_type,amount').in('entry_type', ['SIMULATED_HELD', 'SIMULATED_RELEASE', 'SIMULATED_REFUND'])
         ]);
         const queryError = results.find(result => result.error || !Array.isArray(result.data));
         if (queryError) throw queryError.error || new Error('Ledger escrow tidak tersedia.');
@@ -804,7 +835,7 @@ async function api(req, res, url) {
       } else {
         bookings = Array.from(localBookings.values());
         successfulPayments = Array.from(localPayments.values()).filter(payment => payment.outcome === 'success');
-        ledgerRows = localLedgerEntries.filter(entry => ['SIMULATED_HELD', 'SIMULATED_RELEASE'].includes(entry.entry_type));
+        ledgerRows = localLedgerEntries.filter(entry => ['SIMULATED_HELD', 'SIMULATED_RELEASE', 'SIMULATED_REFUND'].includes(entry.entry_type));
       }
       const amount = verifiedSimulatedEscrowTotal(bookings, successfulPayments, ledgerRows);
       if (amount !== null) simulatedEscrowFunds = { available: true, amount };
@@ -1658,13 +1689,56 @@ async function api(req, res, url) {
     return send(res, 200, rows.filter(d => user.role === 'admin' || d.owner_id === user.id));
   }
 
-  const disputeMatch = /^\/api\/disputes\/([^/]+)\/(resolve|response)$/.exec(path);
+  const disputeMatch = /^\/api\/disputes\/([^/]+)\/(resolve|response|execute)$/.exec(path);
   if (disputeMatch && method === 'POST') {
     const d = await body(req);
     const disputeId = disputeMatch[1];
     const dispute = await getDisputeById(disputeId);
     if (!dispute) fail(404, 'Sengketa tidak ditemukan.');
     const b = await getBooking(dispute.booking_id, user);
+    if (disputeMatch[2] === 'execute') {
+      if (user.role !== 'admin') fail(403, 'Hanya admin yang dapat melaksanakan keputusan sengketa.');
+      if (!dispute.decision || !Number.isInteger(Number(dispute.refund_percent)))
+        fail(409, 'Keputusan admin belum tercatat.');
+      if (dispute.settled_at || b.state !== 'Disputed') fail(409, 'Penyelesaian sengketa sudah dicatat atau status booking berubah.');
+      const executedAt = now();
+      if (supabase) {
+        const { data: result, error } = await supabase.rpc('execute_dispute_simulated_settlement', {
+          p_dispute_id: dispute.id, p_executed_at: executedAt
+        });
+        if (error) {
+          console.error('[Admin simulated dispute settlement]', { code: error.code });
+          if (['P0001', '23505', 'P0002', '23514'].includes(error.code))
+            fail(409, 'Penyelesaian tidak dapat dilakukan: data dana atau status sudah berubah. Muat ulang.');
+          fail(503, 'Penyelesaian simulasi gagal dicatat secara atomik. Tidak ada dana yang dianggap terselesaikan.');
+        }
+        if (!result?.ok || result.booking?.state !== 'Resolved' || result.dispute?.id !== dispute.id ||
+            !result.dispute?.settled_at || result.settlement?.status !== 'SETTLED')
+          fail(503, 'Database belum mengonfirmasi penyelesaian sengketa. Periksa status sebelum mengulang.');
+        return send(res, 200, result);
+      }
+      const successful = [...localPayments.values()].filter(row => row.booking_id === b.id && row.outcome === 'success');
+      const held = localLedgerEntries.filter(row => row.booking_id === b.id && row.entry_type === 'SIMULATED_HELD');
+      if (!successful.length || held.length !== successful.length || held.some(row => !successful.some(p => p.id === row.payment_id && p.amount === row.amount)) ||
+          held.reduce((sum, row) => sum + row.amount, 0) !== successful.reduce((sum, row) => sum + row.amount, 0) ||
+          b.paid !== successful.reduce((sum, row) => sum + row.amount, 0) || b.paid > b.price + (b.deposit || 0) ||
+          localLedgerEntries.some(row => row.booking_id === b.id && ['SIMULATED_RELEASE','SIMULATED_REFUND'].includes(row.entry_type)))
+        fail(409, 'Dana belum konsisten atau sudah dialokasikan.');
+      const heldAmount = held.reduce((sum, row) => sum + row.amount, 0);
+      const serviceAmount = Math.min(b.price, Math.max(0, heldAmount - Math.min(b.deposit || 0, heldAmount)));
+      if (!Number.isSafeInteger(serviceAmount) || serviceAmount <= 0) fail(409, 'Tidak ada dana jasa untuk diselesaikan.');
+      const refundAmount = Math.floor((serviceAmount * dispute.refund_percent + 50) / 100);
+      const vendorAmount = serviceAmount - refundAmount;
+      if (refundAmount) localLedgerEntries.push({ booking_id: b.id, payment_id: null, entry_type: 'SIMULATED_REFUND', amount: refundAmount, created_at: executedAt });
+      if (vendorAmount) localLedgerEntries.push({ booking_id: b.id, payment_id: null, entry_type: 'SIMULATED_RELEASE', amount: vendorAmount, created_at: executedAt });
+      dispute.refund = refundAmount; dispute.settled_at = executedAt;
+      b.state = 'Resolved'; b.updated_at = executedAt;
+      localDisputes.set(b.id, dispute);
+      localAudit.push({ booking_id: b.id, state: `DisputeSettlementSimulated:REFUND=${refundAmount}:VENDOR=${vendorAmount}`, created_at: executedAt });
+      return send(res, 200, { ok: true, dispute, booking: withBookingStatuses(b),
+        settlement: { simulated: true, status: 'SETTLED', serviceAmount, refundAmount, vendorAmount,
+          refundPercent: dispute.refund_percent, settledAt: executedAt } });
+    }
     if (dispute.decision) fail(409, 'Sengketa telah diputuskan.');
     if (disputeMatch[2] === 'response') {
       if (user.role !== 'vendor' || b.owner_id !== user.id) fail(403, 'Hanya vendor terkait yang dapat menanggapi.');
