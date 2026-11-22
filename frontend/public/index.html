@@ -211,6 +211,43 @@ function getVendor(id){return VD.find(function(v){return String(v.id)===String(i
 function mapVendor(v){var code=vendorCode(v.category),priceType={listed:'l',estimate:'d',contact:'a'}[v.price_type]||'l';return{id:v.id,i:v.id,c:code,k:v.city||'Malang',n:v.name,ig:v.instagram||'',w:v.whatsapp||'',a:Number(v.price)||0,b:Number(v.price_max)||0,f:priceType,t:cln(v.description||''),deposit:Number(v.deposit)||0,category:v.category,packages:Array.isArray(v.packages)?v.packages:[]}}
 
 function rp(n){return 'Rp'+Math.round(n).toLocaleString('id-ID')}
+function releaseDisplay(booking){
+  var release=booking&&booking.release;
+  var rawAmount=release&&release.amount;
+  var amount=rawAmount;
+  var hasAmount=typeof rawAmount==='number'&&Number.isFinite(amount)&&amount>=0;
+  var paid=Number(booking&&booking.paid)||0;
+  var paidState=booking&&['DPPaid','Paid','Completed','Disputed','Resolved','Refunded'].includes(booking.state);
+  if(release&&release.simulated===true&&release.status==='RELEASED'&&hasAmount){
+    var releaseDate=release.releasedAt?new Date(release.releasedAt):null;
+    var releaseTime=releaseDate&&Number.isFinite(releaseDate.getTime())?new Intl.DateTimeFormat('id-ID',{dateStyle:'medium',timeStyle:'short',timeZone:'Asia/Jakarta'}).format(releaseDate)+' WIB':'Waktu pencairan belum tersedia';
+    return {status:'RELEASED',label:'Dicairkan (Simulasi)',amountText:hasAmount?rp(amount):'Nominal belum tersedia',timeText:releaseTime,note:''};
+  }
+  if(!paid&&!paidState)return {status:'UNPAID',label:'Belum ada dana tercatat',amountText:'',timeText:'',note:'Status dana akan tersedia setelah pembayaran tercatat.'};
+  if(!release||release.simulated!==true||!['HELD','ON_HOLD'].includes(release.status)||!hasAmount){
+    return {status:'UNAVAILABLE',label:'Status dana belum dapat diverifikasi',amountText:'',timeText:'',note:booking&&booking.state==='Completed'?'Booking berstatus Completed, tetapi backend belum memberikan catatan release.':'Data status dana belum tersedia dari backend.'};
+  }
+  var holdNote=booking&&booking.state==='Disputed'?'Dana ditahan karena sengketa sedang berlangsung.':booking&&booking.state==='Completed'?'Layanan selesai, pencairan belum tercatat.':'Pembayaran tercatat dan belum ada release terverifikasi.';
+  return {status:release.status,label:'Dana Ditahan (Simulasi)',amountText:rp(amount),timeText:'',note:holdNote};
+}
+function releaseStatusInline(booking){
+  var view=releaseDisplay(booking);
+  return '<div class="mut" style="font-size:12px;margin-top:8px"><b>Status dana:</b> '+escapeUi(view.label)+(view.amountText?' &middot; '+escapeUi(view.amountText):'')+(view.timeText?' &middot; '+escapeUi(view.timeText):'')+'</div>';
+}
+function releaseStatusCard(booking){
+  var view=releaseDisplay(booking);
+  var tone=view.status==='RELEASED'?'ok':view.status==='ON_HOLD'?'bad':'';
+  var hasPaid=Number(booking&&booking.paid)>0||booking&&['DPPaid','Paid','Completed','Disputed','Resolved','Refunded'].includes(booking.state);
+  var deposit=Number(booking&&booking.deposit)||0;
+  var depositRow=hasPaid&&deposit>0?'<div class="row"><span>Deposit vendor (terpisah dari dana jasa)</span><b>'+rp(deposit)+'</b></div>':'';
+  return '<div class="card pad" style="margin-top:16px;border:1px solid var(--b)">'
+    +'<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px"><h3 style="font-size:16px;margin:0;color:var(--t)">Status Dana (Simulasi)</h3><span class="tag '+tone+'">'+escapeUi(view.label)+'</span></div>'
+    +(view.amountText?'<div class="row"><span>Dana jasa</span><b>'+escapeUi(view.amountText)+'</b></div>':'')
+    +(view.timeText?'<div class="row"><span>Waktu pencairan</span><b>'+escapeUi(view.timeText)+'</b></div>':'')
+    +depositRow
+    +(view.note?'<p class="mut" style="font-size:12px;line-height:1.5;margin:10px 0 0">'+escapeUi(view.note)+'</p>':'')
+    +'</div>';
+}
 function pr(v){return v.a?(v.b&&v.b!=v.a?rp(v.a)+' - '+rp(v.b):'Mulai '+rp(v.a)):'Tanya vendor'}
 var P={MUA:'<path d="M6 18l8-8 3 3-8 8H6zM14 10l4-5 2 2-5 4"/>',Stylist:'<path d="M12 3c3 3 6 5 6 9a6 6 0 0 1-12 0c0-4 3-6 6-9z"/>',GCC:'<rect x="3" y="7" width="18" height="12" rx="3"/><circle cx="12" cy="13" r="3.5"/>',PA:'<circle cx="12" cy="8" r="3.5"/><path d="M5 20c1-4 4-6 7-6s6 2 7 6"/>',Sign:'<rect x="4" y="4" width="16" height="12" rx="2"/><path d="M12 16v5M8 21h8"/>'};
 function ic(c){return '<svg width="38" height="38" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.6" aria-hidden="true">'+P[c]+'</svg>'}
@@ -567,7 +604,7 @@ var pages={
       +(!isCancelled?T(bItem.finalPaid>0,'Pelunasan ('+rp(bItem.rest)+')',bItem.finalPaid>0?'Pelunasan terverifikasi oleh backend':bItem.dpPaid>0?'Menunggu pembayaran pelunasan':'Menunggu pembayaran DP'):'')
       +(!isCancelled?T(bItem.arrived,'Verifikasi Kehadiran Vendor di Hari H',bItem.arrived?'Vendor telah tiba dan check-in resmi via OTP':'Tunjukkan kode OTP saat vendor tiba di lokasi'):'')
       +(!isCancelled?T(st>=2,st>=3?'Pelaksanaan Acara Selesai':'Pelaksanaan Acara Berlangsung',st>=3?'Vendor menyelesaikan layanan sesuai kontrak':'Kehadiran vendor tercatat; menunggu konfirmasi penyelesaian'):'')
-      +(!isCancelled?T(st>=3,'Konfirmasi Selesai &amp; Dana Dicairkan','Dana escrow diteruskan ke rekening vendor'):'')
+      +releaseStatusCard(bItem)
       // Action buttons
       +'<div style="margin-top:20px;display:flex;gap:10px;flex-wrap:wrap">'
       +(S.role==='customer'&&['Pending','WaitingVendorApproval'].indexOf(bItem.state)>=0&&!isCancelled?'<button class="btn" data-a="paydp">Lanjut Bayar DP</button>':'')
@@ -689,6 +726,21 @@ var pages={
     if(S.role!=='vendor') return '<div class="w sec"><div class="card pad"><h2>Akses dashboard vendor tidak tersedia.</h2><p class="mut">Masuk menggunakan akun vendor untuk melihat pesanan.</p></div></div>';
     var rows=S.vendorBookings||[],fundsReady=rows.every(function(b){return b.paymentBreakdown&&b.paymentBreakdownVerified!==false});
     var verifiedTotal=fundsReady?rows.reduce(function(sum,b){return sum+(Number(b.paymentBreakdown.dpAmount)||0)+(Number(b.paymentBreakdown.finalAmount)||0)},0):null;
+    var releaseStatsReady=rows.length>0&&rows.every(function(b){var release=b.release;if(release)return release.simulated===true&&['HELD','RELEASED','ON_HOLD'].includes(release.status)&&typeof release.amount==='number'&&Number.isFinite(release.amount)&&release.amount>=0;return !(Number(b.paid)>0||['DPPaid','Paid','Completed','Disputed','Resolved','Refunded'].includes(b.state))});
+    var releaseTotals={held:0,released:0};
+    if(releaseStatsReady)rows.forEach(function(b){if(!b.release)return;var amount=b.release.amount;if(b.release.status==='HELD'||b.release.status==='ON_HOLD')releaseTotals.held+=amount;else if(b.release.status==='RELEASED')releaseTotals.released+=amount});
+    var hasRecordedReleaseFunds=rows.some(function(b){return Number(b.paid)>0||b.release&&b.release.status==='RELEASED'});
+    var releaseStatsHtml=S.vendorDashboardLoading
+      ?'<span class="mut">Memuat status dana...</span>'
+      :S.vendorDashboardError
+        ?'<span class="mut">Status dana tidak tersedia</span>'
+        :!rows.length
+          ?'<span class="mut">Belum ada booking</span>'
+          :!releaseStatsReady
+            ?'<span class="mut">Belum dapat diverifikasi dari backend</span>'
+            :!hasRecordedReleaseFunds
+              ?'<span class="mut">Belum ada dana tercatat</span>'
+              :'<div style="display:grid;gap:6px;margin-top:8px;font-size:13px"><div class="row"><span>Dana Ditahan (Simulasi)</span><b>'+rp(releaseTotals.held)+'</b></div><div class="row"><span>Dicairkan (Simulasi)</span><b>'+rp(releaseTotals.released)+'</b></div></div>';
     var contents=S.vendorDashboardLoading
       ?'<div class="msg">Memuat booking vendor dari server...</div>'
       :S.vendorDashboardError
@@ -708,6 +760,7 @@ var pages={
               +'</div>'
               +'<h3 style="margin:0 0 4px;font-size:17px;color:var(--t)">'+escapeUi(b.vendor_name||'Vendor tidak tersedia')+'</h3>'
               +'<div class="mut" style="font-size:13px;margin-bottom:12px">Tanggal Acara: <b>'+escapeUi(b.event_date||'Belum tersedia')+'</b></div>'
+              +releaseStatusInline(b)
               +'</div>'
               +'<div style="display:flex;justify-content:space-between;align-items:center;padding-top:10px;border-top:1px solid var(--b);font-size:13px">'
               +'<span>Harga: <b>'+rp(Number(b.price)||0)+'</b></span>'
@@ -732,6 +785,8 @@ var pages={
       try{ agreementObj = typeof d.agreement==='string'?JSON.parse(d.agreement):(d.agreement||{}); }catch(e){}
       var cName = d.customer_name || listRow.customer_name || 'Pelanggan';
       var vName = d.vendor_name || listRow.vendor_name || 'Vendor Wisuda';
+      var releaseBooking=Object.assign({},listRow,d);
+      if(!d.release&&listRow.release)releaseBooking.release=listRow.release;
       var pkgName = d.package_name || agreementObj.packageName || listRow.package_name || 'Paket Layanan';
       var dateStr = d.event_date || agreementObj.date || listRow.event_date || 'Belum ditentukan';
       var timeStr = d.start_time || agreementObj.startTime || listRow.start_time || 'Belum ditentukan';
@@ -835,13 +890,14 @@ var pages={
         +'🔒 <b>Proteksi Escrow LockIn:</b> Dana ditahan di rekening penampung resmi sampai pelaksanaan acara wisuda selesai.'
         +'</div>'
         +'</div></div>'
+        +releaseStatusCard(releaseBooking)
         +arrivalSectionHtml
         +'</div>';
     }
     return '<div class="w sec"><div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap"><h2>Dashboard Vendor &amp; Pesanan</h2><button class="btn o" data-a="refresh-vendor-dashboard">Muat ulang</button></div>'
       +'<div class="grid"><div class="card pad"><span class="mut">Total Booking Masuk</span><h2 style="font-size:30px;margin:4px 0 0">'+(S.vendorDashboardLoading?'…':S.vendorDashboardError?'—':rows.length)+'</h2></div>'
       +'<div class="card pad"><span class="mut">Pembayaran Berhasil (terverifikasi)</span><h2 style="font-size:24px;margin:4px 0 0;color:var(--p)">'+(S.vendorDashboardLoading?'Memuat…':S.vendorDashboardError||verifiedTotal===null?'Belum tersedia':rp(verifiedTotal))+'</h2></div>'
-      +'<div class="card pad"><span class="mut">Status Pencairan</span><h2 style="font-size:24px;margin:4px 0 0;color:var(--m)">Belum tersedia</h2></div></div>'
+      +'<div class="card pad"><span class="mut">Ringkasan Dana Jasa (Simulasi)</span><div style="margin-top:6px;color:var(--t)">'+releaseStatsHtml+'</div><p class="mut" style="font-size:11px;margin:8px 0 0">Nominal mengikuti release backend; deposit vendor dipisah.</p></div></div>'
       +'<div class="card pad" style="margin-top:20px"><h3>Daftar Pesanan</h3>'+contents+detailHtml+'</div></div>';
   },
 

@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
+import vm from 'node:vm';
 
 const server = spawn(process.execPath, ['backend/src/index.js'], {
   cwd: process.cwd(),
@@ -81,4 +82,112 @@ test('vendor dashboard loads authenticated bookings from API with verified fund 
   const customerBookings = await request('/api/bookings', { cookie: customerCookie });
   assert.ok(customerBookings.data.some(b => b.id === lolita.data.id));
   assert.equal((await request(`/api/bookings/${lolita.data.id}`)).status, 401);
+});
+
+test('customer and vendor display backend release states consistently without inferring payout from Completed', async () => {
+  const html = await readFile('frontend/public/index.html', 'utf8');
+  const jsCode = html.match(/<script>([\s\S]*?)<\/script>/)[1].replace(/\ninitializeLockIn\(\);\s*$/, '');
+  const dummyEl = { innerHTML: '', value: '', style: {}, classList: { toggle: () => {} } };
+  const mockContext = {
+    console, Math, Date, Intl, URL, String, Number, Boolean, Array, Object, JSON, RegExp,
+    encodeURIComponent, addEventListener: () => {}, scrollTo: () => {},
+    document: { addEventListener: () => {}, getElementById: () => dummyEl, querySelectorAll: () => [] },
+    history: { pushState: () => {}, replaceState: () => {} },
+    location: { hash: '#status' },
+    fetch: async () => ({ ok: true, json: async () => ({}) })
+  };
+  mockContext.window = mockContext;
+  const context = vm.createContext(mockContext);
+  vm.runInContext(jsCode, context);
+
+  const baseBooking = overrides => Object.assign({
+    id: 'LI-RELEASE-UI', state: 'Paid', paymentStatus: 'PAID', executionStatus: 'IN_PROGRESS', execution_state: 'IN_PROGRESS',
+    price: 100000, deposit: 0, paid: 100000, dpPaid: 30000, finalPaid: 70000, rest: 70000,
+    date: 'Hari ini', event_date: new Date().toISOString().slice(0, 10), start_time: '08:00', location: 'Malang',
+    vendor_name: 'Vendor Test', customer_name: 'Pelanggan Test', package_name: 'Paket Basic', vendor_arrived: true, arrived: true,
+    paymentBreakdown: { dpAmount: 30000, finalAmount: 70000 }, paymentBreakdownVerified: true,
+    release: { simulated: true, status: 'HELD', amount: 70000, releasedAt: null }
+  }, overrides || {});
+  const renderCustomer = booking => {
+    context.S.role = 'customer';
+    context.S.activeBid = booking.id;
+    context.S.bookingsList = [booking];
+    return context.pages.status();
+  };
+  const renderVendor = bookings => {
+    context.S.role = 'vendor';
+    context.S.vendorBookings = bookings;
+    context.S.vendorDashboardLoading = false;
+    context.S.vendorDashboardError = '';
+    context.S.activeVendorBid = bookings[0]?.id || '';
+    context.S.vendorDetail = bookings[0] || null;
+    context.S.vendorDetailLoading = false;
+    context.S.vendorDetailError = '';
+    return context.pages.dashboard();
+  };
+
+  const held = baseBooking({});
+  const heldCustomer = renderCustomer(held);
+  const heldVendor = renderVendor([held]);
+  assert.match(heldCustomer, /Status Dana \(Simulasi\)/);
+  assert.match(heldCustomer, /Dana Ditahan \(Simulasi\)/);
+  assert.match(heldCustomer, /Rp70\.000/);
+  assert.match(heldVendor, /Dana Ditahan \(Simulasi\)/);
+  assert.match(heldVendor, /Rp70\.000/);
+  const depositBooking = baseBooking({ id: 'LI-DEPOSIT', price: 80000, deposit: 20000, paid: 100000, release: { simulated: true, status: 'RELEASED', amount: 80000, releasedAt: '2026-11-22T02:30:00.000Z' } });
+  const depositCard = context.releaseStatusCard(depositBooking);
+  assert.match(depositCard, /Dana jasa<\/span><b>Rp80\.000/);
+  assert.match(depositCard, /Deposit vendor \(terpisah dari dana jasa\)<\/span><b>Rp20\.000/);
+
+  const releasedAt = '2026-11-22T02:30:00.000Z';
+  const released = baseBooking({ id: 'LI-RELEASED', state: 'Completed', executionStatus: 'COMPLETED', execution_state: 'COMPLETED', release: { simulated: true, status: 'RELEASED', amount: 100000, releasedAt } });
+  const releasedCustomer = renderCustomer(released);
+  const releasedVendor = renderVendor([released]);
+  assert.match(releasedCustomer, /Dicairkan \(Simulasi\)/);
+  assert.match(releasedCustomer, /Rp100\.000/);
+  assert.match(releasedCustomer, /Waktu pencairan/);
+  assert.match(releasedVendor, /Dicairkan \(Simulasi\)/);
+  assert.match(releasedVendor, /Rp100\.000/);
+  assert.match(releasedVendor, /2026/);
+
+  const onHold = baseBooking({ id: 'LI-ON-HOLD', state: 'Disputed', release: { simulated: true, status: 'ON_HOLD', amount: 70000, releasedAt: null } });
+  const onHoldCustomer = renderCustomer(onHold);
+  const onHoldVendor = renderVendor([onHold]);
+  assert.match(onHoldCustomer, /Dana Ditahan \(Simulasi\)/);
+  assert.match(onHoldCustomer, /sengketa sedang berlangsung/);
+  assert.match(onHoldVendor, /Dana Ditahan \(Simulasi\)/);
+  assert.doesNotMatch(onHoldVendor, /Pencairan Ditahan/);
+
+  const unpaid = baseBooking({ id: 'LI-UNPAID', state: 'Pending', paymentStatus: 'UNPAID', paid: 0, dpPaid: 0, finalPaid: 0, release: undefined });
+  assert.match(renderCustomer(unpaid), /Belum ada dana tercatat/);
+  const unpaidVendor = renderVendor([unpaid]);
+  assert.match(unpaidVendor, /Belum ada dana tercatat/);
+
+  const completedWithoutRelease = baseBooking({ id: 'LI-LEGACY-COMPLETED', state: 'Completed', executionStatus: 'COMPLETED', execution_state: 'COMPLETED', release: undefined });
+  const legacyCustomer = renderCustomer(completedWithoutRelease);
+  const legacyVendor = renderVendor([completedWithoutRelease]);
+  assert.match(legacyCustomer, /Status dana belum dapat diverifikasi/);
+  assert.match(legacyCustomer, /belum memberikan catatan release/);
+  assert.doesNotMatch(legacyCustomer, /Dicairkan \(Simulasi\)/);
+  assert.match(legacyVendor, /Belum dapat diverifikasi dari backend/);
+  assert.doesNotMatch(legacyVendor, /Dicairkan \(Simulasi\)/);
+
+  const completedHeld = baseBooking({ id: 'LI-COMPLETED-HELD', state: 'Completed', release: { simulated: true, status: 'ON_HOLD', amount: 80000, releasedAt: null } });
+  const completedHeldCustomer = renderCustomer(completedHeld);
+  assert.match(completedHeldCustomer, /Dana Ditahan \(Simulasi\)/);
+  assert.match(completedHeldCustomer, /Layanan selesai, pencairan belum tercatat/);
+  assert.match(renderVendor([completedHeld]), /Dana Ditahan \(Simulasi\)/);
+
+  const incompleteRelease = baseBooking({ id: 'LI-INCOMPLETE-RELEASE', state: 'Completed', release: { simulated: true, status: 'RELEASED', releasedAt } });
+  assert.match(renderCustomer(incompleteRelease), /Status dana belum dapat diverifikasi/);
+  assert.doesNotMatch(renderCustomer(incompleteRelease), /Dicairkan \(Simulasi\)/);
+
+  const heldAggregate = baseBooking({ id: 'LI-HELD-AGG', release: { simulated: true, status: 'HELD', amount: 70000, releasedAt: null } });
+  const releasedAggregate = baseBooking({ id: 'LI-RELEASE-AGG', state: 'Completed', release: { simulated: true, status: 'RELEASED', amount: 100000, releasedAt } });
+  const onHoldAggregate = baseBooking({ id: 'LI-ON-HOLD-AGG', state: 'Disputed', release: { simulated: true, status: 'ON_HOLD', amount: 30000, releasedAt: null } });
+  const aggregateHtml = renderVendor([heldAggregate, releasedAggregate, onHoldAggregate]);
+  assert.match(aggregateHtml, /Dana Ditahan \(Simulasi\)<\/span><b>Rp100\.000/);
+  assert.doesNotMatch(aggregateHtml, /Pencairan Ditahan/);
+  assert.match(aggregateHtml, /Dicairkan \(Simulasi\)<\/span><b>Rp100\.000/);
+  assert.doesNotMatch(aggregateHtml, /Dana Ditahan \(Simulasi\)<\/span><b>Rp170\.000/);
 });

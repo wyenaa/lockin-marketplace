@@ -3,6 +3,7 @@
 import 'dotenv/config';
 import http from 'node:http';
 import { randomBytes, randomUUID, createHash, scryptSync, timingSafeEqual } from 'node:crypto';
+import { hasCompleteSimulatedFunds } from './utils/simulated-release.js';
 import { readFileSync, existsSync } from 'node:fs';
 import { dirname, resolve, extname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -59,6 +60,7 @@ const VENDOR_APPLICATION_CATEGORY_MAP = {
   'Standing Sign': 'Standing Sign'
 };
 const localPayments = new Map();
+const localLedgerEntries = [];
 const localDisputes = new Map();
 const localEvidence = new Map();
 const localReports  = [];
@@ -134,22 +136,9 @@ const defaultDemoBooking = {
 };
 localBookings.set('LK-2611', defaultDemoBooking);
 
-// Auto-release worker check: Jika 48 jam pasca acara tanpa keluhan, dana otomatis cair ke vendor
+// Auto-release ditangguhkan sampai worker persisten memakai transaksi release yang sama.
 function checkAutoRelease() {
-  const curTime = Date.now();
-  for (const b of localBookings.values()) {
-    if (b.state === 'Paid' && b.event_date) {
-      const eventEnd = new Date(b.event_date).getTime() + (24 * 3600 * 1000);
-      const autoReleaseTime = eventEnd + (POLICY.AUTO_RELEASE_HOURS_AFTER_EVENT * 3600 * 1000);
-      const dispute = localDisputes.get(b.id);
-      if (curTime >= autoReleaseTime && !dispute) {
-        b.state = 'Completed';
-        b.execution_state = 'COMPLETED';
-        b.updated_at = now();
-        localAudit.push({ booking_id: b.id, state: 'Completed:AutoReleased', created_at: now() });
-      }
-    }
-  }
+  return;
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -189,6 +178,39 @@ async function getSuccessfulPaymentBreakdown(bookingId) {
     if (row.payment_type === 'FINAL') totals.finalAmount += amount;
     return totals;
   }, { dpAmount: 0, finalAmount: 0 });
+}
+async function getReleaseStatus(booking) {
+  let ledgerRows = [], activeDispute = Boolean(localDisputes.get(booking.id) && !localDisputes.get(booking.id).decision);
+  if (supabase) {
+    const [{ data: entries, error: ledgerError }, { data: dispute, error: disputeError }] = await Promise.all([
+      supabase.from('ledger_entries').select('entry_type,amount,created_at').eq('booking_id', booking.id).in('entry_type', ['SIMULATED_HELD', 'SIMULATED_RELEASE']),
+      supabase.from('disputes').select('id,decision').eq('booking_id', booking.id).maybeSingle()
+    ]);
+    if (ledgerError) {
+      console.error('[Supabase release ledger]', { code: ledgerError.code, message: ledgerError.message });
+      fail(503, 'Status pencairan gagal dimuat dari database.');
+    }
+    if (disputeError) {
+      console.error('[Supabase release dispute]', { code: disputeError.code, message: disputeError.message });
+      fail(503, 'Status sengketa untuk pencairan gagal diverifikasi.');
+    }
+    ledgerRows = entries || [];
+    activeDispute = activeDispute || Boolean(dispute && !dispute.decision);
+  } else {
+    ledgerRows = localLedgerEntries.filter(entry => entry.booking_id === booking.id);
+  }
+  const releaseEntry = ledgerRows.find(entry => entry.entry_type === 'SIMULATED_RELEASE');
+  const heldAmount = ledgerRows.filter(entry => entry.entry_type === 'SIMULATED_HELD')
+    .reduce((total, entry) => total + (Number(entry.amount) || 0), 0);
+  const serviceHeldAmount = Math.min(
+    Math.max(0, Number(booking.price) || 0),
+    Math.max(0, heldAmount - Math.max(0, Number(booking.deposit) || 0))
+  );
+  if (releaseEntry) {
+    return { simulated: true, status: 'RELEASED', amount: Number(releaseEntry.amount) || 0, releasedAt: releaseEntry.created_at || null };
+  }
+  const onHold = activeDispute || ['Disputed', 'Cancelled', 'Refunded', 'Resolved', 'Completed'].includes(booking.state);
+  return { simulated: true, status: onHold ? 'ON_HOLD' : 'HELD', amount: serviceHeldAmount, releasedAt: null };
 }
 function vendorPackages(v) {
   const base = Math.max(0, Number(v.price) || 0);
@@ -789,6 +811,7 @@ async function api(req, res, url) {
         }
       }));
     }
+    filtered = await Promise.all(filtered.map(async booking => ({ ...booking, release: await getReleaseStatus(booking) })));
     return send(res, 200, filtered);
   }
 
@@ -970,6 +993,7 @@ async function api(req, res, url) {
       return send(res, 200, {
         ...resBooking,
         paymentBreakdown: await getSuccessfulPaymentBreakdown(b.id),
+        release: await getReleaseStatus(b),
         dispute,
         dpBlockchain: null,
         finalBlockchain: null,
@@ -1155,6 +1179,12 @@ async function api(req, res, url) {
       }
 
       localPayments.set(payId, payData);
+      if (!supabase && d.outcome === 'success') {
+        localLedgerEntries.push({
+          id: `LED-${payId}`, booking_id: b.id, payment_id: payId,
+          entry_type: 'SIMULATED_HELD', amount, created_at: updatedAt
+        });
+      }
       if (changed) localAudit.push({ booking_id: b.id, state: nextState, created_at: updatedAt });
       return send(res, 200, { ...b, outcome: d.outcome, paymentAmount: amount });
     }
@@ -1169,21 +1199,54 @@ async function api(req, res, url) {
         localAudit.push({ booking_id: b.id, state: 'VendorProofSubmitted', created_at: now() });
         const resBooking = withBookingStatuses(b);
         if (user.role === 'vendor') delete resBooking.arrival_code;
-        return send(res, 200, { ...resBooking, message: 'Bukti kerja berhasil diunggah. Menunggu konfirmasi pelanggan atau auto-release 48 jam.' });
+        return send(res, 200, { ...resBooking, message: 'Bukti kerja berhasil diunggah. Menunggu konfirmasi pelanggan.' });
       }
 
-      if (!isOwner && !isAdmin) fail(403, 'Hanya pelanggan pemilik booking yang boleh mengonfirmasi penyelesaian.');
-      b.state = 'Completed';
-      b.execution_state = 'COMPLETED';
-      b.updated_at = now();
+      if (user.role !== 'customer' || !isOwner) fail(403, 'Hanya pelanggan pemilik booking yang boleh mengonfirmasi penyelesaian dan pencairan.');
+      if (b.vendor_arrived !== true || b.execution_state !== 'IN_PROGRESS')
+        fail(409, 'Pencairan ditahan sampai kehadiran vendor terverifikasi melalui OTP.');
+      const localDispute = localDisputes.get(b.id);
+      if (b.state === 'Disputed' || (localDispute && !localDispute.decision))
+        fail(409, 'Pencairan ditahan selama sengketa aktif.');
+      const releasedAt = now();
+      let release;
       if (supabase) {
-        const { data, error } = await supabase.from('bookings').update({ state: b.state, execution_state: b.execution_state, updated_at: b.updated_at }).eq('id', b.id).eq('state', 'Paid').select('*').maybeSingle();
-        if (error) fail(503, 'Penyelesaian booking gagal disimpan ke database.');
-        if (!data) fail(409, 'Status booking berubah. Muat ulang halaman.');
-        Object.assign(b, data);
+        const { data, error } = await supabase.rpc('complete_booking_with_simulated_release', {
+          p_booking_id: b.id,
+          p_released_at: releasedAt
+        });
+        if (error) {
+          console.error('[Simulated release]', { code: error.code, message: error.message });
+          if (error.code === 'P0002') fail(404, 'Booking tidak ditemukan.');
+          if (error.code === 'P0001' || error.code === '23505' || error.code === '22023')
+            fail(409, 'Pencairan tidak dapat diproses: pastikan dana tercatat, OTP terverifikasi, dan tidak ada sengketa.');
+          fail(503, 'Pencairan gagal disimpan secara atomik. Status booking dan ledger tidak diubah.');
+        }
+        if (!data?.ok || data.booking?.state !== 'Completed' || data.release?.entry_type !== 'SIMULATED_RELEASE')
+          fail(503, 'Database belum mengonfirmasi status Completed beserta catatan pencairan.');
+        Object.assign(b, data.booking);
+        release = { simulated: true, status: 'RELEASED', amount: Number(data.release.amount), releasedAt: data.release.created_at };
+      } else {
+        const successfulPayments = Array.from(localPayments.values())
+          .filter(payment => payment.booking_id === b.id && payment.outcome === 'success');
+        const heldEntries = localLedgerEntries.filter(entry => entry.booking_id === b.id && entry.entry_type === 'SIMULATED_HELD');
+        if (!hasCompleteSimulatedFunds({ booking: b, successfulPayments, heldEntries }))
+          fail(409, 'Dana escrow belum tercatat lunas. Pencairan tidak diproses.');
+        if (localLedgerEntries.some(entry => entry.booking_id === b.id && entry.entry_type === 'SIMULATED_RELEASE'))
+          fail(409, 'Pencairan untuk booking ini sudah tercatat.');
+        const releaseEntry = {
+          id: `REL-${randomBytes(8).toString('hex').toUpperCase()}`,
+          booking_id: b.id, payment_id: null, entry_type: 'SIMULATED_RELEASE',
+          amount: Number(b.price), created_at: releasedAt
+        };
+        localLedgerEntries.push(releaseEntry);
+        b.state = 'Completed';
+        b.execution_state = 'COMPLETED';
+        b.updated_at = releasedAt;
+        release = { simulated: true, status: 'RELEASED', amount: releaseEntry.amount, releasedAt };
       }
-      localAudit.push({ booking_id: b.id, state: 'Completed', created_at: now() });
-      return send(res, 200, b);
+      localAudit.push({ booking_id: b.id, state: 'Completed:SIMULATED_RELEASE', created_at: releasedAt });
+      return send(res, 200, { ...withBookingStatuses(b), release });
     }
 
     if (action === 'cancel') {
@@ -1241,10 +1304,31 @@ async function api(req, res, url) {
         vendor_response_due: new Date(Date.now() + POLICY.VENDOR_RESPONSE_WINDOW_HOURS * 3600 * 1000).toISOString(),
         created_at: now()
       };
+      if (supabase) {
+        const { data, error } = await supabase.rpc('create_booking_dispute_with_hold', {
+          p_dispute_id: disputeData.id,
+          p_booking_id: b.id,
+          p_reason: disputeData.reason,
+          p_evidence: disputeData.evidence,
+          p_evidence_url: disputeData.evidence_url,
+          p_vendor_response_due: disputeData.vendor_response_due,
+          p_created_at: disputeData.created_at
+        });
+        if (error) {
+          console.error('[Persistent booking dispute]', { code: error.code, message: error.message });
+          if (error.code === 'P0001' || error.code === '23505') fail(409, 'Sengketa tidak dapat dibuka karena status booking telah berubah atau sudah ada sengketa.');
+          fail(503, 'Sengketa gagal disimpan secara persisten. Status booking tidak diubah.');
+        }
+        if (!data?.ok || data.booking?.state !== 'Disputed' || data.dispute?.id !== id)
+          fail(503, 'Database belum mengonfirmasi status sengketa.');
+        Object.assign(b, data.booking);
+        Object.assign(disputeData, data.dispute);
+      } else {
+        b.state = 'Disputed';
+        b.updated_at = disputeData.created_at;
+      }
       localDisputes.set(b.id, disputeData);
-      b.state = 'Disputed';
-      b.updated_at = now();
-      localAudit.push({ booking_id: b.id, state: 'Disputed', created_at: now() });
+      localAudit.push({ booking_id: b.id, state: 'Disputed', created_at: disputeData.created_at });
       return send(res, 201, { id, message: 'Keluhan diajukan. Pencairan dana ditahan sampai admin memutuskan.' });
     }
 
