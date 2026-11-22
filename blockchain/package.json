@@ -4,7 +4,8 @@
   "private": true,
   "description": "LockIn — Smart contracts (Solidity, deploy via Remix IDE)",
   "scripts": {
-    "audit": "node ../audit-lockin.mjs"
+    "audit": "node ../audit-lockin.mjs",
+    "test:contract": "forge test"
   },
   "dependencies": {
     "dotenv": "^17.2.3",

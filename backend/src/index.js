@@ -4,6 +4,7 @@ import 'dotenv/config';
 import http from 'node:http';
 import { randomBytes, randomUUID, createHash, scryptSync, timingSafeEqual } from 'node:crypto';
 import { hasCompleteSimulatedFunds } from './utils/simulated-release.js';
+import { buildBookingBlockchainEvidence, unavailableBookingBlockchainEvidence } from './utils/booking-blockchain-evidence.js';
 import { readFileSync, existsSync } from 'node:fs';
 import { dirname, resolve, extname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -178,6 +179,26 @@ async function getSuccessfulPaymentBreakdown(bookingId) {
     if (row.payment_type === 'FINAL') totals.finalAmount += amount;
     return totals;
   }, { dpAmount: 0, finalAmount: 0 });
+}
+async function getBookingBlockchainEvidence(bookingId) {
+  if (!supabase) return buildBookingBlockchainEvidence([], []);
+  try {
+    const [paymentsResult, jobsResult] = await Promise.all([
+      supabase.from('payments').select('id,payment_type,outcome,created_at').eq('booking_id', bookingId).eq('outcome', 'success'),
+      supabase.from('blockchain_jobs').select('payment_id,status,tx_hash').eq('booking_id', bookingId)
+    ]);
+    if (paymentsResult.error || jobsResult.error) {
+      console.error('[Booking blockchain evidence]', {
+        paymentCode: paymentsResult.error?.code || null,
+        jobCode: jobsResult.error?.code || null
+      });
+      return unavailableBookingBlockchainEvidence();
+    }
+    return buildBookingBlockchainEvidence(paymentsResult.data || [], jobsResult.data || []);
+  } catch (error) {
+    console.error('[Booking blockchain evidence] Query failed.', error?.code || 'unknown');
+    return unavailableBookingBlockchainEvidence();
+  }
 }
 async function getReleaseStatus(booking) {
   let ledgerRows = [], activeDispute = Boolean(localDisputes.get(booking.id) && !localDisputes.get(booking.id).decision);
@@ -1068,9 +1089,8 @@ async function api(req, res, url) {
         ...resBooking,
         paymentBreakdown: await getSuccessfulPaymentBreakdown(b.id),
         release: await getReleaseStatus(b),
+        blockchainEvidence: await getBookingBlockchainEvidence(b.id),
         dispute,
-        dpBlockchain: null,
-        finalBlockchain: null,
         ledgerHeld: b.paid || 0,
         pendingPayment: pendingPay || null,
         blockchainConfigured: isBlockchainConfigured(),

@@ -78,7 +78,18 @@ test('vendor dashboard loads authenticated bookings from API with verified fund 
   assert.deepEqual(afterRefresh.data.find(b => b.id === lolita.data.id), lolitaRow);
   assert.deepEqual(afterRefresh.data.find(b => b.id === magda.data.id), magdaRow);
 
-  assert.equal((await request(`/api/bookings/${lolita.data.id}`, { cookie: customerCookie })).status, 200);
+  const customerDetail = await request(`/api/bookings/${lolita.data.id}`, { cookie: customerCookie });
+  assert.equal(customerDetail.status, 200);
+  assert.deepEqual(customerDetail.data.blockchainEvidence, {
+    available: true,
+    dp: { status: 'NOT_AVAILABLE', txHash: null },
+    final: { status: 'NOT_AVAILABLE', txHash: null }
+  });
+  const vendorDetail = await request(`/api/bookings/${lolita.data.id}`, { cookie: vendorLogin.cookie });
+  assert.equal(vendorDetail.status, 200);
+  assert.deepEqual(vendorDetail.data.blockchainEvidence, customerDetail.data.blockchainEvidence);
+  const otherVendorLogin = await request('/api/auth/login', { method: 'POST', body: { email: 'vendor2@lockin.demo', password: 'LockInDemo123!' } });
+  assert.equal((await request(`/api/bookings/${lolita.data.id}`, { cookie: otherVendorLogin.cookie })).status, 403);
   const customerBookings = await request('/api/bookings', { cookie: customerCookie });
   assert.ok(customerBookings.data.some(b => b.id === lolita.data.id));
   assert.equal((await request(`/api/bookings/${lolita.data.id}`)).status, 401);
@@ -130,9 +141,11 @@ test('customer and vendor display backend release states consistently without in
   const heldCustomer = renderCustomer(held);
   const heldVendor = renderVendor([held]);
   assert.match(heldCustomer, /Status Dana \(Simulasi\)/);
+  assert.match(heldCustomer, /Bukti Blockchain/);
   assert.match(heldCustomer, /Dana Ditahan \(Simulasi\)/);
   assert.match(heldCustomer, /Rp70\.000/);
   assert.match(heldVendor, /Dana Ditahan \(Simulasi\)/);
+  assert.match(heldVendor, /Bukti Blockchain/);
   assert.match(heldVendor, /Rp70\.000/);
   const depositBooking = baseBooking({ id: 'LI-DEPOSIT', price: 80000, deposit: 20000, paid: 100000, release: { simulated: true, status: 'RELEASED', amount: 80000, releasedAt: '2026-11-22T02:30:00.000Z' } });
   const depositCard = context.releaseStatusCard(depositBooking);

@@ -248,6 +248,34 @@ function releaseStatusCard(booking){
     +(view.note?'<p class="mut" style="font-size:12px;line-height:1.5;margin:10px 0 0">'+escapeUi(view.note)+'</p>':'')
     +'</div>';
 }
+function blockchainEvidenceCard(evidence){
+  var safeEvidence=evidence||{},hashPattern=/^0x[a-fA-F0-9]{64}$/;
+  var labels={CONFIRMED:'Terkonfirmasi di Sepolia',QUEUED:'Menunggu antrean blockchain',SUBMITTED:'Transaksi dikirim, menunggu konfirmasi',RETRY:'Menunggu percobaan pencatatan ulang',NOT_AVAILABLE:'Belum ada job blockchain',UNAVAILABLE:'Status pencatatan tidak dapat dimuat',UNKNOWN:'Status pencatatan tidak dikenali'};
+  var row=function(title,item){
+    item=item||{status:'NOT_AVAILABLE'};
+    var status=labels[item.status]||labels.UNKNOWN;
+    var link=item.status==='CONFIRMED'&&typeof item.txHash==='string'&&hashPattern.test(item.txHash)
+      ?'<a href="https://sepolia.etherscan.io/tx/'+item.txHash+'" target="_blank" rel="noopener noreferrer" style="color:var(--p);font-weight:700">Lihat Bukti di Etherscan</a>'
+      :item.status==='CONFIRMED'?'<span class="mut" style="font-size:12px">Hash transaksi tidak tersedia atau tidak valid.</span>':'';
+    var tone=item.status==='CONFIRMED'&&link.indexOf('<a ')===0?'ok':item.status==='RETRY'?'bad':'';
+    return '<div class="row" style="align-items:center;flex-wrap:wrap"><span>'+title+'</span><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span class="tag '+tone+'">'+escapeUi(status)+'</span>'+link+'</div></div>';
+  };
+  var unavailableNote=safeEvidence.available===false?'<p class="mut" style="font-size:12px;margin:10px 0 0">Data pencatatan blockchain belum dapat dimuat. Coba buka kembali detail booking.</p>':'';
+  return '<section class="card pad" style="margin-top:16px" aria-label="Bukti Blockchain">'
+    +'<h3 style="font-size:16px;margin:0 0 6px;color:var(--t)">Bukti Blockchain</h3>'
+    +'<p class="mut" style="font-size:13px;line-height:1.5;margin:0 0 8px">Pembayaran booking ini memiliki bukti pencatatan di jaringan Ethereum Sepolia yang dapat diperiksa secara publik.</p>'
+    +row('Pembayaran DP',safeEvidence.dp)
+    +row('Pelunasan',safeEvidence.final)
+    +unavailableNote
+    +'<details style="margin-top:12px"><summary style="cursor:pointer;font-weight:700;color:var(--p);font-size:13px">Apa manfaat blockchain untuk saya?</summary>'
+    +'<ul class="mut" style="font-size:12px;line-height:1.6;padding-left:20px;margin:8px 0 0">'
+    +'<li><b>Transparansi:</b> Pelanggan dan vendor dapat memeriksa bukti pencatatan transaksi yang sama.</li>'
+    +'<li><b>Riwayat yang sulit dimanipulasi:</b> Catatan blockchain tidak dapat diubah secara sepihak begitu saja.</li>'
+    +'<li><b>Referensi tambahan:</b> Bukti blockchain membantu penelusuran apabila terdapat perbedaan informasi pembayaran.</li>'
+    +'</ul></details>'
+    +'<p class="mut" style="font-size:11px;line-height:1.5;margin:10px 0 0">LockIn menggunakan Ethereum Sepolia (testnet); pembayaran dan escrow masih berupa simulasi.</p>'
+    +'</section>';
+}
 function pr(v){return v.a?(v.b&&v.b!=v.a?rp(v.a)+' - '+rp(v.b):'Mulai '+rp(v.a)):'Tanya vendor'}
 var P={MUA:'<path d="M6 18l8-8 3 3-8 8H6zM14 10l4-5 2 2-5 4"/>',Stylist:'<path d="M12 3c3 3 6 5 6 9a6 6 0 0 1-12 0c0-4 3-6 6-9z"/>',GCC:'<rect x="3" y="7" width="18" height="12" rx="3"/><circle cx="12" cy="13" r="3.5"/>',PA:'<circle cx="12" cy="8" r="3.5"/><path d="M5 20c1-4 4-6 7-6s6 2 7 6"/>',Sign:'<rect x="4" y="4" width="16" height="12" rx="2"/><path d="M12 16v5M8 21h8"/>'};
 function ic(c){return '<svg width="38" height="38" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.6" aria-hidden="true">'+P[c]+'</svg>'}
@@ -634,11 +662,7 @@ var pages={
         ?'<button class="btn o blk" style="margin-top:12px;font-size:13px;background:#fff" onclick="simulateVendorArrival(\''+curBid+'\')">Simulasikan Vendor Check-in dengan Kode</button>'
         :'<div style="margin-top:10px;font-size:12px;color:#166534;text-align:center">✅ <b>Vendor Terverifikasi Hadir di Lokasi!</b></div>')
       +'</div>'
-      // Card Bukti Blockchain On-Chain
-      +'<div class="card pad"><h2>Integritas Blockchain On-Chain</h2>'
-      +'<p class="mut" style="font-size:13px">Perjanjian booking ini di-hash (SHA-256) dan dicatat permanen di smart contract Sepolia.</p>'
-      +'<a class="btn o blk" href="#verifikasi">Buka Bukti Audit &amp; Kontrak Plaintext</a>'
-      +'</div>'
+      +blockchainEvidenceCard(bItem.blockchainEvidence)
       +'</div></div></div></div>';
   },
 
@@ -891,6 +915,7 @@ var pages={
         +'</div>'
         +'</div></div>'
         +releaseStatusCard(releaseBooking)
+        +blockchainEvidenceCard(d.blockchainEvidence)
         +arrivalSectionHtml
         +'</div>';
     }
