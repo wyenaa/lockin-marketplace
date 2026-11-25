@@ -1711,11 +1711,11 @@
           + '<div class="row"><span>Paket Dipilih</span><b>' + (c.i.pkgName || 'Standar') + '</b></div>'
           + '<div class="row"><span>Harga Jasa</span><b>' + rp(c.i.p) + '</b></div>'
           + '<div class="row"><span>Uang Muka (DP 30%)</span><b>' + rp(c.due) + '</b></div>'
-          + '<div class="row"><span>Pelunasan (Sisa 70% H-1)</span><b>' + rp(c.rest) + '</b></div>'
+          + '<div class="row"><span>Pelunasan (Setelah OTP Kedatangan)</span><b>' + rp(c.rest) + '</b></div>'
           + '<div class="row"><span>Biaya Layanan Platform (3%)</span><b>' + rp(c.fee) + '</b></div>'
           + '<div class="row" style="border-bottom:2px solid var(--t);padding:14px 0"><span style="font-weight:700;font-size:16px">Dibayar Sekarang</span><b style="font-size:19px;color:var(--p)">' + rp(c.total) + '</b></div>'
           + '<div style="margin:16px 0;padding:12px;border-radius:12px;background:rgba(29,78,216,.08);border:1px solid var(--b);font-size:12px;color:var(--t);line-height:1.5">'
-          + '🔒 <b>Proteksi Escrow LockIn:</b> DP ditahan di rekening penampung resmi. Pelunasan jatuh tempo H-1 sebelum acara wisuda.'
+          + '🔒 <b>Proteksi Escrow LockIn:</b> DP ditahan di rekening penampung resmi. Pelunasan dibuka setelah vendor check-in di hari H, sebelum layanan dimulai.'
           + '</div>'
           + '<button class="btn blk" onclick="openBankTermsModal()" style="font-size:14px;padding:14px;background:#1D4ED8">'
           + '📜 Baca Perjanjian &amp; Lanjut Bayar DP'
@@ -1728,7 +1728,7 @@
         if (lu) {
           var booking = S.finalCheckoutBooking;
           if (S.finalCheckoutLoading) return '<div class="w" style="padding-top:24px"><div class="card pad"><h2>Memuat tagihan pelunasan...</h2><p class="mut">Memeriksa booking aktif ke server.</p></div></div>';
-          if (S.finalCheckoutError || !booking || booking.id !== S.activeBid || booking.state !== 'DPPaid') return '<div class="w" style="padding-top:24px"><div class="card pad"><h2>Pelunasan tidak tersedia</h2><p class="mut">' + (S.finalCheckoutError || 'Booking aktif tidak ditemukan atau belum berstatus DP dibayar.') + '</p><a class="btn" href="#status">Kembali ke Booking Saya</a></div></div>';
+          if (S.finalCheckoutError || !booking || booking.id !== S.activeBid || (booking.state !== 'DPPaid' || booking.vendor_arrived !== true)) return '<div class="w" style="padding-top:24px"><div class="card pad"><h2>Pelunasan tidak tersedia</h2><p class="mut">' + (S.finalCheckoutError || 'Booking aktif tidak ditemukan atau belum berstatus DP dibayar.') + '</p><a class="btn" href="#status">Kembali ke Booking Saya</a></div></div>';
           var agreement = {}; try { agreement = typeof booking.agreement === 'string' ? JSON.parse(booking.agreement) : booking.agreement || {} } catch { }
           var vendorName = booking.vendor_name || booking.vendors && booking.vendors.name;
           var packageName = booking.package_name || agreement.packageName || 'Paket layanan booking';
@@ -1781,7 +1781,7 @@
         var curBid = S.activeBid;
         var bItem = S.bookingsList.find(function (b) { return b.id === curBid }) || S.bookingsList[0];
         if (!bItem) return '<div class="w" style="padding-top:24px"><div class="card pad"><h1>Booking Saya</h1><p class="mut">' + (S.backendError || 'Belum ada booking. Booking baru akan muncul di sini.') + '</p><a class="btn" href="#daftar">Cari Vendor</a></div></div>';
-        var c = calc(), st = bItem.executionStatus === 'COMPLETED' || bItem.state === 'Completed' ? 3 : bItem.executionStatus === 'IN_PROGRESS' || bItem.arrived ? 2 : 1;
+        var c = calc(), st = bItem.executionStatus === 'COMPLETED' || bItem.state === 'Completed' ? 3 : bItem.executionStatus === 'IN_PROGRESS' ? 2 : 1;
         var isCancelled = bItem.state === 'Cancelled', isDisputed = !!(bItem.dispute || bItem.disputed);
         var bVendor = getVendor(bItem.vendor_id), vName = bItem.vendor_name || (bVendor ? bVendor.n : 'Vendor Wisuda');
         var vCat = bItem.category || (bVendor ? CAT[bVendor.c] : 'Layanan Wisuda');
@@ -1844,21 +1844,20 @@
           + (isCancelled ? '<div class="msg" style="margin:12px 0;background:#FFF7ED;border:1px solid #FDBA74"><b>Booking dibatalkan</b><br>Aturan: ' + (bItem.cancellation_refund_description || 'Refund sesuai kebijakan booking.') + '<br>Dikembalikan: <b>' + rp(bItem.cancellation_refund || 0) + '</b><br>Tidak dikembalikan: <b>' + rp(bItem.cancellation_not_refunded || 0) + '</b></div>' : '')
           + (!isCancelled ? T(1, 'Perjanjian Digital Disetujui', 'Kesepakatan tersimpan pada booking') : '')
           + (!isCancelled ? T(bItem.dpPaid > 0, 'DP Dibayar (' + rp(bItem.dpPaid) + ')', bItem.dpPaid > 0 ? 'Status pembayaran dari backend' : 'Menunggu pembayaran DP') : '')
-          + (!isCancelled ? T(bItem.finalPaid > 0, 'Pelunasan (' + rp(bItem.rest) + ')', bItem.finalPaid > 0 ? 'Pelunasan terverifikasi oleh backend' : bItem.dpPaid > 0 ? 'Menunggu pembayaran pelunasan' : 'Menunggu pembayaran DP') : '')
           + (!isCancelled ? T(bItem.arrived, 'Verifikasi Kehadiran Vendor di Hari H', bItem.arrived ? 'Vendor telah tiba dan check-in resmi via OTP' : 'Tunjukkan kode OTP saat vendor tiba di lokasi') : '')
+          + (!isCancelled ? T(bItem.finalPaid > 0, 'Pelunasan (' + rp(bItem.rest) + ')', bItem.finalPaid > 0 ? 'Pelunasan terverifikasi oleh backend' : bItem.dpPaid > 0 ? 'Pelunasan tersedia setelah OTP vendor berhasil' : 'Menunggu pembayaran DP') : '')
           + (!isCancelled ? T(st >= 2, st >= 3 ? 'Pelaksanaan Acara Selesai' : 'Pelaksanaan Acara Berlangsung', st >= 3 ? 'Vendor menyelesaikan layanan sesuai kontrak' : 'Kehadiran vendor tercatat; menunggu konfirmasi penyelesaian') : '')
           + releaseStatusCard(bItem)
           // Action buttons
           + '<div style="margin-top:20px;display:flex;gap:10px;flex-wrap:wrap">'
           + (S.role === 'customer' && ['Pending', 'WaitingVendorApproval'].indexOf(bItem.state) >= 0 && !isCancelled ? '<button class="btn" data-a="paydp">Lanjut Bayar DP</button>' : '')
-          + (S.role === 'customer' && bItem.state === 'DPPaid' && !isDisputed && !isCancelled ? '<button class="btn" data-a="payrest">Bayar Pelunasan Sekarang</button>' : '')
+          + (S.role === 'customer' && bItem.state === 'DPPaid' && bItem.arrived && !isDisputed && !isCancelled ? '<button class="btn" data-a="payrest">Bayar Pelunasan Sekarang</button>' : '')
           + (S.role === 'customer' && ['Pending', 'WaitingVendorApproval', 'DPPaid', 'Paid'].indexOf(bItem.state) >= 0 && !isDisputed && !isCancelled ? '<button class="btn o" data-a="cancel-booking" style="color:#DC2626;border-color:#DC2626">Batalkan Booking</button>' : '')
-          + (bItem.arrived && st < 2 && !isDisputed && !isCancelled ? '<button class="btn" data-a="vdone" style="background:#059669">✅ Acara Berjalan Lancar (Tandai Selesai)</button>' : '')
           + (st == 2 && !isDisputed && !isCancelled ? '<button class="btn" data-a="confirm" style="background:#059669">✅ Konfirmasi Selesai &amp; Beri Rating</button>' : '')
           + (['DPPaid', 'Paid'].indexOf(bItem.state) >= 0 && !isDisputed && !isCancelled ? '<button class="btn o" data-a="open-complain" style="color:#DC2626;border-color:#DC2626">⚠️ Ajukan Keluhan / Sengketa</button>' : '')
           + '</div>'
           + '<div style="margin-top:16px;padding:12px;background:#F8FAFC;border:1px solid var(--b);border-radius:12px;font-size:12px;color:var(--m)">'
-          + 'ℹ️ <b>Sanksi Otomatis Luar Web:</b> Pelunasan wajib diselesaikan melalui sistem paling lambat H-1. Jika sampai H+2 setelah acara belum dilunasi tanpa persetujuan admin, sistem otomatis mendeteksi transaksi luar web dengan penalti 30% dari saldo tertahan.'
+          + 'ℹ️ <b>Sanksi Otomatis Luar Web:</b> Setelah OTP kedatangan vendor berhasil diverifikasi, lakukan pelunasan di LockIn sebelum vendor memulai layanan. Jika ada masalah pembayaran, hubungi admin.'
           + '</div>'
           + '</div>'
           + '</div>'
@@ -2058,7 +2057,7 @@
 
           var todayJakarta = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' });
           var isAlreadyVerified = Boolean(d.vendor_arrived || d.execution_state === 'IN_PROGRESS' || d.execution_state === 'COMPLETED' || d.state === 'Completed');
-          var isFullyPaid = (d.state === 'Paid' || d.state === 'Completed');
+          var hasDp = (d.state === 'DPPaid' || d.state === 'Paid');
           var isBeforeEventDate = Boolean(d.event_date && typeof d.event_date === 'string' && todayJakarta < d.event_date);
 
           var arrivalSectionHtml = '';
@@ -2078,12 +2077,12 @@
               + '<span class="tag" style="font-size:12px;padding:6px 12px;background:var(--bad);color:var(--badt)">' + (d.state === 'Resolved' ? 'Sengketa selesai' : 'Ditunda karena sengketa') + '</span>'
               + '</div>'
               + '</div>';
-          } else if (!isFullyPaid) {
+          } else if (!hasDp) {
             arrivalSectionHtml = '<div class="card pad" style="margin-top:16px">'
               + '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">'
               + '<div><h3 style="margin:0 0 4px;font-size:16px;color:var(--t)">📍 Verifikasi Kehadiran</h3>'
-              + '<p style="margin:0;font-size:13px;color:var(--m)">Pelanggan belum menyelesaikan pelunasan booking. Form kehadiran hanya aktif jika pesanan berstatus lunas.</p></div>'
-              + '<span class="tag" style="font-size:12px;padding:6px 12px">Menunggu pelunasan</span>'
+              + '<p style="margin:0;font-size:13px;color:var(--m)">Form check-in baru aktif setelah DP dibayar dan pada hari H. Pelunasan dilakukan setelah OTP berhasil diverifikasi.</p></div>'
+              + '<span class="tag" style="font-size:12px;padding:6px 12px">Menunggu DP</span>'
               + '</div>'
               + '</div>';
           } else if (isBeforeEventDate) {
@@ -2147,6 +2146,8 @@
             + releaseStatusCard(releaseBooking)
             + blockchainEvidenceCard(d.blockchainEvidence)
             + arrivalSectionHtml
+            + (d.vendor_arrived === true && d.state === 'DPPaid' ? '<div class="card pad" style="margin-top:14px"><b>Menunggu pelunasan pelanggan</b><p class="mut" style="margin:6px 0 0">Kehadiran sudah terverifikasi. Tombol mulai layanan akan tersedia setelah pembayaran lunas.</p></div>' : '')
+            + (d.vendor_arrived === true && d.state === 'Paid' && (d.execution_state || 'NOT_STARTED') === 'NOT_STARTED' ? '<div class="card pad" style="margin-top:14px"><h3>Mulai layanan</h3><p class="mut" style="font-size:13px">Pembayaran sudah lunas. Mulai pekerjaan sesuai perjanjian.</p><button class="btn" data-a="start-vendor-service" data-v="' + escapeUi(d.id) + '">Mulai Layanan</button></div>' : '')
             + vendorDisputeHtml
             + '</div>';
         }
@@ -2652,7 +2653,7 @@
         if (!bookingId) throw new Error('ID booking aktif tidak tersedia.');
         var booking = await apiRequest('/api/bookings/' + encodeURIComponent(bookingId));
         if (booking.id !== bookingId) throw new Error('Server mengembalikan booking yang berbeda.');
-        if (booking.state !== 'DPPaid') throw new Error('Booking tidak berstatus DP dibayar. Pelunasan tidak dapat dilanjutkan.');
+        if (booking.state !== 'DPPaid' || booking.vendor_arrived !== true) throw new Error('Pelunasan hanya bisa dibayar setelah verifikasi kehadiran vendor.');
         S.finalCheckoutBooking = booking;
       } catch (err) { S.finalCheckoutError = err.message }
       finally { S.finalCheckoutLoading = false; if (S.activeBid === bookingId) render(); }
@@ -2767,6 +2768,24 @@
       }
     }
 
+    async function startVendorService(bid) {
+      if (!bid || S.activeVendorBid !== bid || S.role !== 'vendor') return;
+      try {
+        await apiRequest('/api/bookings/' + encodeURIComponent(bid) + '/start-service', 'POST', {});
+        const updated = await apiRequest('/api/bookings/' + encodeURIComponent(bid));
+        if (S.activeVendorBid !== bid) return;
+        S.vendorDetail = updated;
+        S.vendorBookings = (S.vendorBookings || []).map(function (row) {
+          return row.id === bid ? Object.assign({}, row, { execution_state: updated.execution_state,
+            executionStatus: updated.executionStatus, state: updated.state }) : row;
+        });
+        toast('Layanan berhasil dimulai.');
+        render();
+      } catch (err) {
+        toast('Gagal memulai layanan: ' + (err.message || 'Terjadi kesalahan.'));
+      }
+    }
+
     function openVendorAgreementModal(bid) {
       var d = S.vendorDetail;
       if (!d || d.id !== bid) {
@@ -2818,7 +2837,7 @@
         + '<div style="background:#fff;border:1px solid #E2E8F0;border-radius:12px;padding:16px;margin-bottom:14px">'
         + '<h4 style="margin:0 0 8px;color:#1E3A8A">KETENTUAN PEMBAYARAN &amp; ESCROW</h4>'
         + '<p style="margin:0 0 6px">Uang muka (DP) dan pelunasan ditahan di rekening penampung resmi LockIn sampai seluruh pelaksanaan layanan selesai dan disetujui.</p>'
-        + '<div style="font-size:12px;color:#64748B">Jatuh tempo pelunasan: ' + (sched.dueDaysBefore ? 'H-' + sched.dueDaysBefore + ' sebelum acara' : 'H-1 sebelum acara') + '</div>'
+        + '<div style="font-size:12px;color:#64748B">Pelunasan dilakukan setelah kode kedatangan berhasil diverifikasi dan sebelum pekerjaan dimulai.</div>'
         + '</div>'
         + (tiers.length ? '<div style="background:#fff;border:1px solid #E2E8F0;border-radius:12px;padding:16px;margin-bottom:14px"><h4 style="margin:0 0 8px;color:#1E3A8A">KEBIJAKAN REFUND</h4>' + tiers.map(function (t) { return '<div style="margin-bottom:4px">&bull; <b>' + escapeUi(t.label) + ':</b> ' + escapeUi(t.description) + '</div>' }).join('') + '</div>' : '')
         + (agreementObj.scope ? '<div style="background:#fff;border:1px solid #E2E8F0;border-radius:12px;padding:16px;margin-bottom:14px"><h4 style="margin:0 0 8px;color:#1E3A8A">LINGKUP PEKERJAAN</h4><p style="margin:0">' + escapeUi(agreementObj.scope) + '</p></div>' : '')
@@ -3007,12 +3026,12 @@
         + '• Paket Layanan: <b>' + c.i.pkgName + '</b> (' + rp(c.i.p) + ')<br>'
         + '• Tanggal Acara: <b>' + (S.eventDate || 'Sesuai Pesanan') + '</b><br>'
         + '• Lokasi: <b>' + (S.cc || 'Malang') + '</b> (Toleransi hadir 15 menit)<br>'
-        + '• Uang Muka (DP 30%): <b>' + rp(c.due) + '</b> | Pelunasan: <b>' + rp(c.rest) + '</b> (H-1)'
+        + '• Uang Muka (DP 30%): <b>' + rp(c.due) + '</b> | Pelunasan: <b>' + rp(c.rest) + '</b> (setelah OTP kedatangan)'
         + '</div>'
         + '<b>PASAL 1: MEKANISME DANA DITAHAN (ESCROW)</b><br>'
         + 'Uang muka (DP 30%) dan sisa pelunasan (70%) yang dibayarkan pelanggan tidak langsung diteruskan ke rekening pribadi vendor, melainkan ditahan di rekening penampung resmi LockIn sampai seluruh pelaksanaan acara wisuda selesai dan disetujui.<br><br>'
         + '<b>PASAL 2: JADWAL &amp; BATAS WAKTU PELUNASAN</b><br>'
-        + 'Tagihan pelunasan 70% dikirimkan secara otomatis pada H-3 dan memiliki batas jatuh tempo pembayaran pada H-1 sebelum acara wisuda. Apabila pelunasan tidak diselesaikan hingga H+2 tanpa persetujuan mediator, maka diklasifikasikan sebagai pelanggaran transaksi di luar sistem.<br><br>'
+        + 'Tagihan pelunasan tersedia setelah vendor berhasil check-in menggunakan kode OTP pelanggan pada hari H. Pelunasan diproses melalui LockIn sebelum vendor memulai pekerjaan. Jika pembayaran bermasalah, kedua pihak dapat meminta bantuan admin.<br><br>'
         + '<b>PASAL 3: KEBIJAKAN REFUND BERLAPIS (TRANSPARAN)</b><br>'
         + '• Pembatalan oleh klien pada H-7 atau lebih: 100% dana di luar DP dikembalikan penuh.<br>'
         + '• Pembatalan pada H-6 sampai H-3: 50% dari total dana dikembalikan.<br>'
@@ -3124,7 +3143,7 @@
         + '</div>'
         + '<div style="background:#EFF6FF;border:1px solid #BFDBFE;border-radius:10px;padding:12px;color:#1E40AF">'
         + '<b style="display:block;font-size:13px;margin-bottom:2px">PELUNASAN SISA (70%): ' + rp(bItem.rest) + '</b>'
-        + 'Jatuh Tempo: <b>H-1 Acara</b> (' + dueDate + ')<br>Status: ' + (S.lunas ? '<b>LUNAS</b>' : 'Menunggu Pembayaran')
+        + 'Pelunasan: <b>Setelah check-in vendor</b><br>Status: ' + (S.lunas ? '<b>LUNAS</b>' : 'Menunggu Pembayaran')
         + '</div>'
         + '</div>'
 
@@ -3312,6 +3331,11 @@
         return;
       }
 
+      if (k === 'start-vendor-service') {
+        startVendorService(v);
+        return;
+      }
+
       if (k === 'confirm') {
         e.stopImmediatePropagation();
         apiRequest('/api/bookings/' + encodeURIComponent(S.activeBid) + '/complete', 'POST', {}).then(function () { return refreshBookings(S.activeBid) }).then(function () { toast('Penyelesaian booking tercatat.'); render() }).catch(function (err) { toast(err.message) });
@@ -3352,11 +3376,6 @@
         S.mode = 'dp';
         go('checkout');
       }
-      else if (k == 'vdone') {
-        S.stage = 2;
-        toast('Acara ditandai selesai! Menunggu konfirmasi akhir.');
-        render();
-      }
       else if (k == 'confirm') {
         S.stage = 3;
         toast('✅ Konfirmasi diterima! Dana Rp105.000 berhasil dicairkan ke vendor.');
@@ -3384,7 +3403,7 @@
               if (!bid || !S.finalCheckoutBooking || S.finalCheckoutBooking.id !== bid) throw new Error('Detail booking pelunasan belum dimuat. Buka kembali pelunasan dari Booking Saya.');
               active = await apiRequest('/api/bookings/' + encodeURIComponent(bid));
               if (active.id !== bid) throw new Error('Server mengembalikan booking yang berbeda.');
-              if (active.state !== 'DPPaid') throw new Error('Booking tidak lagi berstatus DP dibayar. Pembayaran diblokir.');
+              if (active.state !== 'DPPaid' || active.vendor_arrived !== true) throw new Error('OTP kedatangan belum diverifikasi atau booking sudah berubah. Pelunasan diblokir.');
               S.finalCheckoutBooking = active;
             } else {
               active = S.bookingsList.find(function (b) { return b.id === bid; });

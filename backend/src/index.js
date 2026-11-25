@@ -2,7 +2,7 @@
 // Node.js HTTP server + REST API + static file server
 import 'dotenv/config';
 import http from 'node:http';
-import { randomBytes, randomUUID, createHash, scryptSync, timingSafeEqual } from 'node:crypto';
+import { randomBytes, randomInt, randomUUID, createHash, scryptSync, timingSafeEqual } from 'node:crypto';
 import { hasCompleteSimulatedFunds } from './utils/simulated-release.js';
 import { buildBookingBlockchainEvidence, unavailableBookingBlockchainEvidence } from './utils/booking-blockchain-evidence.js';
 import { readFileSync, existsSync } from 'node:fs';
@@ -1076,7 +1076,7 @@ async function api(req, res, url) {
       execution_state: 'NOT_STARTED',
       vendor_accepted_at: late ? null : now(),
       state: late ? 'WaitingVendorApproval' : 'Pending',
-      arrival_code: String(Math.floor(100000 + Math.random() * 900000)),
+      arrival_code: String(randomInt(100000, 1000000)),
       vendor_arrived: false,
       agreement,
       hash,
@@ -1133,7 +1133,7 @@ async function api(req, res, url) {
   }
 
   // ── Single booking actions ──
-  const match = /^\/api\/bookings\/([^/]+)(?:\/(payment|complete|cancel|dispute|audit|sync-payment|accept|reject|refund-estimate|report-off-platform|verify-arrival))?$/.exec(path);
+  const match = /^\/api\/bookings\/([^/]+)(?:\/(payment|complete|cancel|dispute|audit|sync-payment|accept|reject|refund-estimate|report-off-platform|verify-arrival|start-service))?$/.exec(path);
   if (match) {
     checkAutoRelease();
     const b = await getBooking(match[1], user);
@@ -1240,6 +1240,9 @@ async function api(req, res, url) {
       const paymentType = b.state === 'DPPaid' ? 'FINAL' : 'DP';
       if (d.paymentType !== paymentType) fail(409, 'Jenis pembayaran tidak sesuai dengan status booking. Muat ulang halaman.');
       if (paymentType === 'FINAL' && d.confirmedFinal !== true) fail(400, 'Konfirmasi pelunasan diperlukan sebelum membuat pembayaran FINAL.');
+      if (paymentType === 'FINAL' && (b.vendor_arrived !== true || !b.vendor_arrived_at)) {
+        fail(409, 'Pelunasan hanya tersedia setelah vendor berhasil check-in menggunakan OTP pelanggan.');
+      }
 
       const isLate = Boolean(b.late_booking);
       const upfrontPercent = isLate ? POLICY.LATE_BOOKING_UPFRONT_PERCENT : POLICY.DP_PERCENT;
@@ -1498,8 +1501,8 @@ async function api(req, res, url) {
       if (b.state === 'Cancelled') {
         fail(409, 'Booking telah dibatalkan.');
       }
-      if (b.state !== 'Paid') {
-        fail(409, 'Hanya booking yang telah berstatus lunas (Paid) yang dapat diverifikasi kedatangannya.');
+      if (!['DPPaid', 'Paid'].includes(b.state)) {
+        fail(409, 'Check-in baru dapat dilakukan setelah DP dibayar.');
       }
       if (b.vendor_arrived || b.execution_state === 'IN_PROGRESS' || b.execution_state === 'COMPLETED' || b.state === 'Completed') {
         fail(409, 'Kedatangan vendor sudah pernah diverifikasi sebelumnya.');
@@ -1550,7 +1553,8 @@ async function api(req, res, url) {
       otpAttempts.delete(attemptKey);
 
       const arrivedAt = now();
-      const executionState = 'IN_PROGRESS';
+      // Check-in membuktikan kehadiran; pekerjaan baru dimulai setelah pelunasan.
+      const executionState = 'NOT_STARTED';
 
       if (supabase) {
         const updatePayload = {
@@ -1563,7 +1567,7 @@ async function api(req, res, url) {
           .update({ ...updatePayload, vendor_arrived_at: arrivedAt })
           .eq('id', b.id)
           .eq('vendor_arrived', false)
-          .eq('state', 'Paid')
+          .eq('state', b.state)
           .select('*')
           .maybeSingle();
 
@@ -1573,7 +1577,7 @@ async function api(req, res, url) {
             .update(updatePayload)
             .eq('id', b.id)
             .eq('vendor_arrived', false)
-            .eq('state', 'Paid')
+            .eq('state', b.state)
             .select('*')
             .maybeSingle();
           data = fallback.data;
@@ -1616,6 +1620,39 @@ async function api(req, res, url) {
         message: 'Vendor terverifikasi telah tiba dan check-in di lokasi acara.',
         booking: resBooking
       });
+    }
+
+    // Vendor memulai pekerjaan hanya setelah kedatangan terverifikasi DAN pelunasan sukses.
+    if (action === 'start-service') {
+      if (!isVendor) fail(403, 'Hanya vendor pemilik booking yang dapat memulai layanan.');
+      if (b.state !== 'Paid' || b.vendor_arrived !== true) {
+        fail(409, 'Layanan hanya bisa dimulai setelah OTP terverifikasi dan pelunasan berhasil.');
+      }
+      if (b.execution_state !== 'NOT_STARTED') {
+        fail(409, 'Layanan sudah dimulai atau diselesaikan.');
+      }
+      const startedAt = now();
+      if (supabase) {
+        const { data, error } = await supabase.from('bookings')
+          .update({ execution_state: 'IN_PROGRESS', updated_at: startedAt })
+          .eq('id', b.id)
+          .eq('state', 'Paid')
+          .eq('vendor_arrived', true)
+          .eq('execution_state', 'NOT_STARTED')
+          .select('*').maybeSingle();
+        if (error) fail(503, 'Gagal menyimpan status mulai layanan.');
+        if (!data) fail(409, 'Status booking sudah berubah. Muat ulang detail.');
+        Object.assign(b, data);
+        const { error: auditError } = await supabase.from('audit').insert({ booking_id: b.id, state: 'VendorServiceStarted', created_at: startedAt });
+        if (auditError) console.error('[Audit start-service]', auditError.code);
+      } else {
+        b.execution_state = 'IN_PROGRESS';
+        b.updated_at = startedAt;
+      }
+      localAudit.push({ booking_id: b.id, state: 'VendorServiceStarted', created_at: startedAt });
+      const responseBooking = withBookingStatuses(b);
+      delete responseBooking.arrival_code;
+      return send(res, 200, { ok: true, booking: responseBooking, message: 'Layanan telah dimulai.' });
     }
 
     if (action === 'sync-payment') {
